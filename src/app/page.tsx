@@ -1,101 +1,151 @@
-import Image from "next/image";
+// src/app/page.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { WeeklyPicks } from '@/components/games/WeeklyPicks';
+import { Results } from '@/components/games/Results';
+import { SeasonStats } from '@/components/games/SeasonStats';
+import { Leaderboard } from '@/components/games/Leaderboard';
+import { Nav } from '@/components/games/Nav';
+import { StatsService } from '@/services/statsService';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+	const [currentWeek, setCurrentWeek] = useState(10);
+	const [seasonStats, setSeasonStats] = useState(() => {
+		const storedStats = StatsService.getStoredStats();
+		return {
+			totalPoints: storedStats.totalPoints,
+			weeklyScores: Object.fromEntries(Object.entries(storedStats.weeklyStats).map(([week, stats]) => [week, stats.weeklyPoints])),
+			correctPicks: storedStats.correctPicks,
+			totalPicks: storedStats.totalPicks,
+			tfsPoints: storedStats.totalTFSPoints
+		};
+	});
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+	// Helper function to get weekly results for a specific week
+	const getWeeklyResultsForWeek = (storedStats: any, week: number) => {
+		const weekStats = storedStats.weeklyStats[week];
+		return weekStats
+			? {
+					'Player 1': {
+						points: weekStats.weeklyPoints || 0,
+						correct: weekStats.correctPicks || 0,
+						tfsPoints: weekStats.tfsPoints || 0
+					}
+			  }
+			: {
+					'Player 1': {
+						points: 0,
+						correct: 0,
+						tfsPoints: 0
+					}
+			  };
+	};
+
+	const [weeklyResults, setWeeklyResults] = useState(() => {
+		const storedStats = StatsService.getStoredStats();
+		return getWeeklyResultsForWeek(storedStats, currentWeek);
+	});
+
+	const [seasonLeaderboard, setSeasonLeaderboard] = useState(() => {
+		const storedStats = StatsService.getStoredStats();
+		return {
+			'Player 1': {
+				totalPoints: storedStats.totalPoints,
+				winPercentage: storedStats.winPercentage,
+				totalTFSPoints: storedStats.totalTFSPoints
+			}
+		};
+	});
+
+	// Update weekly results when week changes
+	useEffect(() => {
+		const storedStats = StatsService.getStoredStats();
+		setWeeklyResults(getWeeklyResultsForWeek(storedStats, currentWeek));
+	}, [currentWeek]);
+
+	// Optional: Add effect to update stats if they change
+	useEffect(() => {
+		const handleStorageChange = () => {
+			const storedStats = StatsService.getStoredStats();
+
+			setSeasonStats({
+				totalPoints: storedStats.totalPoints,
+				weeklyScores: Object.fromEntries(Object.entries(storedStats.weeklyStats).map(([week, stats]) => [week, stats.weeklyPoints])),
+				correctPicks: storedStats.correctPicks,
+				totalPicks: storedStats.totalPicks,
+				tfsPoints: storedStats.totalTFSPoints
+			});
+
+			setWeeklyResults(getWeeklyResultsForWeek(storedStats, currentWeek));
+
+			setSeasonLeaderboard({
+				'Player 1': {
+					totalPoints: storedStats.totalPoints,
+					winPercentage: storedStats.winPercentage,
+					totalTFSPoints: storedStats.totalTFSPoints
+				}
+			});
+		};
+
+		// Listen for storage changes (from other tabs/windows)
+		window.addEventListener('storage', handleStorageChange);
+
+		return () => {
+			window.removeEventListener('storage', handleStorageChange);
+		};
+	}, [currentWeek]);
+
+	return (
+		<div className='min-h-screen bg-gray-50'>
+			<Nav currentWeek={currentWeek} onWeekChange={setCurrentWeek} />
+
+			<main className='py-8'>
+				<div className='max-w-7xl mx-auto px-4'>
+					{/* Header */}
+					<Card className='mb-8'>
+						<CardHeader>
+							<CardTitle className='text-2xl text-center'>NFL Pick 5</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<p className='text-center text-gray-600'>Select 5 games and predict one total final score each week</p>
+						</CardContent>
+					</Card>
+
+					{/* Main Content */}
+					<div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+						{/* Left Column - Weekly Picks & Results */}
+						<div className='lg:col-span-2 space-y-8'>
+							<Tabs defaultValue='picks'>
+								<TabsList className='w-full'>
+									<TabsTrigger value='picks' className='flex-1'>
+										Make Picks
+									</TabsTrigger>
+									<TabsTrigger value='results' className='flex-1'>
+										View Results
+									</TabsTrigger>
+								</TabsList>
+
+								<TabsContent value='picks'>
+									<WeeklyPicks currentWeek={currentWeek} />
+								</TabsContent>
+
+								<TabsContent value='results'>
+									<Results currentWeek={currentWeek} />
+								</TabsContent>
+							</Tabs>
+						</div>
+
+						{/* Right Column - Stats & Leaderboard */}
+						<div className='space-y-8'>
+							<SeasonStats totalPoints={seasonStats.totalPoints} weeklyScores={seasonStats.weeklyScores} correctPicks={seasonStats.correctPicks} totalPicks={seasonStats.totalPicks} tfsPoints={seasonStats.tfsPoints} />
+							<Leaderboard weeklyResults={weeklyResults} seasonStats={seasonLeaderboard} currentWeek={currentWeek} />
+						</div>
+					</div>
+				</div>
+			</main>
+		</div>
+	);
 }
