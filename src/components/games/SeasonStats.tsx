@@ -1,17 +1,26 @@
-// src/components/games/SeasonStats.tsx
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { SeasonStats as SeasonStatsType } from '@/services/statsService';
+import { useStats } from '@/contexts/StatsContext';
 
-interface SeasonStatsProps {
-	totalPoints: number;
-	weeklyScores: Record<string, number>;
+interface WeeklyStats {
+	weeklyPoints: number;
 	correctPicks: number;
 	totalPicks: number;
 	tfsPoints: number;
 }
 
-export function SeasonStats({ totalPoints, weeklyScores, correctPicks, totalPicks, tfsPoints }: SeasonStatsProps) {
+interface SeasonStatsProps {
+	totalPoints: number;
+	weeklyStats: Record<string, WeeklyStats>;
+	correctPicks: number;
+	totalPicks: number;
+	totalTFSPoints: number;
+}
+
+export function SeasonStats() {
+	const { totalPoints, weeklyStats, correctPicks, totalPicks, totalTFSPoints, isLoading } = useStats();
 	const winPercentage = totalPicks > 0 ? ((correctPicks / totalPicks) * 100).toFixed(1) : '0.0';
+
+	if (isLoading) return <div>Loading stats...</div>;
 
 	return (
 		<Card>
@@ -36,21 +45,22 @@ export function SeasonStats({ totalPoints, weeklyScores, correctPicks, totalPick
 					</div>
 					<div>
 						<p className='text-sm text-gray-500'>TFS Points</p>
-						<p className='text-2xl font-bold'>{tfsPoints}</p>
+						<p className='text-2xl font-bold'>{totalTFSPoints}</p>
 					</div>
 				</div>
 
 				<div>
 					<h3 className='text-lg font-medium mb-3'>Weekly Performance</h3>
 					<div className='grid grid-cols-4 gap-2'>
-						{Object.entries(weeklyScores)
-							.sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB))
-							.map(([week, score]) => (
-								<div key={week} className='bg-gray-50 p-2 rounded text-center'>
-									<p className='text-xs text-gray-500'>Week {week}</p>
-									<p className='font-bold'>{score}</p>
-								</div>
-							))}
+						{weeklyStats &&
+							Object.entries(weeklyStats)
+								.sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB))
+								.map(([week, stats]) => (
+									<div key={week} className='bg-gray-50 p-2 rounded text-center'>
+										<p className='text-xs text-gray-500'>Week {week}</p>
+										<p className='font-bold'>{stats.weeklyPoints}</p>
+									</div>
+								))}
 					</div>
 				</div>
 			</CardContent>

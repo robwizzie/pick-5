@@ -1,11 +1,13 @@
+'use client';
+
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { GameCard } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
-import { StatsService } from '@/services/statsService';
-import { SeasonStats } from './SeasonStats';
+import { useStats } from '@/contexts/StatsContext';
 
 interface WeeklyPicks {
 	picks: Array<{
@@ -19,28 +21,27 @@ interface WeeklyPicks {
 	submitted: boolean;
 }
 
-interface ResultsProps {
-	currentWeek: number;
-}
-
-export function Results({ currentWeek }: ResultsProps) {
+export function Results({ currentWeek }: { currentWeek: number }) {
+	const { data: session, status: sessionStatus } = useSession();
+	const { refreshStats } = useStats();
 	const [picks, setPicks] = useState<WeeklyPicks | null>(null);
 	const [games, setGames] = useState<Game[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	// Load data when current week changes
 	useEffect(() => {
 		const loadData = async () => {
+			if (sessionStatus === 'loading') return;
+
 			try {
 				setLoading(true);
-				const savedPicks = localStorage.getItem(`week${currentWeek}picks`);
-				setPicks(savedPicks ? JSON.parse(savedPicks) : null);
+				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}`)]);
 
-				const weeklyGames = await NFLService.getWeeklyGames(currentWeek);
+				const picksData = await picksResponse.json();
 				setGames(weeklyGames);
+				setPicks(picksData);
 			} catch (err) {
-				setError('Error loading results. Please try again.');
+				setError('Error loading results');
 				console.error('Error:', err);
 			} finally {
 				setLoading(false);
@@ -48,7 +49,7 @@ export function Results({ currentWeek }: ResultsProps) {
 		};
 
 		loadData();
-	}, [currentWeek]);
+	}, [currentWeek, sessionStatus]);
 
 	// Game score calculation utility
 	const getGameScore = (game: Game) => ({
@@ -84,89 +85,6 @@ export function Results({ currentWeek }: ResultsProps) {
 		return 0;
 	};
 
-	// Memoized results calculation
-	const results = useMemo(() => {
-		if (!picks || !games.length) {
-			return {
-				gameElements: [],
-				totalPoints: 0,
-				correctPicks: 0,
-				tfsPoints: 0,
-				seasonStats: null
-			};
-		}
-
-		let totalPoints = 0;
-		let correctPicks = 0;
-		let tfsPoints = 0;
-
-		// Process game picks
-		const gameElements = picks.picks.map((pick, index) => {
-			const game = games.find(g => g.id === pick.gameId);
-			if (!game) return null;
-
-			const scores = getGameScore(game);
-			const gameStatus = checkGameStatus(game);
-			const isCorrect = checkPickCorrect(pick, game);
-
-			if (isCorrect) {
-				totalPoints += 2;
-				correctPicks++;
-			}
-
-			return (
-				<div key={pick.gameId} className={`relative ${gameStatus === 'completed' ? (isCorrect ? 'bg-green-50' : 'bg-red-50') : ''}`}>
-					<GameCard
-						game={{
-							...game,
-							away: { ...game.away, score: scores.away },
-							home: { ...game.home, score: scores.home },
-							status: gameStatus
-						}}
-						selected={pick.team}
-						showScores={true}
-						disabled={true}
-						isCorrect={isCorrect}
-					/>
-					<div className='absolute top-2 right-2 px-2 py-1 rounded text-sm font-medium'>
-						<span className={isCorrect ? 'text-green-600' : 'text-red-600'}>{isCorrect ? '+2 pts' : '0 pts'}</span>
-					</div>
-					<div className='absolute top-2 left-2 px-2 py-1 rounded text-sm font-medium text-gray-600'>Pick {index + 1}</div>
-				</div>
-			);
-		});
-
-		// Calculate TFS points
-		if (picks.tfsGame) {
-			const tfsGame = games.find(g => g.id === picks.tfsGame);
-			if (tfsGame && checkGameStatus(tfsGame) === 'completed') {
-				const scores = getGameScore(tfsGame);
-				const predictedScore = parseInt(picks.tfsScore);
-				tfsPoints = getTFSPoints(predictedScore, scores.total);
-				totalPoints += tfsPoints;
-			}
-		}
-
-		// Update season stats
-		const weeklyStats = {
-			correctPicks,
-			totalPicks: picks.picks.length,
-			tfsPoints, // Explicitly track TFS points
-			weeklyPoints: totalPoints
-		};
-
-		const seasonStats = StatsService.updateWeekStats(currentWeek, weeklyStats);
-
-		return {
-			gameElements,
-			totalPoints,
-			correctPicks,
-			tfsPoints, // Return TFS points separately
-			seasonStats
-		};
-	}, [picks, games, currentWeek]);
-
-	// Render TFS prediction details
 	const renderTFSPrediction = () => {
 		if (!picks?.tfsGame) return null;
 
@@ -192,59 +110,152 @@ export function Results({ currentWeek }: ResultsProps) {
 		);
 	};
 
-	return (
-		<div className='space-y-6'>
+	// Memoized results calculation
+	const results = useMemo(() => {
+		if (!picks || !games.length)
+			return {
+				gameElements: [],
+				totalPoints: 0,
+				correctPicks: 0,
+				tfsPoints: 0
+			};
+
+		let totalPoints = 0;
+		let correctPicks = 0;
+		let tfsPoints = 0;
+
+		// Process game picks
+		const gameElements = picks.picks.map((pick, index) => {
+			const game = games.find(g => g.id === pick.gameId);
+			if (!game) return null;
+
+			const scores = getGameScore(game);
+			const gameStatus = checkGameStatus(game);
+			const isCorrect = checkPickCorrect(pick, game);
+
+			if (isCorrect) {
+				totalPoints += 2;
+				correctPicks++;
+			}
+
+			return (
+				<div
+					key={pick.gameId}
+					className={`relative rounded-lg overflow-hidden shadow-sm transition-all
+       ${gameStatus === 'completed' ? (isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200') : 'bg-gray-50 border border-gray-200'}`}>
+					<GameCard
+						game={{
+							...game,
+							away: { ...game.away, score: scores.away },
+							home: { ...game.home, score: scores.home },
+							status: gameStatus
+						}}
+						selected={pick.team}
+						showScores={true}
+						disabled={true}
+						isCorrect={isCorrect}
+					/>
+					<div
+						className={`absolute top-2 right-2 px-3 py-1.5 rounded-full text-sm font-medium
+       ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+						{isCorrect ? '+2 pts' : '0 pts'}
+					</div>
+					<div
+						className='absolute top-2 left-2 px-3 py-1.5 rounded-full 
+       bg-gray-100 text-gray-600 text-sm font-medium'>
+						Pick {index + 1}
+					</div>
+				</div>
+			);
+		});
+
+		// Calculate TFS points
+		if (picks.tfsGame) {
+			const tfsGame = games.find(g => g.id === picks.tfsGame);
+			if (tfsGame && checkGameStatus(tfsGame) === 'completed') {
+				const scores = getGameScore(tfsGame);
+				const predictedScore = parseInt(picks.tfsScore);
+				tfsPoints = getTFSPoints(predictedScore, scores.total);
+				totalPoints += tfsPoints;
+			}
+		}
+
+		return {
+			gameElements,
+			totalPoints,
+			correctPicks,
+			tfsPoints
+		};
+	}, [picks, games]);
+
+	if (sessionStatus === 'loading' || loading) {
+		return (
 			<Card>
-				<CardHeader>
-					<CardTitle>Week {currentWeek} Results</CardTitle>
-				</CardHeader>
-				<CardContent>
-					{error && (
-						<Alert className='mb-4' variant='destructive'>
-							<AlertDescription>{error}</AlertDescription>
-						</Alert>
-					)}
-
-					{loading ? (
-						<p>Loading...</p>
-					) : (
-						<>
-							<div className='space-y-6'>
-								{/* Game Picks */}
-								<div>
-									<h3 className='text-lg font-medium mb-4'>Your Picks</h3>
-									<div className='space-y-3'>{results.gameElements}</div>
-								</div>
-
-								{/* TFS Prediction */}
-								<div>
-									<h3 className='text-lg font-medium mb-4'>Total Final Score Prediction</h3>
-									{renderTFSPrediction()}
-								</div>
-
-								{/* Weekly Summary */}
-								<div className='border-t pt-4'>
-									<div className='flex justify-between items-center text-lg font-medium'>
-										<span>Total Weekly Points:</span>
-										<span>{results.totalPoints} pts</span>
-									</div>
-									<div className='flex justify-between items-center text-sm text-gray-600 mt-1'>
-										<span>Correct Picks:</span>
-										<span>{results.correctPicks}/5</span>
-									</div>
-									<div className='flex justify-between items-center text-sm text-gray-600 mt-1'>
-										<span>TFS Points:</span>
-										<span>+{results.tfsPoints}</span>
-									</div>
-								</div>
-							</div>
-
-							{/* Season Stats */}
-							{results.seasonStats && <SeasonStats totalPoints={results.seasonStats.totalPoints} weeklyScores={Object.fromEntries(Object.entries(results.seasonStats.weeklyStats).map(([week, stats]) => [week, stats.weeklyPoints]))} correctPicks={results.seasonStats.correctPicks} totalPicks={results.seasonStats.totalPicks} tfsPoints={results.seasonStats.totalTFSPoints} />}
-						</>
-					)}
+				<CardContent className='p-6'>
+					<div className='flex items-center justify-center'>
+						<span className='text-gray-500'>Loading results...</span>
+					</div>
 				</CardContent>
 			</Card>
-		</div>
+		);
+	}
+
+	if (!session) {
+		return (
+			<Card>
+				<CardContent className='p-6'>
+					<Alert>
+						<AlertDescription>Please sign in to view results</AlertDescription>
+					</Alert>
+				</CardContent>
+			</Card>
+		);
+	}
+
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>Week {currentWeek} Results</CardTitle>
+			</CardHeader>
+			<CardContent>
+				{error && (
+					<Alert className='mb-4' variant='destructive'>
+						<AlertDescription>{error}</AlertDescription>
+					</Alert>
+				)}
+
+				<div className='space-y-6'>
+					{/* Game Picks */}
+					<div>
+						<h3 className='text-lg font-medium mb-4'>Your Picks</h3>
+						<div className='space-y-3'>{results.gameElements}</div>
+					</div>
+
+					{/* TFS Prediction */}
+					<div>
+						<h3 className='text-lg font-medium mb-4'>Total Final Score</h3>
+						{renderTFSPrediction()}
+					</div>
+
+					{/* Weekly Summary */}
+					<div className='border-t border-gray-200 pt-6 mt-8'>
+						<div className='grid grid-cols-3 gap-4'>
+							<div className='bg-gray-50 rounded-lg p-4 text-center'>
+								<p className='text-gray-500 text-sm'>Total Points</p>
+								<p className='text-2xl font-bold'>{results.totalPoints}</p>
+							</div>
+							<div className='bg-gray-50 rounded-lg p-4 text-center'>
+								<p className='text-gray-500 text-sm'>Correct Picks</p>
+								<p className='text-2xl font-bold'>{results.correctPicks}/5</p>
+							</div>
+							<div className='bg-gray-50 rounded-lg p-4 text-center'>
+								<p className='text-gray-500 text-sm'>TFS Points</p>
+								<p className='text-2xl font-bold'>+{results.tfsPoints}</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</CardContent>
+		</Card>
 	);
 }
