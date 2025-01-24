@@ -1,6 +1,7 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
+import Image from 'next/image';
 import { StatsProvider } from '@/contexts/StatsContext';
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -33,7 +34,7 @@ export default function Home() {
 							{/* Header */}
 							<Card className='mb-8'>
 								<div className='flex flex-col items-center mt-3 mb-3'>
-									<img src='/pick-5-logo.png' alt='Pick 5 Logo' className='w-32' />
+									<Image src='/pick-5-logo.png' alt='Pick 5 Logo' width={128} className='w-32'/>
 								</div>
 								<CardContent>
 									<p className='text-center text-gray-600'>Select 5 games and predict one total final score each week</p>
