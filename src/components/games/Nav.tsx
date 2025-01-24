@@ -1,4 +1,3 @@
-// src/components/games/Nav.tsx
 'use client';
 
 import { useState } from 'react';
@@ -32,7 +31,7 @@ export function Nav({ currentWeek, onWeekChange }: NavProps) {
 	};
 
 	return (
-		<nav className='bg-white shadow-md'>
+		<nav className='bg-white shadow-md sticky top-0 z-50'>
 			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16'>
 				{/* Week Navigation */}
 				<div className='flex items-center space-x-4'>
@@ -43,6 +42,11 @@ export function Nav({ currentWeek, onWeekChange }: NavProps) {
 					<Button variant='outline' size='icon' onClick={handleNextWeek} disabled={currentWeek >= 17}>
 						<ChevronRight className='h-4 w-4' />
 					</Button>
+				</div>
+
+				{/* Logo in the Center */}
+				<div className='absolute left-1/2 transform -translate-x-1/2'>
+					<img src='/pick-5-logo.png' alt='Pick 5 Logo' className='h-12 w-auto' />
 				</div>
 
 				{/* Authentication */}

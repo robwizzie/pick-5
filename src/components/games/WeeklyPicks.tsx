@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -193,20 +193,6 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 										</div>
 									);
 								})}
-
-								<div className='mt-6 p-4 rounded-lg bg-gray-50 border border-gray-200'>
-									<h3 className='text-lg font-medium mb-2'>Total Final Score Prediction</h3>
-									{games.find(g => g.id === tfsGame) && (
-										<>
-											<p className='text-sm text-gray-600 mb-1'>Game Selected:</p>
-											<p className='font-medium mb-2'>
-												{games.find(g => g.id === tfsGame)?.away.team} @ {games.find(g => g.id === tfsGame)?.home.team}
-											</p>
-											<p className='text-sm text-gray-600 mb-1'>Predicted Score:</p>
-											<p className='font-medium'>{tfsScore} points</p>
-										</>
-									)}
-								</div>
 							</div>
 						</div>
 					) : (
@@ -214,12 +200,8 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
 							<div className='space-y-3'>
 								{games.map(game => (
-									<div
-										key={game.id}
-										className={`relative rounded-lg overflow-hidden shadow-sm transition-all
-                     ${picks.find(p => p.gameId === game.id) ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+									<div key={game.id} className={`relative rounded-lg overflow-hidden shadow-sm transition-all ${picks.find(p => p.gameId === game.id) ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
 										<GameCard game={game} selected={picks.find(p => p.gameId === game.id)?.team} onSelect={handleTeamSelect} disabled={picks.length >= 5 && !picks.find(p => p.gameId === game.id)} />
-										{picks.find(p => p.gameId === game.id) && <div className='absolute top-2 right-2 px-3 py-1.5 rounded-full bg-green-100 text-green-800 text-sm font-medium'>Selected</div>}
 									</div>
 								))}
 							</div>

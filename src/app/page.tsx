@@ -32,9 +32,9 @@ export default function Home() {
 						<div className='max-w-7xl mx-auto px-4'>
 							{/* Header */}
 							<Card className='mb-8'>
-								<CardHeader>
-									<CardTitle className='text-2xl text-center'>NFL Pick 5</CardTitle>
-								</CardHeader>
+								<div className='flex flex-col items-center mt-3 mb-3'>
+									<img src='/pick-5-logo.png' alt='Pick 5 Logo' className='w-32' />
+								</div>
 								<CardContent>
 									<p className='text-center text-gray-600'>Select 5 games and predict one total final score each week</p>
 								</CardContent>
