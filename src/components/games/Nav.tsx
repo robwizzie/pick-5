@@ -47,7 +47,7 @@ export function Nav({ currentWeek, onWeekChange }: NavProps) {
 
 				{/* Logo in the Center */}
 				<div className='absolute left-1/2 transform -translate-x-1/2'>
-					<Image src='/pick-5-logo.png' alt='Pick 5 Logo' height={48} width={48} className='h-12 w-auto'/>
+					<Image src='/pick-5-logo.png' alt='Pick 5 Logo' height={48} width={48} className='h-12 w-auto' />
 				</div>
 
 				{/* Authentication */}
