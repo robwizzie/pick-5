@@ -102,15 +102,12 @@ export async function POST(req: Request) {
 		);
 
 		return NextResponse.json(newPicks);
-	} catch (error) {
+	} catch (error: unknown) {
 		console.error('Full error details:', error);
-		return NextResponse.json(
-			{
-				error: error.message || 'Error saving picks',
-				details: error.stack
-			},
-			{ status: 500 }
-		);
+		const errorMessage = error instanceof Error ? error.message : 'Error saving picks';
+		const errorStack = error instanceof Error ? error.stack : undefined;
+
+		return NextResponse.json({ error: errorMessage, details: errorStack }, { status: 500 });
 	}
 }
 
