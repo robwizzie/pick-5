@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
 
