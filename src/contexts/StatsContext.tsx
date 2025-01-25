@@ -1,5 +1,6 @@
 // src/contexts/StatsContext.tsx
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
 
 interface WeeklyStats {
 	weeklyPoints: number;
@@ -24,6 +25,7 @@ interface StatsContextType extends Stats {
 const StatsContext = createContext<StatsContextType>(null!);
 
 export function StatsProvider({ children }: { children: ReactNode }) {
+	const { data: session } = useSession();
 	const [stats, setStats] = useState<Stats>({
 		weeklyStats: {},
 		totalPoints: 0,
@@ -33,7 +35,9 @@ export function StatsProvider({ children }: { children: ReactNode }) {
 	});
 	const [isLoading, setIsLoading] = useState(true);
 
-	const refreshStats = async () => {
+	const refreshStats = useCallback(async () => {
+		if (!session?.user) return;
+
 		try {
 			setIsLoading(true);
 			const response = await fetch('/api/stats');
@@ -45,11 +49,11 @@ export function StatsProvider({ children }: { children: ReactNode }) {
 		} finally {
 			setIsLoading(false);
 		}
-	};
+	}, [session]);
 
 	useEffect(() => {
 		refreshStats();
-	}, []);
+	}, [refreshStats]);
 
 	return <StatsContext.Provider value={{ ...stats, isLoading, refreshStats }}>{children}</StatsContext.Provider>;
 }
