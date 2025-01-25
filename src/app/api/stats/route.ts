@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/db';
 import { User } from '@/models/User';
 import { Pick } from '@/models/Pick';
 import { authOptions } from '@/lib/auth';
+import { WeeklyStats, SeasonStats } from '@/types';
 
 export async function GET(req: Request) {
 	try {
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
 		await connectDB();
 
 		const allPicks = await Pick.find({ userId: session.user.id });
-		let weeklyStatsMap = {};
+		let weeklyStatsMap: Record<number, WeeklyStats> = {};
 		allPicks.forEach(pick => {
 			weeklyStatsMap[pick.week] = {
 				weeklyPoints: pick.weeklyPoints,
