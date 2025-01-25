@@ -29,7 +29,11 @@ export async function connectDB() {
 
 	if (!cached.promise) {
 		const opts = {
-			bufferCommands: false
+			bufferCommands: false,
+			ssl: true,
+			tls: true,
+			tlsAllowInvalidCertificates: true,
+			tlsAllowInvalidHostnames: true
 		};
 
 		cached.promise = mongoose.connect(MONGODB_URI!, opts).then(mongoose => {
