@@ -23,6 +23,7 @@ interface GameCardProps {
 	onSelect?: (gameId: string, team: string, opponent: string, isHome: boolean) => void;
 	showScores?: boolean;
 	disabled?: boolean;
+	isCorrect?: boolean | null;
 }
 
 export function GameCard({ game, selected, onSelect, showScores, disabled }: GameCardProps) {

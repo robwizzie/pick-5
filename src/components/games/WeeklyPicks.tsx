@@ -10,6 +10,7 @@ import { GameCard } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { StatsService } from '@/services/statsService';
 import { useStats } from '@/contexts/StatsContext';
+import type { Game } from './GameCard';
 
 interface WeeklyPicksProps {
 	currentWeek: number;
@@ -17,8 +18,11 @@ interface WeeklyPicksProps {
 
 export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 	const { data: session, status: sessionStatus } = useSession();
+	if (sessionStatus !== 'authenticated' && sessionStatus !== 'loading') {
+		return null;
+	}
 	const { refreshStats } = useStats();
-	const [games, setGames] = useState([]);
+	const [games, setGames] = useState<Game[]>([]);
 	const [picks, setPicks] = useState<any[]>([]);
 	const [tfsGame, setTfsGame] = useState('');
 	const [tfsScore, setTfsScore] = useState('');
@@ -48,7 +52,7 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 	};
 
 	const loadExistingPicks = async () => {
-		if (!session?.user || sessionStatus === 'loading') return;
+		if (sessionStatus !== 'authenticated') return;
 
 		try {
 			const response = await fetch(`/api/picks?week=${currentWeek}`);
@@ -137,8 +141,9 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 			} else {
 				throw new Error('Failed to submit picks');
 			}
-		} catch (error) {
-			console.error('Error submitting picks:', error);
+		} catch (err: unknown) {
+			const error = err as Error;
+			console.error('Error loading picks:', error);
 			setError(error.message);
 		}
 	};
