@@ -8,7 +8,18 @@ interface LeaderboardProps {
 
 export function Leaderboard({ currentWeek }: LeaderboardProps) {
 	const [weeklyResults, setWeeklyResults] = useState<Record<string, { player: string; points: number; correct: number; tfsPoints: number }>>({});
-	const [seasonStats, setSeasonStats] = useState<Record<string, { player: string; totalPoints: number; winPercentage: number; totalTFSPoints: number }>>({});
+	const [seasonStats, setSeasonStats] = useState<
+		Record<
+			string,
+			{
+				player: string;
+				totalPoints: number;
+				correctPicks: number;
+				totalPicks: number;
+				totalTFSPoints: number;
+			}
+		>
+	>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
@@ -44,8 +55,12 @@ export function Leaderboard({ currentWeek }: LeaderboardProps) {
 
 	const seasonLeaderboard = Object.entries(seasonStats)
 		.map(([key, stats]) => ({
-			player: stats.player || `User ${key.slice(-4)}`, // Fallback to part of user ID if no player name
-			...stats
+			player: stats.player || `User ${key.slice(-4)}`,
+			totalPoints: stats.totalPoints,
+			correctPicks: stats.correctPicks,
+			totalPicks: stats.totalPicks,
+			totalTFSPoints: stats.totalTFSPoints,
+			winPercentage: stats.totalPicks > 0 ? (stats.correctPicks / stats.totalPicks) * 100 : 0
 		}))
 		.sort((a, b) => b.totalPoints - a.totalPoints);
 
