@@ -30,13 +30,10 @@ export async function connectDB() {
 	if (!cached.promise) {
 		const opts = {
 			bufferCommands: false,
-			minPoolSize: 5,
-			maxPoolSize: 10,
-			connectTimeoutMS: 10000,
-			socketTimeoutMS: 45000,
 			ssl: true,
-			sslValidate: false,
-			sslCA: null
+			tls: true,
+			tlsAllowInvalidCertificates: true,
+			tlsAllowInvalidHostnames: true
 		};
 		cached.promise = mongoose.connect(MONGODB_URI!, opts).then(mongoose => {
 			return mongoose;

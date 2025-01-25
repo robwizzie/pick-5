@@ -18,9 +18,6 @@ interface WeeklyPicksProps {
 
 export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 	const { data: session, status: sessionStatus } = useSession();
-	if (sessionStatus !== 'authenticated' && sessionStatus !== 'loading') {
-		return null;
-	}
 	const { refreshStats } = useStats();
 	const [games, setGames] = useState<Game[]>([]);
 	const [picks, setPicks] = useState<any[]>([]);
@@ -34,6 +31,10 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 		loadWeeklyGames();
 		loadExistingPicks();
 	}, [currentWeek, session?.user]);
+
+	if (sessionStatus !== 'authenticated' && sessionStatus !== 'loading') {
+		return null;
+	}
 
 	const loadWeeklyGames = async () => {
 		if (sessionStatus === 'loading') return;
