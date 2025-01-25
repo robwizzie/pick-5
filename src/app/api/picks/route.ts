@@ -146,7 +146,7 @@ export async function GET(req: Request) {
 		}));
 
 		// Recalculate scores with current results
-		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(picks.picks, gameResults, picks.tfsGame, picks.tfsScore);
+		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(picks.picks, gameResults, picks.tfsGame, picks.tfsScore.toString());
 
 		// Update picks with current scores if they've changed
 		if (weeklyPoints !== picks.weeklyPoints || correctPicks !== picks.correctPicks || tfsPoints !== picks.tfsPoints) {
