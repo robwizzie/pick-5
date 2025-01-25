@@ -7,7 +7,16 @@ if (!MONGODB_URI) {
 	throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
 
-let cached = global.mongoose;
+interface MongooseCache {
+	conn: typeof mongoose | null;
+	promise: Promise<typeof mongoose> | null;
+}
+
+declare global {
+	var mongoose: MongooseCache;
+}
+
+let cached: MongooseCache = global.mongoose;
 
 if (!cached) {
 	cached = global.mongoose = { conn: null, promise: null };
