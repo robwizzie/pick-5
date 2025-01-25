@@ -67,7 +67,7 @@ export default function Home() {
 
 								{/* Right Column - Stats & Leaderboard */}
 								<div className='space-y-8'>
-									<SeasonStats totalPoints={seasonStats.totalPoints} weeklyStats={seasonStats.weeklyStats} correctPicks={seasonStats.correctPicks} totalPicks={seasonStats.totalPicks} totalTFSPoints={seasonStats.totalTFSPoints} /> <Leaderboard currentWeek={currentWeek} />
+									<SeasonStats />
 								</div>
 							</div>
 						</div>
