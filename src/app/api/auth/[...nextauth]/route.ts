@@ -25,7 +25,7 @@ export const authOptions = {
       }
       return session;
     },
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
       }
@@ -34,6 +34,8 @@ export const authOptions = {
   },
 };
 
-// The Next.js app directory requires you to explicitly define the HTTP methods
+// Create the NextAuth handler
 const handler = NextAuth(authOptions);
+
+// Explicitly define the supported HTTP methods
 export { handler as GET, handler as POST };
