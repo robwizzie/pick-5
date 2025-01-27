@@ -5,9 +5,9 @@ import { connectDB } from '@/lib/db';
 import { User } from '@/models/User';
 import { Pick } from '@/models/Pick';
 import { authOptions } from '@/lib/auth';
-import { WeeklyStats, SeasonStats } from '@/types';
+import { WeeklyStats } from '@/types';
 
-export async function GET(req: Request) {
+export async function GET() {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 		await connectDB();
 		const userPicks = await Pick.find({ userId: session.user.id });
 
-		const weeklyStats: Record<string, any> = {};
+		const weeklyStats: Record<string, { weeklyPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number }> = {};
 		let totalPoints = 0;
 		let correctPicks = 0;
 		let totalPicks = 0;
@@ -50,18 +50,17 @@ export async function GET(req: Request) {
 	}
 }
 
-export async function POST(req: Request) {
+export async function POST() {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { weeklyStats, week } = await req.json();
 		await connectDB();
 
 		const allPicks = await Pick.find({ userId: session.user.id });
-		let weeklyStatsMap: Record<number, WeeklyStats> = {};
+		const weeklyStatsMap: Record<number, WeeklyStats> = {};
 		allPicks.forEach(pick => {
 			weeklyStatsMap[pick.week] = {
 				weeklyPoints: pick.weeklyPoints,

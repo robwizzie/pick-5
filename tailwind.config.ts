@@ -57,6 +57,5 @@ export default {
 				foreground: 'white'
 			}
 		}
-	},
-	plugins: [require('tailwindcss-animate')]
+	}
 } satisfies Config;

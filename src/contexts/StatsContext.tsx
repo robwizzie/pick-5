@@ -1,3 +1,5 @@
+'use client';
+
 // src/contexts/StatsContext.tsx
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
