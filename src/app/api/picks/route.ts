@@ -12,23 +12,22 @@ export async function POST(req: Request) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {
-			console.error('No user ID in session:', session);
-			return NextResponse.json({ error: 'User ID not found' }, { status: 401 });
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
 		const body = await req.json();
-		const { week, picks, tfsGame, tfsScore } = body;
+		const { week, picks, tfsGame, tfsScore, leagueId } = body;
 
 		await connectDB();
 
-		if (!week || !picks || picks.length !== 5 || !tfsGame || typeof tfsScore !== 'number') {
-			console.error('Invalid request data:', { week, picks, tfsGame, tfsScore });
+		if (!week || !picks || picks.length !== 5 || !tfsGame || typeof tfsScore !== 'number' || !leagueId) {
 			return NextResponse.json({ error: 'Invalid request data' }, { status: 400 });
 		}
 
 		// Check if user already submitted picks for this week
 		const existingPicks = await Pick.findOne({
 			userId: session.user.id,
+			leagueId,
 			week
 		});
 
@@ -63,13 +62,14 @@ export async function POST(req: Request) {
 		// Create new picks with scores
 		const newPicks = await Pick.create({
 			userId: session.user.id,
+			leagueId,
 			week,
-			picks: scoredPicks,
+			picks,
 			tfsGame,
 			tfsScore,
-			tfsPoints,
-			weeklyPoints,
-			correctPicks,
+			weeklyPoints: 0,
+			correctPicks: 0,
+			tfsPoints: 0,
 			submitted: true
 		});
 
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
 		// Update user's total stats
 		const totalStats = await Pick.aggregate([
-			{ $match: { userId: session.user.id } },
+			{ $match: { userId: session.user.id, leagueId } },
 			{
 				$group: {
 					_id: null,
@@ -120,12 +120,18 @@ export async function GET(req: Request) {
 
 		const { searchParams } = new URL(req.url);
 		const week = searchParams.get('week');
+		const leagueId = searchParams.get('leagueId');
+
+		if (!week || !leagueId) {
+			return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+		}
 
 		await connectDB();
 
 		const picks = await Pick.findOne({
 			userId: session.user.id,
-			week: parseInt(week || '0')
+			week: parseInt(week, 10),
+			leagueId
 		});
 
 		if (!picks) {
@@ -133,7 +139,7 @@ export async function GET(req: Request) {
 		}
 
 		// Get current game results for re-scoring if needed
-		const games = await NFLService.getWeeklyGames(parseInt(week || '0'));
+		const games = await NFLService.getWeeklyGames(parseInt(week, 10));
 		const gameResults = games.map(game => ({
 			id: game.id,
 			homeScore: game.home.score || 0,

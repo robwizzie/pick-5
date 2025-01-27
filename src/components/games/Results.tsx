@@ -4,10 +4,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Spinner } from '@/components/ui/spinner';
 import { GameCard } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
-import { useStats } from '@/contexts/StatsContext';
+import { useWeek } from '@/contexts/WeekContext';
+import { useLeague } from '@/contexts/LeagueContext';
 
 interface WeeklyPicks {
 	picks: Array<{
@@ -21,9 +23,10 @@ interface WeeklyPicks {
 	submitted: boolean;
 }
 
-export function Results({ currentWeek }: { currentWeek: number }) {
+export function Results() {
+	const { currentWeek } = useWeek();
+	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
-	const { refreshStats } = useStats();
 	const [picks, setPicks] = useState<WeeklyPicks | null>(null);
 	const [games, setGames] = useState<Game[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -34,22 +37,31 @@ export function Results({ currentWeek }: { currentWeek: number }) {
 			if (sessionStatus === 'loading') return;
 
 			try {
+				if (!leagueId) {
+					console.error('[Results] Missing leagueId');
+					setError('League ID is missing.');
+					return;
+				}
+
 				setLoading(true);
-				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}`)]);
+
+				// Pass leagueId to the backend
+				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`)]);
 
 				const picksData = await picksResponse.json();
+
 				setGames(weeklyGames);
 				setPicks(picksData);
 			} catch (err) {
+				console.error('[Results] Error loading results:', err);
 				setError('Error loading results');
-				console.error('Error:', err);
 			} finally {
 				setLoading(false);
 			}
 		};
 
 		loadData();
-	}, [currentWeek, sessionStatus]);
+	}, [currentWeek, sessionStatus, leagueId]);
 
 	// Game score calculation utility
 	const getGameScore = (game: Game) => ({
@@ -85,29 +97,16 @@ export function Results({ currentWeek }: { currentWeek: number }) {
 		return 0;
 	};
 
-	const renderTFSPrediction = () => {
-		if (!picks?.tfsGame) return null;
+	const getPointsColor = (points: number) => {
+		if (points > 0) return 'bg-[#22c55e] text-black'; // Green with black text
+		if (points < 0) return 'bg-destructive text-white';
+		return 'bg-muted text-muted-foreground';
+	};
 
-		const game = games.find(g => g.id === picks.tfsGame);
-		if (!game) return null;
-
-		const scores = getGameScore(game);
-		const predictedScore = parseInt(picks.tfsScore);
-		const gameStatus = checkGameStatus(game);
-		const tfsPoints = gameStatus === 'completed' ? getTFSPoints(predictedScore, scores.total) : 0;
-
-		return (
-			<div className='p-4 rounded-lg bg-gray-50 border border-gray-200'>
-				<div className='space-y-2'>
-					<p className='font-medium'>
-						{game.away.team} vs {game.home.team}
-					</p>
-					<p>Your Prediction: {predictedScore} points</p>
-					<p>Actual Total: {scores.total} points</p>
-					<p className={`font-medium ${tfsPoints > 0 ? 'text-green-600' : 'text-red-600'}`}>TFS Points: +{tfsPoints}</p>
-				</div>
-			</div>
-		);
+	const getTextColor = (points: number) => {
+		if (points > 0) return 'text-[#22c55e]'; // Green
+		if (points < 0) return 'text-destructive';
+		return 'text-muted-foreground';
 	};
 
 	// Memoized results calculation
@@ -133,37 +132,34 @@ export function Results({ currentWeek }: { currentWeek: number }) {
 			const gameStatus = checkGameStatus(game);
 			const isCorrect = checkPickCorrect(pick, game);
 
+			// Add points for correct picks
 			if (isCorrect) {
 				totalPoints += 2;
-				correctPicks++;
+				correctPicks += 1;
 			}
 
+			const badgeStyle = 'absolute px-2 py-1 rounded-full text-xs font-medium border';
+
 			return (
-				<div
-					key={pick.gameId}
-					className={`relative rounded-lg overflow-hidden shadow-sm transition-all
-       ${gameStatus === 'completed' ? (isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200') : 'bg-gray-50 border border-gray-200'}`}>
-					<GameCard
-						game={{
-							...game,
-							away: { ...game.away, score: scores.away },
-							home: { ...game.home, score: scores.home },
-							status: gameStatus
-						}}
-						selected={pick.team}
-						showScores={true}
-						disabled={true}
-						isCorrect={isCorrect}
-					/>
-					<div
-						className={`absolute top-2 right-2 px-3 py-1.5 rounded-full text-sm font-medium
-       ${isCorrect ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-						{isCorrect ? '+2 pts' : '0 pts'}
-					</div>
-					<div
-						className='absolute top-2 left-2 px-3 py-1.5 rounded-full 
-       bg-gray-100 text-gray-600 text-sm font-medium'>
-						Pick {index + 1}
+				<div key={pick.gameId} className='relative rounded-lg overflow-hidden border-2 bg-card border-primary/20 pointer-events-none'>
+					{/* Badges moved outside GameCard */}
+					<div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(isCorrect ? 2 : 0)}`}>{isCorrect ? '+2 pts' : '0 pts'}</div>
+					<div className='absolute top-2 left-1/2 transform -translate-x-1/2 px-2 py-1 rounded-full bg-primary text-black text-xs font-medium shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>
+					<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>Pick {index + 1}</div>
+					<div className='mt-8'>
+						<GameCard
+							game={{
+								...game,
+								away: { ...game.away, score: scores.away },
+								home: { ...game.home, score: scores.home },
+								status: gameStatus
+							}}
+							selected={pick.team}
+							showScores={true}
+							disabled={true}
+							isCorrect={isCorrect}
+							noHover={true}
+						/>
 					</div>
 				</div>
 			);
@@ -193,7 +189,7 @@ export function Results({ currentWeek }: { currentWeek: number }) {
 			<Card>
 				<CardContent className='p-6'>
 					<div className='flex items-center justify-center'>
-						<span className='text-gray-500'>Loading results...</span>
+						<Spinner />
 					</div>
 				</CardContent>
 			</Card>
@@ -212,14 +208,29 @@ export function Results({ currentWeek }: { currentWeek: number }) {
 		);
 	}
 
+	if (!picks || !picks.picks.length) {
+		return (
+			<Card className='bg-card border-primary/20'>
+				<CardHeader>
+					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<Alert variant='destructive' className='mb-4'>
+						<AlertDescription>No picks were made for this week.</AlertDescription>
+					</Alert>
+				</CardContent>
+			</Card>
+		);
+	}
+
 	return (
-		<Card>
+		<Card className='bg-card border-primary/20'>
 			<CardHeader>
-				<CardTitle>Week {currentWeek} Results</CardTitle>
+				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
 			</CardHeader>
 			<CardContent>
 				{error && (
-					<Alert className='mb-4' variant='destructive'>
+					<Alert variant='destructive' className='mb-4 border-destructive/50 bg-destructive/10'>
 						<AlertDescription>{error}</AlertDescription>
 					</Alert>
 				)}
@@ -227,30 +238,54 @@ export function Results({ currentWeek }: { currentWeek: number }) {
 				<div className='space-y-6'>
 					{/* Game Picks */}
 					<div>
-						<h3 className='text-lg font-medium mb-4'>Your Picks</h3>
+						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>Your Picks</h3>
 						<div className='space-y-3'>{results.gameElements}</div>
 					</div>
 
 					{/* TFS Prediction */}
 					<div>
-						<h3 className='text-lg font-medium mb-4'>Total Final Score</h3>
-						{renderTFSPrediction()}
+						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>Total Final Score</h3>
+						<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
+							<div className='space-y-2 text-foreground'>
+								{picks?.tfsGame && games.find(g => g.id === picks.tfsGame) && (
+									<>
+										<div className='font-oswald uppercase text-lg text-primary mb-2'>
+											{games.find(g => g.id === picks.tfsGame)?.away.team} vs {games.find(g => g.id === picks.tfsGame)?.home.team}
+										</div>
+										<div className='flex justify-between items-center bg-primary/10 p-3 rounded-lg'>
+											<div>
+												<span className='text-primary font-medium'>Your Guess: </span>
+												<span className='text-lg font-bold'>{picks.tfsScore}</span>
+											</div>
+											<div>
+												<span className='text-primary font-medium'>Actual: </span>
+												<span className='text-lg font-bold'>{getGameScore(games.find(g => g.id === picks.tfsGame)!).total}</span>
+											</div>
+											<div>
+												<span className='text-primary font-medium'>Bonus: </span>
+												<span className={`text-lg font-bold ${getTextColor(results.tfsPoints)}`}>+{results.tfsPoints}</span>
+											</div>
+										</div>
+									</>
+								)}
+							</div>
+						</div>
 					</div>
 
 					{/* Weekly Summary */}
-					<div className='border-t border-gray-200 pt-6 mt-8'>
+					<div className='border-t border-primary/20 pt-6 mt-8'>
 						<div className='grid grid-cols-3 gap-4'>
-							<div className='bg-gray-50 rounded-lg p-4 text-center'>
-								<p className='text-gray-500 text-sm'>Total Points</p>
-								<p className='text-2xl font-bold'>{results.totalPoints}</p>
+							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+								<p className='text-primary/80 text-sm font-medium'>Total Points</p>
+								<p className={`text-2xl font-bold ${getTextColor(results.totalPoints)}`}>{results.totalPoints}</p>
 							</div>
-							<div className='bg-gray-50 rounded-lg p-4 text-center'>
-								<p className='text-gray-500 text-sm'>Correct Picks</p>
-								<p className='text-2xl font-bold'>{results.correctPicks}/5</p>
+							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+								<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
+								<p className={`text-2xl font-bold text-primary`}>{results.correctPicks}/5</p>
 							</div>
-							<div className='bg-gray-50 rounded-lg p-4 text-center'>
-								<p className='text-gray-500 text-sm'>TFS Points</p>
-								<p className='text-2xl font-bold'>+{results.tfsPoints}</p>
+							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+								<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
+								<p className={`text-2xl font-bold ${getTextColor(results.tfsPoints)}`}>{results.tfsPoints}</p>
 							</div>
 						</div>
 					</div>

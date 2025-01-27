@@ -32,7 +32,7 @@ export class ScoringService {
 		return 0;
 	}
 
-	static calculateWeekScore(picks: any[], gameResults: GameResult[], tfsGame: string, tfsScore: number) {
+	static calculateWeekScore(picks: { gameId: string; team: string; isHome: boolean }[], gameResults: GameResult[], tfsGame: string, tfsScore: number) {
 		let weeklyPoints = 0;
 		let correctPicks = 0;
 		let tfsPoints = 0;

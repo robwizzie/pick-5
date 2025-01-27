@@ -7,6 +7,7 @@ const PickSchema = new mongoose.Schema({
 		ref: 'User',
 		required: true
 	},
+	leagueId: { type: mongoose.Schema.Types.ObjectId, ref: 'League', required: true },
 	week: {
 		type: Number,
 		required: true

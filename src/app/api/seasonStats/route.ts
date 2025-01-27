@@ -1,7 +1,6 @@
 // src/app/api/seasonStats/route.ts
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
-import { User } from '@/models/User';
 import { Pick } from '@/models/Pick';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -13,10 +12,17 @@ export async function GET(req: Request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
+		const { searchParams } = new URL(req.url);
+		const leagueId = searchParams.get('leagueId');
+
+		if (!leagueId) {
+			return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
+		}
+
 		await connectDB();
 
-		const userPicks = await Pick.find({ userId: session.user.id });
-		const weeklyStats: Record<string, any> = {};
+		const userPicks = await Pick.find({ userId: session.user.id, leagueId });
+		const weeklyStats: Record<string, { weeklyPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number }> = {};
 
 		userPicks.forEach(pick => {
 			weeklyStats[pick.week] = {

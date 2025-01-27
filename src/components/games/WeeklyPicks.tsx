@@ -6,21 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Spinner } from '@/components/ui/spinner';
 import { GameCard } from './GameCard';
 import { NFLService } from '@/services/nflService';
-import { StatsService } from '@/services/statsService';
 import { useStats } from '@/contexts/StatsContext';
+import { useWeek } from '@/contexts/WeekContext';
+import { useLeague } from '@/contexts/LeagueContext';
 import type { Game } from './GameCard';
 
-interface WeeklyPicksProps {
-	currentWeek: number;
-}
-
-export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
+export function WeeklyPicks() {
+	const { currentWeek } = useWeek();
+	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const { refreshStats } = useStats();
 	const [games, setGames] = useState<Game[]>([]);
-	const [picks, setPicks] = useState<any[]>([]);
+	const [picks, setPicks] = useState<{ gameId: string; team: string; opponent: string; isHome: boolean }[]>([]);
 	const [tfsGame, setTfsGame] = useState('');
 	const [tfsScore, setTfsScore] = useState('');
 	const [loading, setLoading] = useState(true);
@@ -28,23 +28,22 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 	const [submitted, setSubmitted] = useState(false);
 
 	useEffect(() => {
+		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
 		loadWeeklyGames();
 		loadExistingPicks();
 	}, [currentWeek, session?.user]);
-
-	if (sessionStatus !== 'authenticated' && sessionStatus !== 'loading') {
-		return null;
-	}
 
 	const loadWeeklyGames = async () => {
 		if (sessionStatus === 'loading') return;
 
 		try {
 			setLoading(true);
+			console.log('[WeeklyPicks] Fetching games for week:', currentWeek);
 			const weeklyGames = await NFLService.getWeeklyGames(currentWeek);
+			console.log('[WeeklyPicks] Games fetched:', weeklyGames);
 			setGames(weeklyGames);
 		} catch (error) {
-			console.error('Error loading weekly games:', error);
+			console.error('[WeeklyPicks] Error loading weekly games:', error);
 			setGames([]);
 			setError('Error loading games');
 		} finally {
@@ -53,11 +52,14 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 	};
 
 	const loadExistingPicks = async () => {
-		if (sessionStatus !== 'authenticated') return;
+		if (sessionStatus !== 'authenticated' || !leagueId) return;
 
 		try {
-			const response = await fetch(`/api/picks?week=${currentWeek}`);
+			console.log('[WeeklyPicks] Fetching picks for week:', currentWeek, 'and leagueId:', leagueId);
+
+			const response = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
 			const data = await response.json();
+			console.log('[WeeklyPicks] Picks fetched:', data);
 
 			if (data) {
 				setPicks(data.picks || []);
@@ -71,7 +73,8 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 				setSubmitted(false);
 			}
 		} catch (error) {
-			console.error('Error loading picks:', error);
+			console.error('[WeeklyPicks] Error loading picks:', error);
+			setError('Error loading picks');
 		}
 	};
 
@@ -117,35 +120,29 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 			return;
 		}
 
+		if (!leagueId) {
+			setError('League ID is missing');
+			return;
+		}
+
 		try {
 			const response = await fetch('/api/picks', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ week: currentWeek, picks, tfsGame, tfsScore: parseInt(tfsScore) })
+				body: JSON.stringify({ week: currentWeek, picks, tfsGame, tfsScore: parseInt(tfsScore), leagueId })
 			});
 
 			if (response.ok) {
-				const result = await response.json();
-				await StatsService.updateMongoStats(
-					session.user.id,
-					{
-						weeklyPoints: result.weeklyPoints,
-						correctPicks: result.correctPicks,
-						totalPicks: picks.length,
-						tfsPoints: result.tfsPoints
-					},
-					currentWeek
-				);
 				await refreshStats();
 				setSubmitted(true);
 				await Promise.all([loadWeeklyGames(), loadExistingPicks()]);
 			} else {
-				throw new Error('Failed to submit picks');
+				const { error } = await response.json();
+				setError(error || 'Failed to submit picks');
 			}
-		} catch (err: unknown) {
-			const error = err as Error;
-			console.error('Error loading picks:', error);
-			setError(error.message);
+		} catch (err) {
+			console.error('Error submitting picks:', err);
+			setError('An unexpected error occurred');
 		}
 	};
 
@@ -154,7 +151,7 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 			<Card>
 				<CardContent className='p-6'>
 					<div className='flex items-center justify-center'>
-						<span className='text-gray-500'>Loading...</span>
+						<Spinner />
 					</div>
 				</CardContent>
 			</Card>
@@ -176,7 +173,7 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 	return (
 		<Card>
 			<CardHeader>
-				<CardTitle>Week {currentWeek} Picks</CardTitle>
+				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Picks</CardTitle>
 			</CardHeader>
 			<CardContent>
 				{error && (
@@ -193,9 +190,12 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 								{picks.map((pick, index) => {
 									const game = games.find(g => g.id === pick.gameId);
 									return (
-										<div key={pick.gameId} className='relative rounded-lg overflow-hidden shadow-sm bg-gray-50 border border-gray-200'>
-											<GameCard game={game} selected={pick.team} showScores={false} disabled={true} />
-											<div className='absolute top-2 left-2 px-3 py-1.5 rounded-full bg-gray-100 text-gray-600 text-sm font-medium'>Pick {index + 1}</div>
+										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
+											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
+											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
+											<div className='mt-8'>
+												<GameCard game={game} selected={pick.team} showScores={false} disabled={true} />{' '}
+											</div>
 										</div>
 									);
 								})}
@@ -206,7 +206,7 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
 							<div className='space-y-3'>
 								{games.map(game => (
-									<div key={game.id} className={`relative rounded-lg overflow-hidden shadow-sm transition-all ${picks.find(p => p.gameId === game.id) ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'}`}>
+									<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${picks.find(p => p.gameId === game.id) ? 'border-primary' : 'border-primary/20'}`}>
 										<GameCard game={game} selected={picks.find(p => p.gameId === game.id)?.team} onSelect={handleTeamSelect} disabled={picks.length >= 5 && !picks.find(p => p.gameId === game.id)} />
 									</div>
 								))}
@@ -216,7 +216,7 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 								<div className='mt-6 space-y-4'>
 									<div>
 										<h3 className='text-lg font-medium mb-2'>Total Final Score Prediction</h3>
-										<select className='w-full p-2 border rounded mb-2' value={tfsGame} onChange={e => setTfsGame(e.target.value)}>
+										<select className='w-full p-2 rounded mb-2 bg-card border-2 border-primary/20 text-foreground' value={tfsGame} onChange={e => setTfsGame(e.target.value)}>
 											<option value=''>Select Game</option>
 											{picks.map(pick => {
 												const game = games.find(g => g.id === pick.gameId);
@@ -227,10 +227,10 @@ export function WeeklyPicks({ currentWeek }: WeeklyPicksProps) {
 												);
 											})}
 										</select>
-										<Input type='number' placeholder='Predicted Total Score' value={tfsScore} onChange={e => setTfsScore(e.target.value)} />
+										<Input type='number' placeholder='Predicted Total Score' value={tfsScore} onChange={e => setTfsScore(e.target.value)} className='bg-card border-2 border-primary/20' />
 									</div>
 
-									<Button className='w-full' onClick={handleSubmit} disabled={!tfsGame || !tfsScore}>
+									<Button className='w-full bg-primary text-black hover:bg-primary/90 font-medium' onClick={handleSubmit} disabled={!tfsGame || !tfsScore}>
 										Submit Picks
 									</Button>
 								</div>
