@@ -23,6 +23,7 @@ export function SeasonStats() {
 		totalPicks: 0,
 		totalTFSPoints: 0
 	});
+	const [key, setKey] = useState(0); // Force rerender
 
 	const winPercentage = stats.totalPicks > 0 ? ((stats.correctPicks / stats.totalPicks) * 100).toFixed(0) : '0';
 
@@ -34,12 +35,13 @@ export function SeasonStats() {
 					return;
 				}
 				setLoading(true);
-				const response = await fetch(`/api/seasonStats?leagueId=${leagueId}`);
+				const response = await fetch(`/api/seasonStats?leagueId=${leagueId}`, { cache: 'no-store' });
 				if (!response.ok) {
 					throw new Error('Failed to fetch stats');
 				}
 				const data = await response.json();
 				setStats(data);
+				console.log('[SeasonStats Debug] Updated stats:', data); // Debugging log
 			} catch (err) {
 				setError('Failed to load stats.');
 				console.error(err);
@@ -49,6 +51,16 @@ export function SeasonStats() {
 		};
 
 		fetchStats();
+
+		// Refresh stats on custom event
+		const handleRefresh = () => {
+			console.log('[SeasonStats Debug] Refreshing stats...');
+			fetchStats();
+			setKey(prev => prev + 1); // Force rerender
+		};
+		window.addEventListener('refreshSeasonStats', handleRefresh);
+
+		return () => window.removeEventListener('refreshSeasonStats', handleRefresh);
 	}, [leagueId]);
 
 	const handleWeekClick = (week: string) => {
@@ -60,7 +72,7 @@ export function SeasonStats() {
 	if (error) return <div className='text-destructive'>{error}</div>;
 
 	return (
-		<Card>
+		<Card key={key}>
 			<CardHeader>
 				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Season Statistics</CardTitle>
 			</CardHeader>
