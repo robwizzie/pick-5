@@ -25,27 +25,35 @@ export function Leaderboard() {
 		>
 	>({});
 	const [loading, setLoading] = useState(true);
+	const [waitingForResults, setWaitingForResults] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [key, setKey] = useState(0); // Force rerender mechanism
 
 	// Fetch leaderboard data
 	const fetchLeaderboard = async () => {
+		if (!leagueId) {
+			setError('League ID is missing');
+			return;
+		}
 		try {
-			if (!leagueId) {
-				setError('League ID is missing');
-				return;
-			}
 			setLoading(true);
 			setError(null);
-			const response = await fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}`);
-			if (!response.ok) {
-				throw new Error('Failed to fetch leaderboard data');
-			}
+
+			const response = await fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' });
+			if (!response.ok) throw new Error('Failed to fetch leaderboard data');
+
 			const data = await response.json();
+			console.log('[Leaderboard Debug] Fetched leaderboard data:', data);
+
 			setWeeklyResults(data.weeklyResults);
 			setSeasonStats(data.seasonStats);
+
+			// Check if all results are pending
+			const allPending = data.weeklyResults.every((result: { points: number }) => result.points === 0);
+			setWaitingForResults(allPending);
 		} catch (err) {
+			console.error('Failed to load leaderboard data:', err);
 			setError('Failed to load leaderboard data.');
-			console.error(err);
 		} finally {
 			setLoading(false);
 		}
@@ -53,6 +61,13 @@ export function Leaderboard() {
 
 	useEffect(() => {
 		fetchLeaderboard();
+		const handleRefresh = () => {
+			console.log('[Leaderboard Debug] Refreshing leaderboard');
+			fetchLeaderboard();
+			setKey(prev => prev + 1); // Trigger a rerender
+		};
+		window.addEventListener('refreshLeaderboard', handleRefresh);
+		return () => window.removeEventListener('refreshLeaderboard', handleRefresh);
 	}, [currentWeek, leagueId]);
 
 	// Generate leaderboard data
@@ -74,7 +89,7 @@ export function Leaderboard() {
 		.sort((a, b) => b.totalPoints - a.totalPoints);
 
 	return (
-		<Card>
+		<Card key={key}>
 			<CardHeader>
 				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Leaderboard</CardTitle>
 			</CardHeader>
@@ -89,26 +104,30 @@ export function Leaderboard() {
 						</TabsList>
 
 						<TabsContent value='weekly'>
-							<div className='space-y-2'>
-								{weeklyLeaderboard.map((entry, index) => (
-									<div key={index} className='flex justify-between items-center p-2 bg-card border-2 border-primary/20 rounded-lg'>
-										<div className='flex items-center space-x-4'>
-											<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
-											<span className='text-primary'>{entry.player}</span>
-										</div>
-										<div className='flex space-x-4'>
-											<div className='text-right'>
-												<p className='text-sm text-primary/80'>Points</p>
-												<p className='font-bold text-primary'>{entry.points}</p>
+							{waitingForResults ? (
+								<div className='text-primary/80 text-center'>Results for this week are not yet available.</div>
+							) : (
+								<div className='space-y-2'>
+									{weeklyLeaderboard.map((entry, index) => (
+										<div key={index} className='flex justify-between items-center p-2 bg-card border-2 border-primary/20 rounded-lg'>
+											<div className='flex items-center space-x-4'>
+												<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
+												<span className='text-primary'>{entry.player}</span>
 											</div>
-											<div className='text-right'>
-												<p className='text-sm text-primary/80'>TFS</p>
-												<p className='font-bold text-primary'>{entry.tfsPoints}</p>
+											<div className='flex space-x-4'>
+												<div className='text-right'>
+													<p className='text-sm text-primary/80'>Points</p>
+													<p className='font-bold text-primary'>{entry.points}</p>
+												</div>
+												<div className='text-right'>
+													<p className='text-sm text-primary/80'>TFS</p>
+													<p className='font-bold text-primary'>{entry.tfsPoints}</p>
+												</div>
 											</div>
 										</div>
-									</div>
-								))}
-							</div>
+									))}
+								</div>
+							)}
 						</TabsContent>
 
 						<TabsContent value='season'>

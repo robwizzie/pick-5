@@ -21,9 +21,13 @@ export async function GET(req: Request) {
 
 		await connectDB();
 
+		// Find picks for the user in the specific league
 		const userPicks = await Pick.find({ userId: session.user.id, leagueId });
+
+		// Initialize weekly stats
 		const weeklyStats: Record<string, { weeklyPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number }> = {};
 
+		// Calculate weekly stats
 		userPicks.forEach(pick => {
 			weeklyStats[pick.week] = {
 				weeklyPoints: pick.weeklyPoints,
@@ -33,6 +37,7 @@ export async function GET(req: Request) {
 			};
 		});
 
+		// Aggregate totals across all weeks
 		const totals = userPicks.reduce(
 			(acc, pick) => ({
 				totalPoints: acc.totalPoints + pick.weeklyPoints,
@@ -40,12 +45,7 @@ export async function GET(req: Request) {
 				totalPicks: acc.totalPicks + pick.picks.length,
 				totalTFSPoints: acc.totalTFSPoints + pick.tfsPoints
 			}),
-			{
-				totalPoints: 0,
-				correctPicks: 0,
-				totalPicks: 0,
-				totalTFSPoints: 0
-			}
+			{ totalPoints: 0, correctPicks: 0, totalPicks: 0, totalTFSPoints: 0 }
 		);
 
 		return NextResponse.json({

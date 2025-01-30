@@ -133,8 +133,14 @@ export function WeeklyPicks() {
 			});
 
 			if (response.ok) {
-				await refreshStats();
 				setSubmitted(true);
+
+				// Dispatch refresh events
+				const leaderboardEvent = new CustomEvent('refreshLeaderboard');
+				const statsEvent = new CustomEvent('refreshSeasonStats');
+				window.dispatchEvent(leaderboardEvent);
+				window.dispatchEvent(statsEvent);
+
 				await Promise.all([loadWeeklyGames(), loadExistingPicks()]);
 			} else {
 				const { error } = await response.json();
@@ -192,9 +198,9 @@ export function WeeklyPicks() {
 									return (
 										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
 											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
-											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
+											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
 											<div className='mt-8'>
-												<GameCard game={game} selected={pick.team} showScores={false} disabled={true} />{' '}
+												<GameCard game={game} selected={pick.team} showScores={false} disabled={true} />
 											</div>
 										</div>
 									);
@@ -230,7 +236,16 @@ export function WeeklyPicks() {
 										<Input type='number' placeholder='Predicted Total Score' value={tfsScore} onChange={e => setTfsScore(e.target.value)} className='bg-card border-2 border-primary/20' />
 									</div>
 
-									<Button className='w-full bg-primary text-black hover:bg-primary/90 font-medium' onClick={handleSubmit} disabled={!tfsGame || !tfsScore}>
+									<Button
+										className='w-full bg-primary text-black hover:bg-primary/90 font-medium'
+										onClick={async () => {
+											await handleSubmit();
+											// Trigger Leaderboard and Stats refresh
+											const leaderboardEvent = new CustomEvent('refreshLeaderboard');
+											window.dispatchEvent(leaderboardEvent);
+											await refreshStats();
+										}}
+										disabled={!tfsGame || !tfsScore}>
 										Submit Picks
 									</Button>
 								</div>
