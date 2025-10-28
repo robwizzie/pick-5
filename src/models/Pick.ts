@@ -3,11 +3,11 @@ import mongoose from 'mongoose';
 
 const PickSchema = new mongoose.Schema({
 	userId: {
-		type: mongoose.Schema.Types.ObjectId,
+		type: String,
 		ref: 'User',
 		required: true
 	},
-	leagueId: { type: mongoose.Schema.Types.ObjectId, ref: 'League', required: true },
+	leagueId: { type: String, ref: 'League', required: true },
 	week: {
 		type: Number,
 		required: true
@@ -45,8 +45,8 @@ const PickSchema = new mongoose.Schema({
 	}
 });
 
-// Ensure one pick set per user per week
-PickSchema.index({ userId: 1, week: 1 }, { unique: true });
+// Ensure one pick set per user per week per league
+PickSchema.index({ userId: 1, week: 1, leagueId: 1 }, { unique: true });
 
 // Check if model exists before creating new one
 export const Pick = mongoose.models?.Pick || mongoose.model('Pick', PickSchema);
