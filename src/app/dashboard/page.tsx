@@ -24,11 +24,7 @@ const Dashboard = () => {
 			if (!session) return;
 
 			try {
-				const response = await fetch('/api/user/leagues', {
-					headers: {
-						Authorization: `Bearer ${session.accessToken}`
-					}
-				});
+				const response = await fetch('/api/user/leagues');
 
 				if (!response.ok) {
 					const errorText = await response.text();
