@@ -14,11 +14,13 @@ export const authOptions: NextAuthOptions = {
 	adapter: MongoDBAdapter(clientPromise),
 	secret: process.env.NEXTAUTH_SECRET,
 	pages: {
-		signIn: '/auth/signin'
+		signIn: '/login',
+		error: '/login'
 	},
 	session: {
 		strategy: 'jwt'
 	},
+    debug: false,
 	callbacks: {
 		session: async ({ session, token }) => {
 			if (session?.user && token?.sub) {
@@ -31,6 +33,16 @@ export const authOptions: NextAuthOptions = {
 				token.id = user.id;
 			}
 			return token;
+		},
+        async signIn() {
+            return true;
+        },
+        async redirect({ url, baseUrl }) {
+			// Allows relative callback URLs
+			if (url.startsWith('/')) return `${baseUrl}${url}`;
+			// Allows callback URLs on the same origin
+			else if (new URL(url).origin === baseUrl) return url;
+			return baseUrl;
 		}
 	}
 };
