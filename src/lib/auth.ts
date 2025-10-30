@@ -1,8 +1,8 @@
 // src/lib/auth.ts
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-import { MongoDBAdapter } from '@auth/mongodb-adapter';
-import clientPromise from '@/lib/mongodb-adapter';
+import { connectDB } from '@/lib/db';
+import { User } from '@/models/User';
 
 export const authOptions: NextAuthOptions = {
 	providers: [
@@ -11,7 +11,6 @@ export const authOptions: NextAuthOptions = {
 			clientSecret: process.env.GOOGLE_SECRET!
 		})
 	],
-	adapter: MongoDBAdapter(clientPromise),
 	secret: process.env.NEXTAUTH_SECRET,
 	pages: {
 		signIn: '/login',
@@ -22,15 +21,42 @@ export const authOptions: NextAuthOptions = {
 	},
     debug: false,
 	callbacks: {
-		session: async ({ session, token }) => {
+		async signIn({ user, account, profile }) {
+			// Connect to DB and create/update user
+			await connectDB();
+
+			const existingUser = await User.findOne({ email: user.email });
+
+			if (!existingUser) {
+				// Create new user
+				const newUser = await User.create({
+					email: user.email,
+					name: user.name,
+					image: user.image,
+					emailVerified: new Date()
+				});
+				user.id = newUser._id.toString();
+			} else {
+				// Update existing user
+				user.id = existingUser._id.toString();
+				await User.findByIdAndUpdate(existingUser._id, {
+					name: user.name,
+					image: user.image,
+					updatedAt: new Date()
+				});
+			}
+
+			return true;
+		},
+		async session({ session, token }) {
 			if (session?.user && token?.sub) {
 				session.user.id = token.sub;
 			}
 			return session;
 		},
-		jwt: async ({ token, user }) => {
+		async jwt({ token, user }) {
 			if (user) {
-				token.id = user.id;
+				token.sub = user.id;
 			}
 			return token;
 		},
