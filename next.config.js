@@ -1,9 +1,13 @@
 /** @type {import('next').NextConfig} */
-const config = {
-  reactStrictMode: true,
-  eslint: {
-    ignoreDuringBuilds: true, // Temporarily ignore ESLint errors during production builds
-  },
+const nextConfig = {
+    images: {
+        remotePatterns: [
+            {
+                protocol: 'https',
+                hostname: 'lh3.googleusercontent.com'
+            }
+        ]
+    }
 };
 
-module.exports = config;
+module.exports = nextConfig;

@@ -1,7 +1,7 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { WeeklyPicks } from '@/components/games/WeeklyPicks';
@@ -16,8 +16,9 @@ interface League {
 	sport: string;
 }
 
-export default function LeagueDetails({ params }: { params: Promise<{ id: string }> }) {
-	const { id } = use(params);
+export default function LeagueDetails() {
+	const params = useParams();
+	const id = (params?.id as string) || '';
 	const [league, setLeague] = useState<League | null>(null);
 	const router = useRouter();
 
@@ -53,7 +54,7 @@ export default function LeagueDetails({ params }: { params: Promise<{ id: string
 			<Card className='mb-8 bg-card border-2 border-primary/20'>
 				<div className='flex items-center justify-start p-6 gap-8'>
 					<div className='relative w-24 h-24 flex-shrink-0'>
-						<Image src='/pick-5-logo.png' alt='Pick 5 Logo' fill className='object-contain' priority />
+						<Image src='/pick-5-logo.png' alt='Pick 5 Logo' fill sizes='96px' className='object-contain' priority />
 					</div>
 					<div>
 						<h1 className='text-2xl font-oswald uppercase tracking-wide text-primary'>{league.name}</h1>
