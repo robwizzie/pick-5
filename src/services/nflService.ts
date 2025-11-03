@@ -48,7 +48,7 @@ export class NFLService {
 		}
 	}
 
-	private static calculateCurrentWeek(): number {
+	static calculateCurrentWeek(): number {
 		const now = new Date();
 		const seasonYear = this.getCurrentSeason();
 		// Approx season start: first Thursday of September
