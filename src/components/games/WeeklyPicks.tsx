@@ -15,7 +15,7 @@ import { useLeague } from '@/contexts/LeagueContext';
 import type { Game } from './GameCard';
 
 export function WeeklyPicks() {
-	const { currentWeek } = useWeek();
+	const { currentWeek, currentNFLWeek } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const { refreshStats } = useStats();
@@ -26,6 +26,9 @@ export function WeeklyPicks() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [submitted, setSubmitted] = useState(false);
+	
+	// Check if viewing a past week
+	const isPastWeek = currentWeek < currentNFLWeek;
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
@@ -172,6 +175,43 @@ export function WeeklyPicks() {
 					<Alert>
 						<AlertDescription>Please sign in to make picks</AlertDescription>
 					</Alert>
+				</CardContent>
+			</Card>
+		);
+	}
+
+	// Show past week message if viewing a week in the past
+	if (isPastWeek) {
+		return (
+			<Card>
+				<CardHeader>
+					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Picks</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<Alert className='mb-4 bg-muted/50 border-2 border-primary/20'>
+						<AlertDescription className='text-foreground'>
+							This week has already passed. Picks are no longer available for past weeks. Please view the Results tab to see your picks and scores from this week.
+						</AlertDescription>
+					</Alert>
+					{submitted && picks.length > 0 && (
+						<div>
+							<h3 className='text-lg font-medium mb-4'>Your Picks</h3>
+							<div className='space-y-3'>
+								{picks.map((pick, index) => {
+									const game = games.find(g => g.id === pick.gameId);
+									return (
+										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
+											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
+											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
+											<div className='mt-8'>
+												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} />
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					)}
 				</CardContent>
 			</Card>
 		);
