@@ -31,6 +31,7 @@ export function WeeklyPicks() {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
 		loadWeeklyGames();
 		loadExistingPicks();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, session?.user]);
 
 	const loadWeeklyGames = async () => {

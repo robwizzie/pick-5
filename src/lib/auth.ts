@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
 	},
     debug: false,
 	callbacks: {
-		async signIn({ user, account, profile }) {
+		async signIn({ user }) {
 			// Connect to DB and create/update user
 			await connectDB();
 
@@ -60,10 +60,7 @@ export const authOptions: NextAuthOptions = {
 			}
 			return token;
 		},
-        async signIn() {
-            return true;
-        },
-        async redirect({ url, baseUrl }) {
+		async redirect({ url, baseUrl }) {
 			// Allows relative callback URLs
 			if (url.startsWith('/')) return `${baseUrl}${url}`;
 			// Allows callback URLs on the same origin
