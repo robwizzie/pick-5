@@ -8,6 +8,8 @@ import { authOptions } from '@/lib/auth';
 import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
 	try {
 		const session = await getServerSession(authOptions);

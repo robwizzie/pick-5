@@ -20,6 +20,38 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```env
+# MongoDB connection
+MONGODB_URI=your_mongodb_connection_string
+
+# NextAuth configuration
+NEXTAUTH_URL=http://localhost:3000  # Use your production domain in production
+NEXTAUTH_SECRET=your_nextauth_secret_key
+
+# Google OAuth
+GOOGLE_ID=your_google_client_id
+GOOGLE_SECRET=your_google_client_secret
+```
+
+Generate a secure `NEXTAUTH_SECRET` using:
+```bash
+openssl rand -base64 32
+```
+
+## Google OAuth Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Enable the Google+ API
+4. Create OAuth 2.0 credentials (Web application)
+5. Add authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google` (development)
+   - `https://yourdomain.com/api/auth/callback/google` (production)
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

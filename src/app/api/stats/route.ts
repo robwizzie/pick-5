@@ -7,6 +7,8 @@ import { Pick } from '@/models/Pick';
 import { authOptions } from '@/lib/auth';
 import { WeeklyStats } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
 	try {
 		const session = await getServerSession(authOptions);
