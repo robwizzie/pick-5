@@ -182,6 +182,7 @@ export function Results() {
 			correctPicks,
 			tfsPoints
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [picks, games]);
 
 	if (sessionStatus === 'loading' || loading) {

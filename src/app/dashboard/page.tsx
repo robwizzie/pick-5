@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, LogIn, Trophy, Users, TrendingUp, Calendar, Star, Crown } from 'lucide-react';
+import { Plus, LogIn, Trophy, Users, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
 
@@ -12,12 +12,6 @@ const Dashboard = () => {
 	const router = useRouter();
 	const { data: session } = useSession();
 	const [leagues, setLeagues] = useState([]);
-	const [stats, setStats] = useState({
-		totalPicks: 0,
-		winRate: 0,
-		currentRank: 0,
-		weeklyStreak: 0
-	});
 
 	useEffect(() => {
 		const fetchLeagues = async () => {
@@ -56,37 +50,37 @@ const Dashboard = () => {
 					<p className='text-xl text-muted-foreground max-w-2xl mx-auto'>Ready to dominate your leagues? Make your picks and climb the leaderboard.</p>
 				</div>
 
-				{/* Stats Overview */}
-				<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-up'>
+				{/* Stats Overview - TODO: Implement stats fetching */}
+				{/* <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-up'>
 					<Card className='glass border-white/10 card-hover'>
 						<CardContent className='p-6 text-center space-y-2'>
 							<Trophy className='h-8 w-8 text-accent mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>{stats.totalPicks}</p>
+							<p className='text-2xl font-bold text-foreground'>0</p>
 							<p className='text-sm text-muted-foreground'>Total Picks</p>
 						</CardContent>
 					</Card>
 					<Card className='glass border-white/10 card-hover'>
 						<CardContent className='p-6 text-center space-y-2'>
 							<TrendingUp className='h-8 w-8 text-primary mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>{stats.winRate}%</p>
+							<p className='text-2xl font-bold text-foreground'>0%</p>
 							<p className='text-sm text-muted-foreground'>Win Rate</p>
 						</CardContent>
 					</Card>
 					<Card className='glass border-white/10 card-hover'>
 						<CardContent className='p-6 text-center space-y-2'>
 							<Crown className='h-8 w-8 text-accent-3 mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>#{stats.currentRank}</p>
+							<p className='text-2xl font-bold text-foreground'>#0</p>
 							<p className='text-sm text-muted-foreground'>Current Rank</p>
 						</CardContent>
 					</Card>
 					<Card className='glass border-white/10 card-hover'>
 						<CardContent className='p-6 text-center space-y-2'>
 							<Star className='h-8 w-8 text-accent-2 mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>{stats.weeklyStreak}</p>
+							<p className='text-2xl font-bold text-foreground'>0</p>
 							<p className='text-sm text-muted-foreground'>Week Streak</p>
 						</CardContent>
 					</Card>
-				</div>
+				</div> */}
 
 				{/* Main Content */}
 				<div className='grid lg:grid-cols-3 gap-8'>

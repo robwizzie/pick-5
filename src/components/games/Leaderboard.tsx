@@ -68,6 +68,7 @@ export function Leaderboard() {
 		};
 		window.addEventListener('refreshLeaderboard', handleRefresh);
 		return () => window.removeEventListener('refreshLeaderboard', handleRefresh);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, leagueId]);
 
 	// Generate leaderboard data
