@@ -6,6 +6,7 @@ interface CacheEntry<T> {
 }
 
 class CacheService {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private cache = new Map<string, CacheEntry<any>>();
 	private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes
 
@@ -52,6 +53,7 @@ class CacheService {
 	}
 
 	// Generate cache key for API requests
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	generateKey(endpoint: string, params: Record<string, any> = {}): string {
 		const sortedParams = Object.keys(params)
 			.sort()
@@ -64,13 +66,9 @@ class CacheService {
 export const cacheService = new CacheService();
 
 // Enhanced fetch with caching
-export async function cachedFetch<T>(
-	url: string, 
-	options: RequestInit = {}, 
-	ttl: number = 5 * 60 * 1000
-): Promise<T> {
+export async function cachedFetch<T>(url: string, options: RequestInit = {}, ttl: number = 5 * 60 * 1000): Promise<T> {
 	const cacheKey = cacheService.generateKey(url, options);
-	
+
 	// Try to get from cache first
 	const cached = cacheService.get<T>(cacheKey);
 	if (cached) {
@@ -79,14 +77,14 @@ export async function cachedFetch<T>(
 	}
 
 	console.log(`[Cache] Miss for ${url}, fetching...`);
-	
+
 	try {
 		const response = await fetch(url, {
 			...options,
 			headers: {
 				'Content-Type': 'application/json',
-				...options.headers,
-			},
+				...options.headers
+			}
 		});
 
 		if (!response.ok) {
@@ -94,10 +92,10 @@ export async function cachedFetch<T>(
 		}
 
 		const data = await response.json();
-		
+
 		// Cache the result
 		cacheService.set(cacheKey, data, ttl);
-		
+
 		return data;
 	} catch (error) {
 		console.error(`[Cache] Error fetching ${url}:`, error);
