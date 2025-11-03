@@ -10,8 +10,15 @@ import ActiveLeagues from '@/components/league/ActiveLeagues';
 
 const Dashboard = () => {
 	const router = useRouter();
-	const { data: session } = useSession();
+	const { data: session, status } = useSession();
 	const [leagues, setLeagues] = useState([]);
+
+	useEffect(() => {
+		if (status === 'unauthenticated') {
+			router.push('/login');
+			return;
+		}
+	}, [status, router]);
 
 	useEffect(() => {
 		const fetchLeagues = async () => {
