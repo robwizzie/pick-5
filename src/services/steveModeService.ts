@@ -1,4 +1,5 @@
 // src/services/steveModeService.ts
+import type { EspnEvent } from '@/types';
 import { cachedFetch } from './cacheService';
 
 export interface SteveModeGame {
@@ -29,7 +30,7 @@ export class SteveModeService {
 			// Use ESPN API to get games
 			const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&season=${season}`;
 
-			const data = await cachedFetch<{ events: any[] }>(url, {}, this.CACHE_TTL);
+			const data = await cachedFetch<{ events: EspnEvent[] }>(url, {}, this.CACHE_TTL);
 
 			if (!data.events || data.events.length === 0) {
 				console.warn(`No games found for week ${week}, season ${season}`);
@@ -69,7 +70,7 @@ export class SteveModeService {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
 
-			const result = await response.json();
+			await response.json();
 			return { success: true, message: 'Picks submitted successfully' };
 		} catch (error) {
 			console.error('Error submitting picks:', error);
@@ -128,15 +129,15 @@ export class SteveModeService {
 	/**
 	 * Format ESPN games data for Steve mode
 	 */
-	private static formatGamesForSteveMode(events: any[], week: number): SteveModeGame[] {
+	private static formatGamesForSteveMode(events: EspnEvent[], week: number): SteveModeGame[] {
 		return events
-			.map(event => {
+			.map((event: EspnEvent) => {
 				try {
 					const competition = event.competitions?.[0];
 					if (!competition) return null;
 
-					const homeTeam = competition.competitors?.find((team: any) => team.homeAway === 'home');
-					const awayTeam = competition.competitors?.find((team: any) => team.homeAway === 'away');
+					const homeTeam = competition.competitors?.find(team => team.homeAway === 'home');
+					const awayTeam = competition.competitors?.find(team => team.homeAway === 'away');
 
 					if (!homeTeam || !awayTeam) return null;
 
@@ -146,7 +147,7 @@ export class SteveModeService {
 						awayTeam: awayTeam.team?.displayName || 'Unknown',
 						homeScore: homeTeam.score ? parseInt(homeTeam.score) : undefined,
 						awayScore: awayTeam.score ? parseInt(awayTeam.score) : undefined,
-						status: this.mapGameStatus(event.status?.type?.state),
+						status: this.mapGameStatus(event.status?.type?.state || 'pre'),
 						date: event.date,
 						week
 					};

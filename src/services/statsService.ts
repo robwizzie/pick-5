@@ -21,7 +21,7 @@ export class StatsService {
 
 		try {
 			const storedStats = localStorage.getItem(this.STORAGE_KEY);
-			return storedStats ? JSON.parse(storedStats) : DEFAULT_STATS;
+			return storedStats ? (JSON.parse(storedStats) as SeasonStats) : DEFAULT_STATS;
 		} catch (error) {
 			console.error('Error reading from localStorage:', error);
 			return DEFAULT_STATS;
@@ -52,7 +52,7 @@ export class StatsService {
 		seasonStats.weeklyStats[week] = stats;
 
 		const totals = Object.values(seasonStats.weeklyStats).reduce(
-			(acc, weekStats) => ({
+			(acc: { points: number; correct: number; picks: number; tfs: number }, weekStats: WeeklyStats) => ({
 				points: acc.points + weekStats.weeklyPoints,
 				correct: acc.correct + weekStats.correctPicks,
 				picks: acc.picks + weekStats.totalPicks,
