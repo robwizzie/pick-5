@@ -12,7 +12,7 @@ import { AuthDialog } from './AuthDialog';
 import { useState } from 'react';
 
 export function Nav() {
-	const { currentWeek, setCurrentWeek, currentNFLWeek } = useWeek();
+	const { currentWeek, setCurrentWeek } = useWeek();
 	const pathname = usePathname();
 	const router = useRouter();
 	const { data: session, status } = useSession();
@@ -28,8 +28,8 @@ export function Nav() {
 	};
 
 	const handlePreviousWeek = () => {
-		const newWeek = currentWeek - 1;
-		if (newWeek >= currentNFLWeek) {
+		if (currentWeek > 1) {
+			const newWeek = currentWeek - 1;
 			setCurrentWeek(newWeek);
 		}
 	};
@@ -42,7 +42,7 @@ export function Nav() {
 					<div className='flex items-center space-x-4'>
 						{isLeaguePage ? (
 							<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
-								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={(currentWeek - 1) < currentNFLWeek} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
+								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
 									<ChevronLeft className='h-4 w-4' />
 								</Button>
 								<span className='text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[80px] text-center'>Week {currentWeek}</span>

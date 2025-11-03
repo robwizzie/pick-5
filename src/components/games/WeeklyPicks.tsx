@@ -15,7 +15,7 @@ import { useLeague } from '@/contexts/LeagueContext';
 import type { Game } from './GameCard';
 
 export function WeeklyPicks() {
-	const { currentWeek, currentNFLWeek } = useWeek();
+	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const { refreshStats } = useStats();
@@ -26,9 +26,6 @@ export function WeeklyPicks() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [submitted, setSubmitted] = useState(false);
-	
-	// Check if viewing a past week
-	const isPastWeek = currentWeek < currentNFLWeek;
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
@@ -80,6 +77,24 @@ export function WeeklyPicks() {
 			console.error('[WeeklyPicks] Error loading picks:', error);
 			setError('Error loading picks');
 		}
+	};
+
+	// Helper to check if a game is not started yet (can be selected)
+	const isGameSelectable = (game: Game): boolean => {
+		// Game is selectable if status is 'pre' (pre-game) or if it has no status
+		return !game.status || game.status === 'pre' || game.status === 'scheduled';
+	};
+
+	// Helper to check if a pick is correct (for display purposes)
+	const isPickCorrect = (pick: { gameId: string; team: string }, game: Game | undefined): boolean | null => {
+		if (!game) return null;
+		// Only show correct/incorrect if game is completed (has scores)
+		const hasScores = typeof game.home.score === 'number' && typeof game.away.score === 'number';
+		if (!hasScores) return null;
+		
+		const homeWon = game.home.score! > game.away.score!;
+		const pickedHome = pick.team === game.home.team;
+		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
 	};
 
 	const handleTeamSelect = (gameId: string, selectedTeam: string, opponent: string, isHome: boolean) => {
@@ -180,43 +195,6 @@ export function WeeklyPicks() {
 		);
 	}
 
-	// Show past week message if viewing a week in the past
-	if (isPastWeek) {
-		return (
-			<Card>
-				<CardHeader>
-					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Picks</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<Alert className='mb-4 bg-muted/50 border-2 border-primary/20'>
-						<AlertDescription className='text-foreground'>
-							This week has already passed. Picks are no longer available for past weeks. Please view the Results tab to see your picks and scores from this week.
-						</AlertDescription>
-					</Alert>
-					{submitted && picks.length > 0 && (
-						<div>
-							<h3 className='text-lg font-medium mb-4'>Your Picks</h3>
-							<div className='space-y-3'>
-								{picks.map((pick, index) => {
-									const game = games.find(g => g.id === pick.gameId);
-									return (
-										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
-											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
-											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
-											<div className='mt-8'>
-												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} />
-											</div>
-										</div>
-									);
-								})}
-							</div>
-						</div>
-					)}
-				</CardContent>
-			</Card>
-		);
-	}
-
 	return (
 		<Card>
 			<CardHeader>
@@ -236,12 +214,13 @@ export function WeeklyPicks() {
 							<div className='space-y-3'>
 								{picks.map((pick, index) => {
 									const game = games.find(g => g.id === pick.gameId);
+									const isCorrect = isPickCorrect(pick, game);
 									return (
 										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
 											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
 											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
 											<div className='mt-8'>
-												<GameCard game={game} selected={pick.team} showScores={false} disabled={true} />
+												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} isCorrect={isCorrect} />
 											</div>
 										</div>
 									);
@@ -252,11 +231,14 @@ export function WeeklyPicks() {
 						<div>
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
 							<div className='space-y-3'>
-								{games.map(game => (
-									<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${picks.find(p => p.gameId === game.id) ? 'border-primary' : 'border-primary/20'}`}>
-										<GameCard game={game} selected={picks.find(p => p.gameId === game.id)?.team} onSelect={handleTeamSelect} disabled={picks.length >= 5 && !picks.find(p => p.gameId === game.id)} />
-									</div>
-								))}
+								{games.map(game => {
+									const isSelectable = isGameSelectable(game);
+									return (
+										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${picks.find(p => p.gameId === game.id) ? 'border-primary' : 'border-primary/20'}`}>
+											<GameCard game={game} selected={picks.find(p => p.gameId === game.id)?.team} onSelect={handleTeamSelect} disabled={!isSelectable || (picks.length >= 5 && !picks.find(p => p.gameId === game.id))} showScores={!isSelectable} />
+										</div>
+									);
+								})}
 							</div>
 
 							{picks.length === 5 && (

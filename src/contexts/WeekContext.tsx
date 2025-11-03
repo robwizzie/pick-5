@@ -7,14 +7,12 @@ interface WeekContextType {
 	currentWeek: number;
 	setCurrentWeek: (week: number) => void;
 	season: number;
-	currentNFLWeek: number;
 }
 
 const WeekContext = createContext<WeekContextType>({
 	currentWeek: 1,
 	setCurrentWeek: () => {},
-	season: 2024,
-	currentNFLWeek: 1
+	season: 2024
 });
 
 export const useWeek = () => useContext(WeekContext);
@@ -23,7 +21,6 @@ export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
 	// Default to current NFL season and week
 	const currentSeason = 2024;
 	const [currentWeek, setCurrentWeek] = useState(1);
-	const [currentNFLWeek, setCurrentNFLWeek] = useState(1);
 	const [isInitialized, setIsInitialized] = useState(false);
 
 	useEffect(() => {
@@ -31,7 +28,6 @@ export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
 		if (typeof window !== 'undefined') {
 			// Always calculate the actual current NFL week
 			const nflWeek = NFLService.calculateCurrentWeek();
-			setCurrentNFLWeek(nflWeek);
 			
 			const storedWeek = localStorage.getItem('currentWeek');
 			const storedSeason = localStorage.getItem('currentSeason');
@@ -66,8 +62,7 @@ export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
 			value={{ 
 				currentWeek, 
 				setCurrentWeek: handleSetCurrentWeek,
-				season: currentSeason,
-				currentNFLWeek
+				season: currentSeason
 			}}
 		>
 			{children}
