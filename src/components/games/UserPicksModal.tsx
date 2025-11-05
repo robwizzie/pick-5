@@ -112,8 +112,8 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 
 	return (
 		<div className='fixed inset-0 bg-black/50 flex items-start justify-center z-[100] p-4 pt-24' onClick={onClose}>
-			<Card className='w-full max-w-3xl max-h-[calc(90vh-6rem)] overflow-y-auto bg-card border-primary/20' onClick={e => e.stopPropagation()}>
-				<CardHeader className='flex flex-row items-center justify-between border-b border-primary/20'>
+			<Card className='w-full max-w-3xl max-h-[calc(90vh-6rem)] flex flex-col bg-card border-primary/20 overflow-hidden' onClick={e => e.stopPropagation()}>
+				<CardHeader className='flex flex-row items-center justify-between border-b border-primary/20 sticky top-0 z-10 bg-card'>
 					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>
 						{playerName}&apos;s Picks - Week {week}
 					</CardTitle>
@@ -121,7 +121,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 						<X className='h-4 w-4' />
 					</Button>
 				</CardHeader>
-				<CardContent className='p-6'>
+				<CardContent className='p-6 overflow-y-auto flex-1'>
 					{error && <div className='mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive'>{error}</div>}
 
 					<div className='space-y-4'>
