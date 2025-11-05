@@ -1,25 +1,40 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { NFLService } from '@/services/nflService';
+
+// Calculate the default current week
+const getDefaultWeek = (): number => {
+	try {
+		return NFLService.getCurrentWeek();
+	} catch (error) {
+		console.error('Error calculating current week, defaulting to 1:', error);
+		return 1;
+	}
+};
 
 const WeekContext = createContext<{
 	currentWeek: number;
 	setCurrentWeek: (week: number) => void;
 }>({
-	currentWeek: 10, // Default to Week 10
+	currentWeek: getDefaultWeek(),
 	setCurrentWeek: () => {}
 });
 
 export const useWeek = () => useContext(WeekContext);
 
 export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
-	const [currentWeek, setCurrentWeek] = useState(10); // Default value
+	const [currentWeek, setCurrentWeek] = useState(getDefaultWeek());
 
 	useEffect(() => {
 		// Access `localStorage` only in the browser
 		const storedWeek = localStorage.getItem('currentWeek');
 		if (storedWeek) {
-			setCurrentWeek(parseInt(storedWeek, 10));
+			const parsedWeek = parseInt(storedWeek, 10);
+			setCurrentWeek(parsedWeek);
+		} else {
+			// If no stored week, set to current NFL week
+			setCurrentWeek(getDefaultWeek());
 		}
 	}, []);
 
