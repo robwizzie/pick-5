@@ -117,9 +117,9 @@ export function Leaderboard() {
 											<div className='flex items-center space-x-4 flex-1'>
 												<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
 												<span className='text-primary flex-1'>{entry.player}</span>
-												<span className={`text-xs px-4 py-2 rounded-full font-medium ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks are in' : 'Needs to Pick'}</span>
+												<span className={`text-xs px-3 py-1.5 rounded-full font-medium mx-2 ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks are in' : 'Needs to Pick'}</span>
 											</div>
-											<div className='flex space-x-4'>
+											<div className='flex space-x-4 ml-4'>
 												<div className='text-right'>
 													<p className='text-sm text-primary/80'>Points</p>
 													<p className='font-bold text-primary'>{entry.points}</p>
