@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: Request) {
 	try {
 		// Verify session

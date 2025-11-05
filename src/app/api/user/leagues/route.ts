@@ -4,6 +4,8 @@ import { League } from '@/models/League';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
 	try {
 		const session = await getServerSession(authOptions);

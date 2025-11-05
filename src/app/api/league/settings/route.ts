@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
 	try {
 		// Parse the URL to access searchParams
