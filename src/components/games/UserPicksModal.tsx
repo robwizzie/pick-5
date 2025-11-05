@@ -111,8 +111,8 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 	}
 
 	return (
-		<div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4' onClick={onClose}>
-			<Card className='w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-primary/20' onClick={e => e.stopPropagation()}>
+		<div className='fixed inset-0 bg-black/50 flex items-start justify-center z-[100] p-4 pt-24' onClick={onClose}>
+			<Card className='w-full max-w-3xl max-h-[calc(90vh-6rem)] overflow-y-auto bg-card border-primary/20' onClick={e => e.stopPropagation()}>
 				<CardHeader className='flex flex-row items-center justify-between border-b border-primary/20'>
 					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>
 						{playerName}&apos;s Picks - Week {week}
