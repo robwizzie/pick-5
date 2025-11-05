@@ -33,10 +33,12 @@ export function WeeklyPicks() {
 	const [isSaving, setIsSaving] = useState(false);
 	const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const initialLoadRef = useRef(true);
+	const lastSavedRef = useRef<{ picks: typeof picks; tfsGame: string; tfsScore: string } | null>(null);
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
 		initialLoadRef.current = true; // Reset for new week
+		lastSavedRef.current = null; // Reset last saved for new week
 		loadWeeklyGames();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, session?.user]);
@@ -78,14 +80,21 @@ export function WeeklyPicks() {
 			console.log('[WeeklyPicks] Picks fetched:', data);
 
 			if (data) {
-				setPicks(data.picks || []);
-				setTfsGame(data.tfsGame || '');
-				setTfsScore(data.tfsScore?.toString() || '');
+				const loadedPicks = data.picks || [];
+				const loadedTfsGame = data.tfsGame || '';
+				const loadedTfsScore = data.tfsScore?.toString() || '';
+
+				setPicks(loadedPicks);
+				setTfsGame(loadedTfsGame);
+				setTfsScore(loadedTfsScore);
 				setHasExistingPicks(true);
+
+				// Update last saved ref to match loaded data
+				lastSavedRef.current = { picks: [...loadedPicks], tfsGame: loadedTfsGame, tfsScore: loadedTfsScore };
 
 				// Only set submitted to true if all picked games have started
 				// This allows editing until games start
-				const allGamesStarted = haveAllPickedGamesStarted(data.picks || [], games);
+				const allGamesStarted = haveAllPickedGamesStarted(loadedPicks, games);
 				setSubmitted(allGamesStarted);
 			} else {
 				setPicks([]);
@@ -93,6 +102,7 @@ export function WeeklyPicks() {
 				setTfsScore('');
 				setSubmitted(false);
 				setHasExistingPicks(false);
+				lastSavedRef.current = null;
 			}
 
 			// Mark initial load as complete after a short delay
@@ -122,6 +132,15 @@ export function WeeklyPicks() {
 			return; // Don't save if incomplete
 		}
 
+		// Check if picks have actually changed
+		const currentState = JSON.stringify({ picks, tfsGame, tfsScore });
+		if (lastSavedRef.current) {
+			const lastSavedState = JSON.stringify({ picks: lastSavedRef.current.picks, tfsGame: lastSavedRef.current.tfsGame, tfsScore: lastSavedRef.current.tfsScore });
+			if (currentState === lastSavedState) {
+				return; // No changes, skip save
+			}
+		}
+
 		try {
 			setIsSaving(true);
 			const response = await fetch('/api/picks', {
@@ -134,10 +153,10 @@ export function WeeklyPicks() {
 				setHasExistingPicks(true);
 				setToast({ message: isUpdate ? 'Picks updated successfully!' : 'Picks saved!', type: 'success' });
 
-				// Reload to get updated data
-				await loadExistingPicks();
+				// Update last saved ref to prevent loop
+				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore };
 
-				// Dispatch refresh events
+				// Dispatch refresh events (don't reload picks to avoid triggering loop)
 				const leaderboardEvent = new CustomEvent('refreshLeaderboard');
 				const statsEvent = new CustomEvent('refreshSeasonStats');
 				window.dispatchEvent(leaderboardEvent);
@@ -242,6 +261,9 @@ export function WeeklyPicks() {
 			if (response.ok) {
 				setHasExistingPicks(true);
 				setToast({ message: hasExistingPicks ? 'Picks updated successfully!' : 'Picks submitted successfully!', type: 'success' });
+
+				// Update last saved ref to prevent duplicate saves
+				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore };
 
 				// Reload games and picks to check if all games have started
 				await loadWeeklyGames();
