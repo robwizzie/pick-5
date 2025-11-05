@@ -2,21 +2,24 @@
 import type { Game } from '@/components/games/GameCard';
 
 /**
- * Check if a game has started (status is 'in' or 'post', or game has scores)
+ * Check if a game has started (status is 'in' or 'post', or game has actual scores)
  */
 export function hasGameStarted(game: Game): boolean {
-	// Game has started if it has scores
-	if (typeof game.home.score === 'number' || typeof game.away.score === 'number') {
-		return true;
-	}
-
 	// Game has started if status is 'in' (in progress) or 'post' (finished)
 	if (game.status === 'in' || game.status === 'post') {
 		return true;
 	}
 
-	// Game has started if the game date has passed
-	if (game.date) {
+	// Game has started if it has actual scores (not just 0, which is a default)
+	// Check if both scores exist and at least one is greater than 0
+	const homeScore = game.home.score;
+	const awayScore = game.away.score;
+	if (typeof homeScore === 'number' && typeof awayScore === 'number' && (homeScore > 0 || awayScore > 0)) {
+		return true;
+	}
+
+	// Game has started if the game date has passed (and it's not just scheduled)
+	if (game.date && game.status !== 'pre' && game.status !== 'scheduled') {
 		const gameDate = new Date(game.date);
 		const now = new Date();
 		return gameDate <= now;
