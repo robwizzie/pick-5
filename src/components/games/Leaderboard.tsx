@@ -113,11 +113,11 @@ export function Leaderboard() {
 							) : (
 								<div className='space-y-2'>
 									{weeklyLeaderboard.map((entry, index) => (
-										<div key={entry.userId || index} className={`flex justify-between items-center p-2 bg-card border-2 border-primary/20 rounded-lg ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
+										<div key={entry.userId || index} className={`flex justify-between items-center p-3 bg-card border-2 border-primary/20 rounded-lg ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
 											<div className='flex items-center space-x-4 flex-1'>
 												<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
 												<span className='text-primary flex-1'>{entry.player}</span>
-												<span className={`text-xs px-2 py-1 rounded-full ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks are in' : 'Needs to Pick'}</span>
+												<span className={`text-xs px-4 py-2 rounded-full font-medium ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks are in' : 'Needs to Pick'}</span>
 											</div>
 											<div className='flex space-x-4'>
 												<div className='text-right'>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -27,6 +28,7 @@ interface UserPick {
 }
 
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: UserPicksModalProps) {
+	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
 	const [tfsGame, setTfsGame] = useState<string>('');
 	const [tfsScore, setTfsScore] = useState<number | null>(null);
@@ -34,16 +36,16 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
+	// Check if viewing own picks
+	const isViewingOwnPicks = session?.user?.id === userId;
+
 	useEffect(() => {
 		const loadData = async () => {
 			try {
 				setLoading(true);
 				setError(null);
 
-				const [weeklyGames, picksResponse] = await Promise.all([
-					NFLService.getWeeklyGames(week),
-					fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`)
-				]);
+				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(week), fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`)]);
 
 				if (!picksResponse.ok) {
 					throw new Error('Failed to fetch picks');
@@ -120,89 +122,104 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 					</Button>
 				</CardHeader>
 				<CardContent className='p-6'>
-					{error && (
-						<div className='mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive'>
-							{error}
-						</div>
-					)}
+					{error && <div className='mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive'>{error}</div>}
 
 					<div className='space-y-4'>
-						{/* Game Picks - Only show games that have started */}
+						{/* Game Picks */}
 						<div>
 							<h3 className='text-lg font-medium mb-4'>Game Picks</h3>
-							<div className='space-y-3'>
-								{picks.map((pick, index) => {
-									const game = games.find(g => g.id === pick.gameId);
-									if (!game) return null;
+							{picks.length === 0 ? (
+								<div className='text-center text-muted-foreground py-8'>No picks found</div>
+							) : (
+								<div className='space-y-3'>
+									{(() => {
+										// Filter picks based on viewing context
+										const visiblePicks = picks.filter(p => {
+											const g = games.find(g => g.id === p.gameId);
+											if (!g) return false;
+											// For other users: only show picks for games that have started
+											// For own picks: show all picks
+											if (!isViewingOwnPicks && !hasGameStarted(g)) return false;
+											return true;
+										});
 
-									const gameStarted = hasGameStarted(game);
-									const gameFinished = hasGameFinished(game);
-									const isCorrect = isPickCorrect(pick, game);
-									const scores = getGameScore(game);
+										return visiblePicks.map((pick, displayIndex) => {
+											const game = games.find(g => g.id === pick.gameId);
+											if (!game) return null;
 
-									// Only show picks for games that have started
-									if (!gameStarted) {
-										return (
-											<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20 opacity-50'>
-												<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>
-													Pick {index + 1}
-												</div>
-												<div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-muted text-muted-foreground z-10'>
-													Not Started
-												</div>
-												<div className='mt-8'>
-													<GameCard game={game} selected={pick.team} showScores={false} disabled={true} isCorrect={null} noHover={true} />
-												</div>
-											</div>
-										);
-									}
+											const gameStarted = hasGameStarted(game);
+											const gameFinished = hasGameFinished(game);
 
-									return (
-										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
-											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>
-												Pick {index + 1}
-											</div>
-											{gameFinished && (
-												<div className={`absolute px-2 py-1 rounded-full text-xs font-medium top-2 right-2 z-10 ${
-													isCorrect === true ? 'bg-green-500 text-black' : isCorrect === false ? 'bg-red-500 text-black' : 'bg-muted text-muted-foreground'
-												}`}>
-													{isCorrect === true ? '+2 pts' : isCorrect === false ? '0 pts' : 'Pending'}
+											const isCorrect = isPickCorrect(pick, game);
+											const scores = getGameScore(game);
+
+											// For own picks: show all games (started or not)
+											// For other users: only show started games
+											if (!gameStarted && isViewingOwnPicks) {
+												return (
+													<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
+														<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {displayIndex + 1}</div>
+														<div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-muted text-muted-foreground z-10'>Not Started</div>
+														<div className='mt-8'>
+															<GameCard game={game} selected={pick.team} showScores={false} disabled={true} isCorrect={null} noHover={true} />
+														</div>
+													</div>
+												);
+											}
+
+											return (
+												<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
+													<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {displayIndex + 1}</div>
+													{gameFinished && <div className={`absolute px-2 py-1 rounded-full text-xs font-medium top-2 right-2 z-10 ${isCorrect === true ? 'bg-green-500 text-black' : isCorrect === false ? 'bg-red-500 text-black' : 'bg-muted text-muted-foreground'}`}>{isCorrect === true ? '+2 pts' : isCorrect === false ? '0 pts' : 'Pending'}</div>}
+													<div className='mt-8'>
+														<GameCard
+															game={{
+																...game,
+																away: {
+																	...game.away,
+																	score: gameFinished && scores.away !== undefined ? scores.away : undefined
+																},
+																home: {
+																	...game.home,
+																	score: gameFinished && scores.home !== undefined ? scores.home : undefined
+																}
+															}}
+															selected={pick.team}
+															showScores={gameFinished}
+															disabled={true}
+															isCorrect={gameFinished ? isCorrect : null}
+															noHover={true}
+														/>
+													</div>
 												</div>
-											)}
-											<div className='mt-8'>
-												<GameCard
-													game={{
-														...game,
-														away: { ...game.away, score: scores.away },
-														home: { ...game.home, score: scores.home }
-													}}
-													selected={pick.team}
-													showScores={gameFinished}
-													disabled={true}
-													isCorrect={isCorrect}
-													noHover={true}
-												/>
-											</div>
-										</div>
-									);
-								})}
-							</div>
+											);
+										});
+									})()}
+								</div>
+							)}
 						</div>
 
-						{/* TFS Prediction */}
-						{tfsGame && (
-							<div>
-								<h3 className='text-lg font-medium mb-4'>Total Final Score Prediction</h3>
-								<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
-									{(() => {
-										const tfsGameObj = games.find(g => g.id === tfsGame);
-										if (!tfsGameObj) return null;
+						{/* TFS Prediction - Only show if game has started (for other users) or always (for own picks) */}
+						{tfsGame &&
+							(() => {
+								const tfsGameObj = games.find(g => g.id === tfsGame);
+								if (!tfsGameObj) return null;
 
-										const tfsGameStarted = hasGameStarted(tfsGameObj);
-										const tfsGameFinished = hasGameFinished(tfsGameObj);
-										const scores = getGameScore(tfsGameObj);
+								const tfsGameStarted = hasGameStarted(tfsGameObj);
 
-										return (
+								// For other users: only show TFS if game has started
+								// For own picks: always show TFS
+								if (!isViewingOwnPicks && !tfsGameStarted) {
+									return null;
+								}
+
+								const tfsGameFinished = hasGameFinished(tfsGameObj);
+								const scores = getGameScore(tfsGameObj);
+
+								return (
+									<div>
+										<h3 className='text-lg font-medium mb-4'>Total Final Score Prediction</h3>
+										<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
 											<div className='space-y-2'>
 												<div className='font-oswald uppercase text-lg text-primary mb-2'>
 													{tfsGameObj.away.team} vs {tfsGameObj.home.team}
@@ -214,21 +231,17 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 													</div>
 													<div>
 														<span className='text-primary font-medium'>Actual: </span>
-														<span className='text-lg font-bold'>
-															{tfsGameFinished && scores.total !== undefined ? scores.total : tfsGameStarted ? 'In Progress' : 'TBD'}
-														</span>
+														<span className='text-lg font-bold'>{tfsGameFinished && scores.total !== undefined ? scores.total : tfsGameStarted ? 'In Progress' : 'TBD'}</span>
 													</div>
 												</div>
 											</div>
-										);
-									})()}
-								</div>
-							</div>
-						)}
+										</div>
+									</div>
+								);
+							})()}
 					</div>
 				</CardContent>
 			</Card>
 		</div>
 	);
 }
-
