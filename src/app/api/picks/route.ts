@@ -39,10 +39,13 @@ export async function POST(req: Request) {
 - The week number is invalid
 - The season year is incorrect
 - ESPN API is temporarily unavailable`);
-			return NextResponse.json({
-				error: 'No games found for week',
-				details: `No games available for week ${week}. Please try again or contact support.`
-			}, { status: 400 });
+			return NextResponse.json(
+				{
+					error: 'No games found for week',
+					details: `No games available for week ${week}. Please try again or contact support.`
+				},
+				{ status: 400 }
+			);
 		}
 
 		// Check if user already submitted picks for this week
@@ -53,9 +56,11 @@ export async function POST(req: Request) {
 		});
 
 		// Check if any of the new picks' games have started
-		const newPickedGames = picks.map((pick: { gameId: string; team: string; opponent: string; isHome: boolean }) => {
-			return games.find(g => g.id === pick.gameId);
-		}).filter(Boolean) as Game[];
+		const newPickedGames = picks
+			.map((pick: { gameId: string; team: string; opponent: string; isHome: boolean }) => {
+				return games.find(g => g.id === pick.gameId);
+			})
+			.filter(Boolean) as Game[];
 
 		const tfsGameObj = games.find(g => g.id === tfsGame);
 		const allNewGames = tfsGameObj ? [...newPickedGames, tfsGameObj] : newPickedGames;
@@ -64,25 +69,33 @@ export async function POST(req: Request) {
 
 		if (anyNewGameStarted) {
 			console.error('Cannot submit picks - one or more selected games have already started');
-			return NextResponse.json({ 
-				error: 'Cannot submit picks - one or more selected games have already started' 
-			}, { status: 400 });
+			return NextResponse.json(
+				{
+					error: 'Cannot submit picks - one or more selected games have already started'
+				},
+				{ status: 400 }
+			);
 		}
 
 		// If picks exist, check if any of the existing picked games have started
 		if (existingPicks) {
-			const existingPickedGames = existingPicks.picks.map((pick: { gameId: string; team: string; opponent: string; isHome: boolean }) => {
-				return games.find(g => g.id === pick.gameId);
-			}).filter(Boolean) as Game[];
+			const existingPickedGames = existingPicks.picks
+				.map((pick: { gameId: string; team: string; opponent: string; isHome: boolean }) => {
+					return games.find(g => g.id === pick.gameId);
+				})
+				.filter(Boolean) as Game[];
 
 			// Check if any of the existing picked games have started
 			const anyExistingGameStarted = existingPickedGames.some(game => hasGameStarted(game));
 
 			if (anyExistingGameStarted) {
 				console.error('Cannot edit picks - one or more games from your existing picks have already started');
-				return NextResponse.json({ 
-					error: 'Cannot edit picks - one or more games from your existing picks have already started' 
-				}, { status: 400 });
+				return NextResponse.json(
+					{
+						error: 'Cannot edit picks - one or more games from your existing picks have already started'
+					},
+					{ status: 400 }
+				);
 			}
 
 			// If no games have started, allow update - delete existing picks
@@ -92,8 +105,10 @@ export async function POST(req: Request) {
 
 		const gameResults = games.map(game => ({
 			id: game.id,
-			homeScore: typeof game.home.score === 'number' ? game.home.score : 0,
-			awayScore: typeof game.away.score === 'number' ? game.away.score : 0,
+			// Only include scores if they're actual numbers (not undefined)
+			// Use undefined instead of 0 to distinguish "no score yet" from "score is 0"
+			homeScore: typeof game.home.score === 'number' ? game.home.score : undefined,
+			awayScore: typeof game.away.score === 'number' ? game.away.score : undefined,
 			homeTeam: game.home.team,
 			awayTeam: game.away.team
 		}));
@@ -188,8 +203,10 @@ export async function GET(req: Request) {
 		const games = await NFLService.getWeeklyGames(parseInt(week, 10));
 		const gameResults = games.map(game => ({
 			id: game.id,
-			homeScore: typeof game.home.score === 'number' ? game.home.score : 0,
-			awayScore: typeof game.away.score === 'number' ? game.away.score : 0,
+			// Only include scores if they're actual numbers (not undefined)
+			// Use undefined instead of 0 to distinguish "no score yet" from "score is 0"
+			homeScore: typeof game.home.score === 'number' ? game.home.score : undefined,
+			awayScore: typeof game.away.score === 'number' ? game.away.score : undefined,
 			homeTeam: game.home.team,
 			awayTeam: game.away.team
 		}));

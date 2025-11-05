@@ -1,8 +1,8 @@
 // src/services/scoringService.ts
 interface GameResult {
 	id: string;
-	homeScore: number;
-	awayScore: number;
+	homeScore: number | undefined;
+	awayScore: number | undefined;
 	homeTeam: string;
 	awayTeam: string;
 }
@@ -16,6 +16,11 @@ export class ScoringService {
 		},
 		gameResult: GameResult
 	) {
+		// Type guard: scores must be defined at this point
+		if (gameResult.homeScore === undefined || gameResult.awayScore === undefined) {
+			return false;
+		}
+
 		const homeWon = gameResult.homeScore > gameResult.awayScore;
 		const pickedHome = pick.team === gameResult.homeTeam;
 
@@ -47,10 +52,10 @@ export class ScoringService {
 				return { ...pick, isCorrect: null };
 			}
 
-			// Only score if game has finished (both scores are present and are numbers)
-			// Note: scores can be 0, so we check for typeof === 'number' only
-			const gameFinished = typeof gameResult.homeScore === 'number' && typeof gameResult.awayScore === 'number';
-			
+			// Only score if game has finished (both scores are present, are numbers, and at least one is > 0)
+			// This prevents scoring games that haven't started (which would have 0/0 as default)
+			const gameFinished = typeof gameResult.homeScore === 'number' && typeof gameResult.awayScore === 'number' && gameResult.homeScore !== undefined && gameResult.awayScore !== undefined && (gameResult.homeScore > 0 || gameResult.awayScore > 0);
+
 			if (!gameFinished) {
 				return { ...pick, isCorrect: null };
 			}
@@ -67,10 +72,10 @@ export class ScoringService {
 		// Score TFS if applicable - only if game has finished
 		const tfsGameResult = gameResults.find(g => g.id === tfsGame);
 		if (tfsGameResult) {
-			// Only score TFS if game has finished (both scores are present and are numbers)
-			const tfsGameFinished = typeof tfsGameResult.homeScore === 'number' && typeof tfsGameResult.awayScore === 'number';
-			
-			if (tfsGameFinished) {
+			// Only score TFS if game has finished (both scores are present, are numbers, and at least one is > 0)
+			const tfsGameFinished = typeof tfsGameResult.homeScore === 'number' && typeof tfsGameResult.awayScore === 'number' && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined && (tfsGameResult.homeScore > 0 || tfsGameResult.awayScore > 0);
+
+			if (tfsGameFinished && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined) {
 				const actualScore = tfsGameResult.homeScore + tfsGameResult.awayScore;
 				tfsPoints = this.calculateTFSPoints(tfsScore, actualScore);
 				weeklyPoints += tfsPoints;
