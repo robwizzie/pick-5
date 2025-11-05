@@ -5,6 +5,28 @@ interface OddsData {
 	lastUpdated: Date;
 }
 
+interface OddsApiOutcome {
+	name: string;
+	price: string | number;
+}
+
+interface OddsApiMarket {
+	key: string;
+	outcomes: OddsApiOutcome[];
+}
+
+interface OddsApiBookmaker {
+	title: string;
+	markets: OddsApiMarket[];
+}
+
+interface OddsApiGame {
+	id: string;
+	home_team: string;
+	away_team: string;
+	bookmakers: OddsApiBookmaker[];
+}
+
 export class OddsService {
 	private static API_KEY = process.env.NEXT_PUBLIC_ODDS_API_KEY;
 	private static BASE_URL = 'https://api.the-odds-api.com/v4';
@@ -43,8 +65,8 @@ export class OddsService {
 		}
 	}
 
-	private static formatOddsData(rawData: any[], gameId: string): OddsData | null {
-		const game = rawData.find(g => g.id === gameId);
+	private static formatOddsData(rawData: OddsApiGame[], gameId: string): OddsData | null {
+		const game = rawData.find((g: OddsApiGame) => g.id === gameId);
 		if (!game) return null;
 
 		const bestOdds = {
@@ -52,12 +74,14 @@ export class OddsService {
 			away: { odds: 0, bookmaker: '' }
 		};
 
-		game.bookmakers.forEach((bookmaker: any) => {
-			const market = bookmaker.markets.find((m: any) => m.key === 'h2h');
+		game.bookmakers.forEach((bookmaker: OddsApiBookmaker) => {
+			const market = bookmaker.markets.find((m: OddsApiMarket) => m.key === 'h2h');
 			if (!market) return;
 
-			const homeOdds = parseInt(market.outcomes.find((o: any) => o.name === game.home_team).price);
-			const awayOdds = parseInt(market.outcomes.find((o: any) => o.name === game.away_team).price);
+			const homeOutcome = market.outcomes.find((o: OddsApiOutcome) => o.name === game.home_team);
+			const awayOutcome = market.outcomes.find((o: OddsApiOutcome) => o.name === game.away_team);
+			const homeOdds = homeOutcome ? parseInt(String(homeOutcome.price)) : 0;
+			const awayOdds = awayOutcome ? parseInt(String(awayOutcome.price)) : 0;
 
 			if (homeOdds > bestOdds.home.odds) {
 				bestOdds.home = { odds: homeOdds, bookmaker: bookmaker.title };

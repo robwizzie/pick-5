@@ -4,6 +4,8 @@ import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
 import { ObjectId } from 'mongodb';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: Request) {
 	try {
 		const { searchParams } = new URL(req.url);

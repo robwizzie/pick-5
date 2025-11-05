@@ -1,46 +1,28 @@
 {
-  "compilerOptions": {
-    "target": "ESNext", // Use ESNext for the latest JavaScript features
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ], // DOM and modern JS libraries
-    "allowJs": true, // Allow JavaScript files
-    "skipLibCheck": true, // Skip type checking of declaration files for faster builds
-    "strict": true, // Enable strict type-checking
-    "noEmit": true, // Avoid emitting compiled files
-    "esModuleInterop": true, // Ensure compatibility with CommonJS modules
-    "module": "esnext", // Use ES modules
-    "moduleResolution": "node", // Node module resolution
-    "resolveJsonModule": true, // Enable importing JSON files
-    "isolatedModules": true, // Ensure isolated modules for Next.js
-    "jsx": "preserve", // Use React JSX transform (newer version)
-    "types": [
-      "node",
-      "react",
-      "react-dom"
-    ], // Include Node, React types
-    "incremental": true, // Enable incremental compilation
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ] // Alias for src directory
-    },
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
-  },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts", // Ensure Next.js types are included
-    "next.config.js" // Include the Next.js config file
-  ],
-  "exclude": [
-    "node_modules"
-  ] // Exclude node_modules directory
+	"compilerOptions": {
+		"target": "es5",
+		"lib": ["dom", "dom.iterable", "es6"],
+		"allowJs": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noEmit": true,
+		"esModuleInterop": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"jsx": "preserve",
+		"incremental": true,
+		"plugins": [
+			{
+				"name": "next"
+			}
+		],
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+	"exclude": ["node_modules"]
 }

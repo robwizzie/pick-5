@@ -13,13 +13,15 @@ export const authOptions: NextAuthOptions = {
 	],
 	secret: process.env.NEXTAUTH_SECRET,
 	pages: {
-		signIn: '/auth/signin'
+		signIn: '/login',
+		error: '/login'
 	},
 	session: {
 		strategy: 'jwt'
 	},
+    debug: false,
 	callbacks: {
-		async signIn({ user, account, profile }) {
+		async signIn({ user }) {
 			// Connect to DB and create/update user
 			await connectDB();
 
@@ -57,6 +59,13 @@ export const authOptions: NextAuthOptions = {
 				token.sub = user.id;
 			}
 			return token;
+		},
+		async redirect({ url, baseUrl }) {
+			// Allows relative callback URLs
+			if (url.startsWith('/')) return `${baseUrl}${url}`;
+			// Allows callback URLs on the same origin
+			else if (new URL(url).origin === baseUrl) return url;
+			return baseUrl;
 		}
 	}
 };

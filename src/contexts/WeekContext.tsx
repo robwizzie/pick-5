@@ -1,47 +1,71 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { NFLService } from '@/services/nflService';
 
-// Calculate the default current week
-const getDefaultWeek = (): number => {
-	try {
-		return NFLService.getCurrentWeek();
-	} catch (error) {
-		console.error('Error calculating current week, defaulting to 1:', error);
-		return 1;
-	}
-};
-
-const WeekContext = createContext<{
+interface WeekContextType {
 	currentWeek: number;
 	setCurrentWeek: (week: number) => void;
-}>({
-	currentWeek: getDefaultWeek(),
-	setCurrentWeek: () => {}
+	season: number;
+}
+
+const WeekContext = createContext<WeekContextType>({
+	currentWeek: 1,
+	setCurrentWeek: () => {},
+	season: 2024
 });
 
 export const useWeek = () => useContext(WeekContext);
 
 export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
-	const [currentWeek, setCurrentWeek] = useState(getDefaultWeek());
+	// Default to current NFL season and week
+	const currentSeason = 2024;
+	const [currentWeek, setCurrentWeek] = useState(1);
+	const [isInitialized, setIsInitialized] = useState(false);
 
 	useEffect(() => {
-		// Access `localStorage` only in the browser
-		const storedWeek = localStorage.getItem('currentWeek');
-		if (storedWeek) {
-			const parsedWeek = parseInt(storedWeek, 10);
-			setCurrentWeek(parsedWeek);
-		} else {
-			// If no stored week, set to current NFL week
-			setCurrentWeek(getDefaultWeek());
+		// Initialize with current NFL week or stored value
+		if (typeof window !== 'undefined') {
+			// Always calculate the actual current NFL week
+			const nflWeek = NFLService.calculateCurrentWeek();
+			
+			const storedWeek = localStorage.getItem('currentWeek');
+			const storedSeason = localStorage.getItem('currentSeason');
+			
+			if (storedSeason && parseInt(storedSeason) === currentSeason && storedWeek) {
+				setCurrentWeek(parseInt(storedWeek, 10));
+			} else {
+				setCurrentWeek(nflWeek);
+				localStorage.setItem('currentWeek', nflWeek.toString());
+				localStorage.setItem('currentSeason', currentSeason.toString());
+			}
+			setIsInitialized(true);
+		}
+	}, [currentSeason]);
+
+	const handleSetCurrentWeek = useCallback((week: number) => {
+		if (week >= 1 && week <= 18) {
+			setCurrentWeek(week);
+			if (typeof window !== 'undefined') {
+				localStorage.setItem('currentWeek', week.toString());
+			}
 		}
 	}, []);
 
-	useEffect(() => {
-		// Sync `currentWeek` with `localStorage` whenever it changes
-		localStorage.setItem('currentWeek', currentWeek.toString());
-	}, [currentWeek]);
+	// Don't render until initialized to prevent hydration mismatch
+	if (!isInitialized) {
+		return null;
+	}
 
-	return <WeekContext.Provider value={{ currentWeek, setCurrentWeek }}>{children}</WeekContext.Provider>;
+	return (
+		<WeekContext.Provider 
+			value={{ 
+				currentWeek, 
+				setCurrentWeek: handleSetCurrentWeek,
+				season: currentSeason
+			}}
+		>
+			{children}
+		</WeekContext.Provider>
+	);
 };
