@@ -28,7 +28,6 @@ export function Leaderboard() {
 		>
 	>({});
 	const [loading, setLoading] = useState(true);
-	const [waitingForResults, setWaitingForResults] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [key, setKey] = useState(0); // Force rerender mechanism
 
@@ -50,10 +49,6 @@ export function Leaderboard() {
 
 			setWeeklyResults(data.weeklyResults || []);
 			setSeasonStats(data.seasonStats || {});
-
-			// Check if all results are pending
-			const allPending = (data.weeklyResults || []).every((result: { points: number }) => result.points === 0);
-			setWaitingForResults(allPending);
 		} catch (err) {
 			console.error('Failed to load leaderboard data:', err);
 			setError('Failed to load leaderboard data.');
@@ -113,8 +108,8 @@ export function Leaderboard() {
 						</TabsList>
 
 						<TabsContent value='weekly'>
-							{waitingForResults ? (
-								<div className='text-primary/80 text-center'>Results for this week are not yet available.</div>
+							{weeklyLeaderboard.length === 0 ? (
+								<div className='text-primary/80 text-center'>No users in this league yet.</div>
 							) : (
 								<div className='space-y-2'>
 									{weeklyLeaderboard.map((entry, index) => (

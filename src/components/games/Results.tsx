@@ -159,14 +159,21 @@ export function Results() {
 						<GameCard
 							game={{
 								...game,
-								away: { ...game.away, score: scores.away },
-								home: { ...game.home, score: scores.home },
+								// Only pass scores if game is finished
+								away: {
+									...game.away,
+									score: gameFinished && scores.away !== undefined ? scores.away : undefined
+								},
+								home: {
+									...game.home,
+									score: gameFinished && scores.home !== undefined ? scores.home : undefined
+								},
 								status: gameStatus
 							}}
 							selected={pick.team}
 							showScores={gameFinished}
 							disabled={true}
-							isCorrect={isCorrect}
+							isCorrect={gameFinished ? isCorrect : null}
 							noHover={true}
 						/>
 					</div>
