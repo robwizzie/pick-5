@@ -60,8 +60,8 @@ export function Nav() {
 						)}
 					</div>
 
-					{/* Center - Logo */}
-					<div className='absolute left-1/2 transform -translate-x-1/2'>
+					{/* Center - Logo (hidden on small screens when on league page to prevent overlap) */}
+					<div className={`absolute left-1/2 transform -translate-x-1/2 ${isLeaguePage ? 'hidden sm:block' : ''}`}>
 						<div className='cursor-pointer transition-all duration-300 hover:scale-110 hover:drop-shadow-glow' onClick={() => router.push('/dashboard')}>
 							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' width={56} height={56} className='drop-shadow-lg' priority />
 						</div>
