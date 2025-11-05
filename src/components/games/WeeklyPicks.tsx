@@ -74,7 +74,7 @@ export function WeeklyPicks() {
 				setPicks(data.picks || []);
 				setTfsGame(data.tfsGame || '');
 				setTfsScore(data.tfsScore?.toString() || '');
-				
+
 				// Only set submitted to true if all picked games have started
 				// This allows editing until games start
 				const allGamesStarted = haveAllPickedGamesStarted(data.picks || [], games);
@@ -91,19 +91,13 @@ export function WeeklyPicks() {
 		}
 	};
 
-	// Helper to check if a game is not started yet (can be selected)
-	const isGameSelectable = (game: Game): boolean => {
-		// Game is selectable if status is 'pre' (pre-game) or if it has no status
-		return !game.status || game.status === 'pre' || game.status === 'scheduled';
-	};
-
 	// Helper to check if a pick is correct (for display purposes)
 	const isPickCorrect = (pick: { gameId: string; team: string }, game: Game | undefined): boolean | null => {
 		if (!game) return null;
 		// Only show correct/incorrect if game is completed (has scores)
 		const hasScores = typeof game.home.score === 'number' && typeof game.away.score === 'number';
 		if (!hasScores) return null;
-		
+
 		const homeWon = game.home.score! > game.away.score!;
 		const pickedHome = pick.team === game.home.team;
 		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
@@ -241,7 +235,7 @@ export function WeeklyPicks() {
 							{!haveAllPickedGamesStarted(picks, games) && (
 								<div className='mt-4'>
 									<Alert className='mb-4'>
-										<AlertDescription>Some games haven't started yet. You can still edit your picks.</AlertDescription>
+										<AlertDescription>Some games haven&apos;t started yet. You can still edit your picks.</AlertDescription>
 									</Alert>
 									<Button
 										className='w-full bg-primary text-black hover:bg-primary/90 font-medium'
@@ -259,23 +253,16 @@ export function WeeklyPicks() {
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
 							<div className='space-y-3'>
 								{games.map(game => {
-									const isSelectable = isGameSelectable(game);
 									const isPicked = picks.find(p => p.gameId === game.id);
 									const gameStarted = hasGameStarted(game);
-									
+
 									// Allow editing if game hasn't started, even if already picked
 									// If game has started, don't allow selection (unless it's not picked)
 									const canSelect = !gameStarted;
-									
+
 									return (
 										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
-											<GameCard 
-												game={game} 
-												selected={isPicked?.team} 
-												onSelect={handleTeamSelect} 
-												disabled={!canSelect || (picks.length >= 5 && !isPicked)} 
-												showScores={gameStarted} 
-											/>
+											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} />
 										</div>
 									);
 								})}
