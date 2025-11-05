@@ -12,6 +12,7 @@ import { NFLService } from '@/services/nflService';
 import { useStats } from '@/contexts/StatsContext';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
+import { hasGameStarted, haveAllPickedGamesStarted } from '@/services/gameUtils';
 import type { Game } from './GameCard';
 
 export function WeeklyPicks() {
@@ -30,9 +31,16 @@ export function WeeklyPicks() {
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
 		loadWeeklyGames();
-		loadExistingPicks();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, session?.user]);
+
+	// Load picks after games are loaded so we can check game status
+	useEffect(() => {
+		if (games.length > 0 && sessionStatus === 'authenticated') {
+			loadExistingPicks();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [games, sessionStatus]);
 
 	const loadWeeklyGames = async () => {
 		if (sessionStatus === 'loading') return;
@@ -66,7 +74,11 @@ export function WeeklyPicks() {
 				setPicks(data.picks || []);
 				setTfsGame(data.tfsGame || '');
 				setTfsScore(data.tfsScore?.toString() || '');
-				setSubmitted(true);
+				
+				// Only set submitted to true if all picked games have started
+				// This allows editing until games start
+				const allGamesStarted = haveAllPickedGamesStarted(data.picks || [], games);
+				setSubmitted(allGamesStarted);
 			} else {
 				setPicks([]);
 				setTfsGame('');
@@ -152,15 +164,15 @@ export function WeeklyPicks() {
 			});
 
 			if (response.ok) {
-				setSubmitted(true);
+				// Reload games and picks to check if all games have started
+				await loadWeeklyGames();
+				await loadExistingPicks();
 
 				// Dispatch refresh events
 				const leaderboardEvent = new CustomEvent('refreshLeaderboard');
 				const statsEvent = new CustomEvent('refreshSeasonStats');
 				window.dispatchEvent(leaderboardEvent);
 				window.dispatchEvent(statsEvent);
-
-				await Promise.all([loadWeeklyGames(), loadExistingPicks()]);
 			} else {
 				const { error } = await response.json();
 				setError(error || 'Failed to submit picks');
@@ -226,6 +238,21 @@ export function WeeklyPicks() {
 									);
 								})}
 							</div>
+							{!haveAllPickedGamesStarted(picks, games) && (
+								<div className='mt-4'>
+									<Alert className='mb-4'>
+										<AlertDescription>Some games haven't started yet. You can still edit your picks.</AlertDescription>
+									</Alert>
+									<Button
+										className='w-full bg-primary text-black hover:bg-primary/90 font-medium'
+										onClick={() => {
+											setSubmitted(false);
+											setError(null);
+										}}>
+										Edit Picks
+									</Button>
+								</div>
+							)}
 						</div>
 					) : (
 						<div>
@@ -233,9 +260,22 @@ export function WeeklyPicks() {
 							<div className='space-y-3'>
 								{games.map(game => {
 									const isSelectable = isGameSelectable(game);
+									const isPicked = picks.find(p => p.gameId === game.id);
+									const gameStarted = hasGameStarted(game);
+									
+									// Allow editing if game hasn't started, even if already picked
+									// If game has started, don't allow selection (unless it's not picked)
+									const canSelect = !gameStarted;
+									
 									return (
-										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${picks.find(p => p.gameId === game.id) ? 'border-primary' : 'border-primary/20'}`}>
-											<GameCard game={game} selected={picks.find(p => p.gameId === game.id)?.team} onSelect={handleTeamSelect} disabled={!isSelectable || (picks.length >= 5 && !picks.find(p => p.gameId === game.id))} showScores={!isSelectable} />
+										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
+											<GameCard 
+												game={game} 
+												selected={isPicked?.team} 
+												onSelect={handleTeamSelect} 
+												disabled={!canSelect || (picks.length >= 5 && !isPicked)} 
+												showScores={gameStarted} 
+											/>
 										</div>
 									);
 								})}

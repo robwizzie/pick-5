@@ -7,6 +7,8 @@ import { User } from '@/models/User';
 import { authOptions } from '@/lib/auth';
 import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
+import { hasGameStarted } from '@/services/gameUtils';
+import type { Game } from '@/components/games/GameCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,19 +28,7 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'Invalid request data' }, { status: 400 });
 		}
 
-		// Check if user already submitted picks for this week
-		const existingPicks = await Pick.findOne({
-			userId: session.user.id,
-			leagueId,
-			week
-		});
-
-		if (existingPicks) {
-			console.error('Picks already submitted for this week');
-			return NextResponse.json({ error: 'Picks already submitted for this week' }, { status: 400 });
-		}
-
-		// Get game results for scoring
+		// Get game results for validation and scoring
 		console.log(`[Picks API] Fetching games for week ${week}`);
 		const games = await NFLService.getWeeklyGames(week);
 		console.log(`[Picks API] Received ${games?.length || 0} games from ESPN API`);
@@ -55,32 +45,77 @@ export async function POST(req: Request) {
 			}, { status: 400 });
 		}
 
+		// Check if user already submitted picks for this week
+		const existingPicks = await Pick.findOne({
+			userId: session.user.id,
+			leagueId,
+			week
+		});
+
+		// Check if any of the new picks' games have started
+		const newPickedGames = picks.map(pick => {
+			return games.find(g => g.id === pick.gameId);
+		}).filter(Boolean) as Game[];
+
+		const tfsGameObj = games.find(g => g.id === tfsGame);
+		const allNewGames = tfsGameObj ? [...newPickedGames, tfsGameObj] : newPickedGames;
+
+		const anyNewGameStarted = allNewGames.some(game => hasGameStarted(game));
+
+		if (anyNewGameStarted) {
+			console.error('Cannot submit picks - one or more selected games have already started');
+			return NextResponse.json({ 
+				error: 'Cannot submit picks - one or more selected games have already started' 
+			}, { status: 400 });
+		}
+
+		// If picks exist, check if any of the existing picked games have started
+		if (existingPicks) {
+			const existingPickedGames = existingPicks.picks.map(pick => {
+				return games.find(g => g.id === pick.gameId);
+			}).filter(Boolean) as Game[];
+
+			// Check if any of the existing picked games have started
+			const anyExistingGameStarted = existingPickedGames.some(game => hasGameStarted(game));
+
+			if (anyExistingGameStarted) {
+				console.error('Cannot edit picks - one or more games from your existing picks have already started');
+				return NextResponse.json({ 
+					error: 'Cannot edit picks - one or more games from your existing picks have already started' 
+				}, { status: 400 });
+			}
+
+			// If no games have started, allow update - delete existing picks
+			await Pick.deleteOne({ _id: existingPicks._id });
+			console.log('Deleted existing picks to allow update');
+		}
+
 		const gameResults = games.map(game => ({
 			id: game.id,
-			homeScore: game.home.score || 0,
-			awayScore: game.away.score || 0,
+			homeScore: typeof game.home.score === 'number' ? game.home.score : 0,
+			awayScore: typeof game.away.score === 'number' ? game.away.score : 0,
 			homeTeam: game.home.team,
 			awayTeam: game.away.team
 		}));
 
 		console.log('Game results for scoring:', gameResults);
 
-		// Calculate scores
+		// Calculate scores (only for finished games)
 		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(picks, gameResults, tfsGame, tfsScore);
 
 		console.log('Calculated scores:', { scoredPicks, weeklyPoints, correctPicks, tfsPoints });
 
-		// Create new picks with scores
+		// Create new picks with scores (will be 0 for games that haven't finished)
 		const newPicks = await Pick.create({
 			userId: session.user.id,
 			leagueId,
 			week,
-			picks,
+			picks: scoredPicks,
 			tfsGame,
 			tfsScore,
-			weeklyPoints: 0,
-			correctPicks: 0,
-			tfsPoints: 0,
+			weeklyPoints,
+			correctPicks,
+			tfsPoints,
 			submitted: true
 		});
 
@@ -153,13 +188,13 @@ export async function GET(req: Request) {
 		const games = await NFLService.getWeeklyGames(parseInt(week, 10));
 		const gameResults = games.map(game => ({
 			id: game.id,
-			homeScore: game.home.score || 0,
-			awayScore: game.away.score || 0,
+			homeScore: typeof game.home.score === 'number' ? game.home.score : 0,
+			awayScore: typeof game.away.score === 'number' ? game.away.score : 0,
 			homeTeam: game.home.team,
 			awayTeam: game.away.team
 		}));
 
-		// Recalculate scores with current results
+		// Recalculate scores with current results (only scores finished games)
 		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(picks.picks, gameResults, picks.tfsGame, picks.tfsScore);
 
 		// Update picks with current scores if they've changed
