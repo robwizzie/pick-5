@@ -39,11 +39,20 @@ export async function POST(req: Request) {
 		}
 
 		// Get game results for scoring
+		console.log(`[Picks API] Fetching games for week ${week}`);
 		const games = await NFLService.getWeeklyGames(week);
-		console.log('ESPN API Response:', games);
+		console.log(`[Picks API] Received ${games?.length || 0} games from ESPN API`);
 
 		if (!games || !games.length) {
-			return NextResponse.json({ error: 'No games found for week' }, { status: 400 });
+			console.error(`[Picks API] No games found for week ${week}. This could mean:
+- ESPN API returned no events
+- The week number is invalid
+- The season year is incorrect
+- ESPN API is temporarily unavailable`);
+			return NextResponse.json({
+				error: 'No games found for week',
+				details: `No games available for week ${week}. Please try again or contact support.`
+			}, { status: 400 });
 		}
 
 		const gameResults = games.map(game => ({

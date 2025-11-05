@@ -14,11 +14,46 @@ export class NFLService {
 		return seasonYear;
 	}
 
+	/**
+	 * Check if we're running on the server side
+	 */
+	private static isServer(): boolean {
+		return typeof window === 'undefined';
+	}
+
 	static async getWeeklyGames(week: number, season?: number): Promise<Game[]> {
 		try {
 			const effectiveSeason = season ?? this.getCurrentSeason();
-			const url = `/api/nfl/scoreboard?week=${week}&season=${effectiveSeason}&seasontype=2`;
 
+			// If we're on the server, call ESPN API directly to avoid relative URL issues
+			if (this.isServer()) {
+				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${effectiveSeason}`;
+
+				const response = await fetch(espnUrl, {
+					headers: {
+						'User-Agent': 'pick-5/1.0',
+						'Accept': 'application/json'
+					},
+					next: { revalidate: 120 } // Cache for 2 minutes
+				});
+
+				if (!response.ok) {
+					console.error(`ESPN API error: ${response.status} ${response.statusText}`);
+					return [];
+				}
+
+				const data = await response.json();
+
+				if (!data.events || data.events.length === 0) {
+					console.warn(`No games found for week ${week}, season ${effectiveSeason}`);
+					return [];
+				}
+
+				return this.formatGameData(data.events);
+			}
+
+			// On the client, use the proxy API
+			const url = `/api/nfl/scoreboard?week=${week}&season=${effectiveSeason}&seasontype=2`;
 			const data = await cachedFetch<{ events: EspnEvent[] }>(url, {}, this.CACHE_TTL);
 
 			if (!data.events || data.events.length === 0) {
@@ -36,11 +71,32 @@ export class NFLService {
 
 	static async getCurrentWeek(): Promise<number> {
 		try {
-			// Get current week via server API proxy (avoids CORS)
-			const url = '/api/nfl/scoreboard';
-			const data = await cachedFetch<{ week: { number: number } }>(url, {}, 10 * 60 * 1000); // 10 min cache
+			// If on server, call ESPN directly
+			if (this.isServer()) {
+				const effectiveSeason = this.getCurrentSeason();
+				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&dates=${effectiveSeason}`;
 
-			return data.week?.number || 1;
+				const response = await fetch(espnUrl, {
+					headers: {
+						'User-Agent': 'pick-5/1.0',
+						'Accept': 'application/json'
+					},
+					next: { revalidate: 600 } // Cache for 10 minutes
+				});
+
+				if (response.ok) {
+					const data = await response.json();
+					return data.week?.number || this.calculateCurrentWeek();
+				}
+			} else {
+				// On client, use proxy API
+				const url = '/api/nfl/scoreboard';
+				const data = await cachedFetch<{ week: { number: number } }>(url, {}, 10 * 60 * 1000);
+				return data.week?.number || this.calculateCurrentWeek();
+			}
+
+			// Fallback to calculation
+			return this.calculateCurrentWeek();
 		} catch (error) {
 			console.error('Error fetching current week:', error);
 			// Fallback to calculating week based on date
