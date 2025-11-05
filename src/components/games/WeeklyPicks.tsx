@@ -256,8 +256,8 @@ export function WeeklyPicks() {
 									const isPicked = picks.find(p => p.gameId === game.id);
 									const gameStarted = hasGameStarted(game);
 
-									// Allow editing if game hasn't started, even if already picked
-									// If game has started, don't allow selection (unless it's not picked)
+									// Allow editing if game has not started, even if already picked
+									// If game has started, do not allow selection (unless it is not picked)
 									const canSelect = !gameStarted;
 
 									return (
