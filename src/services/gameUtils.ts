@@ -32,7 +32,17 @@ export function hasGameStarted(game: Game): boolean {
  * Check if a game has finished (has final scores)
  */
 export function hasGameFinished(game: Game): boolean {
-	return typeof game.home.score === 'number' && typeof game.away.score === 'number';
+	// Game is finished if status is 'post'
+	if (game.status === 'post') {
+		return true;
+	}
+
+	// Game is finished if it has both scores and at least one is > 0
+	// This prevents treating 0-0 defaults as finished games
+	const homeScore = game.home.score;
+	const awayScore = game.away.score;
+
+	return typeof homeScore === 'number' && typeof awayScore === 'number' && homeScore !== undefined && awayScore !== undefined && (homeScore > 0 || awayScore > 0);
 }
 
 /**
