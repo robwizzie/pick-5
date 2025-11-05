@@ -53,7 +53,7 @@ export async function POST(req: Request) {
 		});
 
 		// Check if any of the new picks' games have started
-		const newPickedGames = picks.map(pick => {
+		const newPickedGames = picks.map((pick: { gameId: string; team: string; opponent: string; isHome: boolean }) => {
 			return games.find(g => g.id === pick.gameId);
 		}).filter(Boolean) as Game[];
 
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
 
 		// If picks exist, check if any of the existing picked games have started
 		if (existingPicks) {
-			const existingPickedGames = existingPicks.picks.map(pick => {
+			const existingPickedGames = existingPicks.picks.map((pick: { gameId: string; team: string; opponent: string; isHome: boolean }) => {
 				return games.find(g => g.id === pick.gameId);
 			}).filter(Boolean) as Game[];
 
