@@ -2,7 +2,7 @@
 
 import { useWeek } from '@/contexts/WeekContext';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Home, Trophy, Users, Settings } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Trophy, Users, Settings, LogOut } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
@@ -102,8 +102,12 @@ export function Nav() {
 										<span>Leaderboard</span>
 									</DropdownMenuItem>
 									<DropdownMenuSeparator className='bg-white/10' />
-									<DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })} className='flex items-center space-x-2 cursor-pointer hover:bg-destructive/10 text-destructive'>
+									<DropdownMenuItem onClick={() => router.push('/settings')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
 										<Settings className='h-4 w-4' />
+										<span>Settings</span>
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })} className='flex items-center space-x-2 cursor-pointer hover:bg-destructive/10 text-destructive'>
+										<LogOut className='h-4 w-4' />
 										<span>Sign Out</span>
 									</DropdownMenuItem>
 								</DropdownMenuContent>
