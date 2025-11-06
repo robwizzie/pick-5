@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
 			const existingUser = await User.findOne({ email: user.email });
 
 			if (!existingUser) {
-				// Create new user
+				// Create new user with Google OAuth data
 				const newUser = await User.create({
 					email: user.email,
 					name: user.name,
@@ -37,12 +37,12 @@ export const authOptions: NextAuthOptions = {
 				});
 				user.id = newUser._id.toString();
 			} else {
-				// Update existing user
+				// For existing users, only update the ID and timestamp
+				// DO NOT overwrite name/image - user may have customized these in settings
 				user.id = existingUser._id.toString();
 				await User.findByIdAndUpdate(existingUser._id, {
-					name: user.name,
-					image: user.image,
 					updatedAt: new Date()
+					// Removed: name and image update to preserve user customizations
 				});
 			}
 
@@ -50,7 +50,18 @@ export const authOptions: NextAuthOptions = {
 		},
 		async session({ session, token }) {
 			if (session?.user && token?.sub) {
-				session.user.id = token.sub;
+				// Fetch fresh user data from database to get custom name/image
+				await connectDB();
+				const dbUser = await User.findById(token.sub);
+
+				if (dbUser) {
+					session.user.id = token.sub;
+					session.user.name = dbUser.name;
+					session.user.email = dbUser.email;
+					session.user.image = dbUser.image;
+				} else {
+					session.user.id = token.sub;
+				}
 			}
 			return session;
 		},
