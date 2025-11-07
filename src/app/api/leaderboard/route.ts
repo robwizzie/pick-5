@@ -3,7 +3,8 @@ import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
 import { League } from '@/models/League';
-import { ObjectId } from 'mongodb';
+import { NFLService } from '@/services/nflService';
+import { ScoringService } from '@/services/scoringService';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,33 +32,48 @@ export async function GET(req: Request) {
 		const allUsers = await User.find({ _id: { $in: league.members } }, 'name');
 		console.log('[API Debug] League Members:', allUsers.map(u => ({ id: u._id.toString(), name: u.name })));
 
-		// First, let's see ALL picks for this league and week (for debugging)
+		// Get all picks for this week and league
 		const allPicksForWeek = await Pick.find({ week, leagueId }).lean();
-		console.log('[API Debug] All Picks for Week:', JSON.stringify(allPicksForWeek, null, 2));
+		console.log('[API Debug] Found picks for week:', allPicksForWeek.length);
 
-		// Aggregate weekly results specific to the league
-		const weeklyResults = await Pick.aggregate([
-			{ $match: { week, leagueId } },
-			{
-				$group: {
-					_id: '$userId',
-					points: { $sum: '$weeklyPoints' },
-					correct: { $sum: '$correctPicks' },
-					tfsPoints: { $sum: '$tfsPoints' }
-				}
-			}
-		]);
+		// Get current game results to re-score picks on the fly
+		const games = await NFLService.getWeeklyGames(week);
+		const gameResults = games.map(game => ({
+			id: game.id,
+			homeScore: game.home.score || 0,
+			awayScore: game.away.score || 0,
+			homeTeam: game.home.team,
+			awayTeam: game.away.team
+		}));
 
-		console.log('[API Debug] Weekly Results Aggregation:', JSON.stringify(weeklyResults, null, 2));
+		console.log('[API Debug] Game results for scoring:', gameResults.length);
 
-		// Create a map of user results for quick lookup
-		const weeklyResultsMap = new Map(weeklyResults.map(result => [result._id.toString(), result]));
+		// Re-calculate scores for each pick (don't trust stored values)
+		const weeklyResultsMap = new Map();
+		const userIdsWithPicks = new Set();
 
-		// Check which users have submitted picks for this week
-		const picksSubmitted = await Pick.find({ week, leagueId: new ObjectId(leagueId) }, 'userId');
-		const userIdsWithPicks = new Set(picksSubmitted.map(p => p.userId.toString()));
+		for (const pick of allPicksForWeek) {
+			const userId = pick.userId.toString();
+			userIdsWithPicks.add(userId);
 
-		// Populate usernames for weekly results and include users without picks
+			// Re-score this pick with current game results
+			const { weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(
+				pick.picks,
+				gameResults,
+				pick.tfsGame,
+				pick.tfsScore
+			);
+
+			weeklyResultsMap.set(userId, {
+				points: weeklyPoints,
+				correct: correctPicks,
+				tfsPoints: tfsPoints
+			});
+		}
+
+		console.log('[API Debug] Re-calculated scores:', Array.from(weeklyResultsMap.entries()));
+
+		// Populate usernames for weekly results
 		const resultsWithUsernames = allUsers.map(user => {
 			const result = weeklyResultsMap.get(user._id.toString());
 			const hasPicks = userIdsWithPicks.has(user._id.toString());
@@ -71,29 +87,65 @@ export async function GET(req: Request) {
 			};
 		});
 
-		// First, let's see ALL picks for this league (for debugging season stats)
+		// Get ALL picks for this league for season stats
 		const allPicksForSeason = await Pick.find({ leagueId }).lean();
 		console.log('[API Debug] All Picks for Season (count):', allPicksForSeason.length);
-		console.log('[API Debug] Sample Season Pick:', JSON.stringify(allPicksForSeason[0], null, 2));
 
-		// Aggregate season stats specific to the league
-		const seasonStats = await Pick.aggregate([
-			{ $match: { leagueId } },
-			{
-				$group: {
-					_id: '$userId',
-					totalPoints: { $sum: '$weeklyPoints' },
-					totalTFSPoints: { $sum: '$tfsPoints' },
-					correctPicks: { $sum: '$correctPicks' },
-					totalPicks: { $sum: { $size: '$picks' } }
-				}
+		// Get unique weeks from all picks
+		const weekSet = new Set<number>();
+		allPicksForSeason.forEach(p => weekSet.add(p.week));
+		const uniqueWeeks = Array.from(weekSet);
+		console.log('[API Debug] Unique weeks with picks:', uniqueWeeks);
+
+		// Fetch game results for all weeks (cache them)
+		const gameResultsByWeek = new Map();
+		for (const weekNum of uniqueWeeks) {
+			const weekGames = await NFLService.getWeeklyGames(weekNum);
+			const results = weekGames.map(game => ({
+				id: game.id,
+				homeScore: game.home.score || 0,
+				awayScore: game.away.score || 0,
+				homeTeam: game.home.team,
+				awayTeam: game.away.team
+			}));
+			gameResultsByWeek.set(weekNum, results);
+		}
+
+		console.log('[API Debug] Fetched game results for weeks:', Array.from(gameResultsByWeek.keys()));
+
+		// Re-calculate season stats for each user
+		const seasonStatsMap = new Map();
+
+		for (const pick of allPicksForSeason) {
+			const userId = pick.userId.toString();
+			const weekResults = gameResultsByWeek.get(pick.week) || [];
+
+			// Re-score this week's picks
+			const { weeklyPoints, correctPicks: correct, tfsPoints } = ScoringService.calculateWeekScore(
+				pick.picks,
+				weekResults,
+				pick.tfsGame,
+				pick.tfsScore
+			);
+
+			// Aggregate into user's season stats
+			if (!seasonStatsMap.has(userId)) {
+				seasonStatsMap.set(userId, {
+					totalPoints: 0,
+					totalTFSPoints: 0,
+					correctPicks: 0,
+					totalPicks: 0
+				});
 			}
-		]);
 
-		console.log('[API Debug] Season Stats Aggregation:', JSON.stringify(seasonStats, null, 2));
+			const userStats = seasonStatsMap.get(userId);
+			userStats.totalPoints += weeklyPoints;
+			userStats.totalTFSPoints += tfsPoints;
+			userStats.correctPicks += correct;
+			userStats.totalPicks += pick.picks.length;
+		}
 
-		// Create a map for season stats
-		const seasonStatsMap = new Map(seasonStats.map(stat => [stat._id.toString(), stat]));
+		console.log('[API Debug] Re-calculated season stats:', Array.from(seasonStatsMap.entries()));
 
 		// Format season stats with usernames
 		const seasonStatsFormatted = allUsers.map(user => {
