@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { NFLService } from '@/services/nflService';
 import { UserPicksModal } from './UserPicksModal';
+import { Crown } from 'lucide-react';
 
 export function Leaderboard() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
-	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; points: number; correct: number; tfsPoints: number; hasPicks: boolean }>>([]);
+	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean }>>([]);
 	const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 	const [showUserPicks, setShowUserPicks] = useState(false);
 	const [seasonStats, setSeasonStats] = useState<
@@ -20,6 +22,7 @@ export function Leaderboard() {
 			string,
 			{
 				player: string;
+				image: string | null;
 				totalPoints: number;
 				correctPicks: number;
 				totalPicks: number;
@@ -113,11 +116,12 @@ export function Leaderboard() {
 	const seasonLeaderboard = Object.entries(seasonStats)
 		.map(([key, stats]) => ({
 			player: stats.player || `User ${key.slice(-4)}`,
+			image: stats.image,
 			totalPoints: stats.totalPoints,
 			correctPicks: stats.correctPicks,
 			totalPicks: stats.totalPicks,
 			totalTFSPoints: stats.totalTFSPoints,
-			winPercentage: stats.winPercentage ? stats.winPercentage.toFixed(0) : '0'
+			winPercentage: stats.winPercentage ? parseFloat(stats.winPercentage.toFixed(0)) : 0
 		}))
 		.sort((a, b) => b.totalPoints - a.totalPoints);
 
@@ -167,50 +171,102 @@ export function Leaderboard() {
 							{weeklyLeaderboard.length === 0 ? (
 								<div className='text-primary/80 text-center'>No users in this league yet.</div>
 							) : (
-								<div className='space-y-2'>
-									{weeklyLeaderboard.map((entry, index) => (
-										<div key={entry.userId || index} className={`flex justify-between items-center p-3 bg-card border-2 border-primary/20 rounded-lg ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
-											<div className='flex items-center space-x-4 flex-1'>
-												<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
-												<span className='text-primary flex-1'>{entry.player}</span>
-												<span className={`text-xs px-3 py-1.5 rounded-full font-medium mx-2 ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks are in' : 'Needs to Pick'}</span>
-											</div>
-											<div className='flex space-x-4 ml-4'>
-												<div className='text-right'>
-													<p className='text-sm text-primary/80'>Points</p>
-													<p className='font-bold text-primary'>{entry.points}</p>
+								<div className='space-y-3'>
+									{weeklyLeaderboard.map((entry, index) => {
+										const isFirstPlace = index === 0 && entry.points === weeklyLeaderboard[0].points && entry.points > 0;
+										const getRankBadgeStyle = () => {
+											if (index === 0) return 'bg-yellow-500/20 text-yellow-400 font-bold';
+											if (index === 1) return 'bg-gray-400/20 text-gray-300 font-bold';
+											if (index === 2) return 'bg-orange-500/20 text-orange-400 font-bold';
+											return 'bg-primary/10 text-primary/80';
+										};
+
+										return (
+											<div key={entry.userId || index} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
+												{/* Left side: Rank, Avatar, Name */}
+												<div className='flex items-center gap-3 flex-1 min-w-0'>
+													{/* Rank with crown for 1st place */}
+													<div className='flex flex-col items-center gap-1'>
+														{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
+														<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{index + 1}</span>
+													</div>
+
+													{/* Avatar */}
+													<Avatar className='w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0'>
+														<AvatarImage src={entry.image || undefined} alt={entry.player} />
+														<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{entry.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
+													</Avatar>
+
+													{/* Name and Status */}
+													<div className='flex flex-col min-w-0 flex-1'>
+														<span className='text-primary font-semibold truncate'>{entry.player}</span>
+														<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block w-fit ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks In' : 'Needs Pick'}</span>
+													</div>
 												</div>
-												<div className='text-right'>
-													<p className='text-sm text-primary/80'>TFS</p>
-													<p className='font-bold text-primary'>{entry.tfsPoints}</p>
+
+												{/* Right side: Stats */}
+												<div className='flex gap-4 sm:gap-6 ml-auto'>
+													<div className='text-center min-w-[60px]'>
+														<p className='text-xs text-primary/60 uppercase tracking-wide'>Points</p>
+														<p className='text-xl font-bold text-primary'>{entry.points}</p>
+													</div>
+													<div className='text-center min-w-[60px]'>
+														<p className='text-xs text-primary/60 uppercase tracking-wide'>TFS</p>
+														<p className='text-xl font-bold text-accent'>{entry.tfsPoints}</p>
+													</div>
 												</div>
 											</div>
-										</div>
-									))}
+										);
+									})}
 								</div>
 							)}
 						</TabsContent>
 
 						<TabsContent value='season'>
-							<div className='space-y-2'>
-								{seasonLeaderboard.map((entry, index) => (
-									<div key={index} className='flex justify-between items-center p-2 bg-card border-2 border-primary/20 rounded-lg'>
-										<div className='flex items-center space-x-4'>
-											<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
-											<span className='text-primary'>{entry.player}</span>
-										</div>
-										<div className='flex space-x-4'>
-											<div className='text-right'>
-												<p className='text-sm text-primary/80'>Total</p>
-												<p className='font-bold text-primary'>{entry.totalPoints}</p>
+							<div className='space-y-3'>
+								{seasonLeaderboard.map((entry, index) => {
+									const isFirstPlace = index === 0 && entry.totalPoints === seasonLeaderboard[0].totalPoints && entry.totalPoints > 0;
+									const getRankBadgeStyle = () => {
+										if (index === 0) return 'bg-yellow-500/20 text-yellow-400 font-bold';
+										if (index === 1) return 'bg-gray-400/20 text-gray-300 font-bold';
+										if (index === 2) return 'bg-orange-500/20 text-orange-400 font-bold';
+										return 'bg-primary/10 text-primary/80';
+									};
+
+									return (
+										<div key={index} className='flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 hover:border-primary/40 transition-all'>
+											{/* Left side: Rank, Avatar, Name */}
+											<div className='flex items-center gap-3 flex-1 min-w-0'>
+												{/* Rank with crown for 1st place */}
+												<div className='flex flex-col items-center gap-1'>
+													{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
+													<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{index + 1}</span>
+												</div>
+
+												{/* Avatar */}
+												<Avatar className='w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0'>
+													<AvatarImage src={entry.image || undefined} alt={entry.player} />
+													<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{entry.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
+												</Avatar>
+
+												{/* Name */}
+												<span className='text-primary font-semibold truncate'>{entry.player}</span>
 											</div>
-											<div className='text-right'>
-												<p className='text-sm text-primary/80'>Win %</p>
-												<p className='font-bold text-primary'>{entry.winPercentage}%</p>
+
+											{/* Right side: Stats */}
+											<div className='flex gap-4 sm:gap-6 ml-auto'>
+												<div className='text-center min-w-[60px]'>
+													<p className='text-xs text-primary/60 uppercase tracking-wide'>Total</p>
+													<p className='text-xl font-bold text-primary'>{entry.totalPoints}</p>
+												</div>
+												<div className='text-center min-w-[60px]'>
+													<p className='text-xs text-primary/60 uppercase tracking-wide'>Win %</p>
+													<p className='text-xl font-bold text-accent'>{Math.round(entry.winPercentage)}%</p>
+												</div>
 											</div>
 										</div>
-									</div>
-								))}
+									);
+								})}
 							</div>
 						</TabsContent>
 					</Tabs>
