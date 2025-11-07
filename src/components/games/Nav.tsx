@@ -82,7 +82,7 @@ export function Nav() {
 							</div>
 						) : !isDashboard ? (
 							<div className='flex items-center space-x-2'>
-								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-primary/10 transition-colors'>
+								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors'>
 									<Home className='h-4 w-4' />
 									<span className='hidden sm:inline font-medium'>Dashboard</span>
 								</Button>
