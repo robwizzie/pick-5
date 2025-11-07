@@ -61,13 +61,25 @@ export function Leaderboard() {
 
 	useEffect(() => {
 		fetchLeaderboard();
+
 		const handleRefresh = () => {
 			console.log('[Leaderboard Debug] Refreshing leaderboard');
 			fetchLeaderboard();
 			setKey(prev => prev + 1); // Trigger a rerender
 		};
+
 		window.addEventListener('refreshLeaderboard', handleRefresh);
-		return () => window.removeEventListener('refreshLeaderboard', handleRefresh);
+
+		// Poll for updates every 2 minutes during game days
+		const pollInterval = setInterval(() => {
+			console.log('[Leaderboard Debug] Polling for leaderboard updates...');
+			fetchLeaderboard();
+		}, 2 * 60 * 1000); // 2 minutes
+
+		return () => {
+			window.removeEventListener('refreshLeaderboard', handleRefresh);
+			clearInterval(pollInterval);
+		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, leagueId]);
 
