@@ -7,7 +7,8 @@ export default {
 		extend: {
 			fontFamily: {
 				sans: ['Inter', 'system-ui', 'sans-serif'],
-				display: ['Oswald', 'system-ui', 'sans-serif']
+				display: ['Oswald', 'system-ui', 'sans-serif'],
+				oswald: ['Oswald', 'Impact', 'Arial Black', 'sans-serif']
 			},
 			colors: {
 				background: 'hsl(var(--background))',
