@@ -36,10 +36,10 @@ export function Nav() {
 			try {
 				const response = await fetch(`/api/picks/user?leagueId=${leagueId}`);
 				if (response.ok) {
-					const data = await response.json();
+					const data: Array<{ week: number }> = await response.json();
 					console.log('[Nav] Fetched picks data:', data);
 					if (Array.isArray(data)) {
-						const weeks = data.map((pick: any) => pick.week);
+						const weeks = data.map(pick => pick.week);
 						console.log('[Nav] Weeks with picks:', weeks);
 						setWeeksWithPicks(weeks);
 					}

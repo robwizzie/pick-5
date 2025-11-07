@@ -90,7 +90,7 @@ export default function JoinInvitePage({ params }: JoinInvitePageProps) {
 							<div className='space-y-2'>
 								<h1 className='text-2xl font-bold text-foreground'>Welcome to the League!</h1>
 								<p className='text-muted-foreground'>
-									You've successfully joined <span className='text-primary font-semibold'>{leagueName}</span>
+									You&apos;ve successfully joined <span className='text-primary font-semibold'>{leagueName}</span>
 								</p>
 							</div>
 							<Button onClick={() => router.push(`/league/${leagueId}`)} className='w-full bg-primary hover:bg-primary/90 text-lg py-6'>
@@ -105,9 +105,9 @@ export default function JoinInvitePage({ params }: JoinInvitePageProps) {
 								<CheckCircle2 className='h-16 w-16 text-primary' />
 							</div>
 							<div className='space-y-2'>
-								<h1 className='text-2xl font-bold text-foreground'>You're Already In!</h1>
+								<h1 className='text-2xl font-bold text-foreground'>You&apos;re Already In!</h1>
 								<p className='text-muted-foreground'>
-									You're already a member of <span className='text-primary font-semibold'>{leagueName}</span>
+									You&apos;re already a member of <span className='text-primary font-semibold'>{leagueName}</span>
 								</p>
 							</div>
 							<Button onClick={() => router.push(`/league/${leagueId}`)} className='w-full bg-primary hover:bg-primary/90 text-lg py-6'>
