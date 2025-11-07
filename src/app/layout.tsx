@@ -1,23 +1,10 @@
 import type { Metadata } from 'next';
-import { Inter, Oswald } from 'next/font/google';
 import SessionProviderWrapper from '@/components/providers/SessionProviderWrapper';
 import { StatsProvider } from '@/contexts/StatsContext';
 import { WeekProvider } from '@/contexts/WeekContext';
 import { LeagueProvider } from '@/contexts/LeagueContext';
 import { Nav } from '@/components/games/Nav';
 import '../styles/globals.css';
-
-const interFont = Inter({
-	variable: '--font-inter',
-	subsets: ['latin'],
-	display: 'swap'
-});
-
-const oswaldFont = Oswald({
-	variable: '--font-oswald',
-	subsets: ['latin'],
-	display: 'swap'
-});
 
 export const metadata: Metadata = {
 	title: 'Pick 5 - NFL Fantasy League',
@@ -40,8 +27,13 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang='en' className={`${interFont.variable} ${oswaldFont.variable}`}>
-			<body className='font-sans antialiased'>
+		<html lang='en'>
+			<head>
+				<link rel='preconnect' href='https://fonts.googleapis.com' />
+				<link rel='preconnect' href='https://fonts.gstatic.com' crossOrigin='anonymous' />
+				<link href='https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Oswald:wght@200..700&display=swap' rel='stylesheet' />
+			</head>
+			<body className='font-sans antialiased' style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
 				<SessionProviderWrapper>
 					<StatsProvider>
 						<WeekProvider>

@@ -7,7 +7,8 @@ import { User } from '@/models/User';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function GET(_req: Request) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {
