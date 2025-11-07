@@ -15,9 +15,9 @@
 		--popover: 0 0% 12%;
 		--popover-foreground: 0 0% 98%;
 		/* Primary colors inspired by logo */
-		--primary: 220 100% 50%;
-		/* Electric blue */
-		--primary-foreground: 0 0% 98%;
+		--primary: 200 100% 70%;
+		/* Bright cyan-blue for better contrast */
+		--primary-foreground: 0 0% 8%;
 		--secondary: 0 0% 20%;
 		/* Dark grey */
 		--secondary-foreground: 0 0% 98%;
@@ -34,7 +34,7 @@
 		--muted-foreground: 0 0% 65%;
 		--border: 0 0% 25%;
 		--input: 0 0% 18%;
-		--ring: 220 100% 50%;
+		--ring: 200 100% 70%;
 		/* Status colors */
 		--destructive: 0 100% 50%;
 		--destructive-foreground: 0 0% 98%;
@@ -43,7 +43,7 @@
 		--warning: 45 100% 50%;
 		--warning-foreground: 0 0% 8%;
 		/* Chart colors */
-		--chart-1: 220 100% 50%;
+		--chart-1: 200 100% 70%;
 		--chart-2: 120 100% 50%;
 		--chart-3: 0 100% 50%;
 		--chart-4: 45 100% 50%;
