@@ -25,8 +25,8 @@ export function Leaderboard() {
 		>
 	>({});
 	const [loading, setLoading] = useState(true);
-	const [waitingForResults, setWaitingForResults] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [waitingForResults, setWaitingForResults] = useState(false);
 	const [key, setKey] = useState(0); // Force rerender mechanism
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
