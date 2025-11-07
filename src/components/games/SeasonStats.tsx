@@ -24,48 +24,76 @@ export function SeasonStats() {
 		totalTFSPoints: 0
 	});
 	const [key, setKey] = useState(0); // Force rerender
+	const [isUpdating, setIsUpdating] = useState(false);
+	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
 	const winPercentage = stats.totalPicks > 0 ? ((stats.correctPicks / stats.totalPicks) * 100).toFixed(0) : '0';
 
 	useEffect(() => {
-		const fetchStats = async () => {
+		const fetchStats = async (isPolling = false) => {
 			try {
 				if (!leagueId) {
 					setError('League ID is missing');
 					return;
 				}
-				setLoading(true);
+				if (isPolling) {
+					setIsUpdating(true);
+				} else {
+					setLoading(true);
+				}
 				const response = await fetch(`/api/seasonStats?leagueId=${leagueId}`, { cache: 'no-store' });
 				if (!response.ok) {
 					throw new Error('Failed to fetch stats');
 				}
 				const data = await response.json();
 				setStats(data);
-				console.log('[SeasonStats Debug] Updated stats:', data); // Debugging log
+				setLastUpdated(new Date());
+				console.log('[SeasonStats Debug] Updated stats:', data);
 			} catch (err) {
 				setError('Failed to load stats.');
 				console.error(err);
 			} finally {
 				setLoading(false);
+				setIsUpdating(false);
 			}
 		};
 
-		fetchStats();
+		fetchStats(false); // Initial load
 
 		// Refresh stats on custom event
 		const handleRefresh = () => {
-			console.log('[SeasonStats Debug] Refreshing stats...');
-			fetchStats();
+			console.log('[SeasonStats Debug] Event triggered refresh');
+			fetchStats(true);
 			setKey(prev => prev + 1); // Force rerender
 		};
 		window.addEventListener('refreshSeasonStats', handleRefresh);
 
-		return () => window.removeEventListener('refreshSeasonStats', handleRefresh);
+		// Poll for updates every 30 seconds for live stats
+		const pollInterval = setInterval(() => {
+			console.log('[SeasonStats Debug] 🔄 Auto-refreshing stats...');
+			fetchStats(true);
+		}, 30 * 1000); // 30 seconds
+
+		return () => {
+			window.removeEventListener('refreshSeasonStats', handleRefresh);
+			clearInterval(pollInterval);
+		};
 	}, [leagueId]);
 
 	const handleWeekClick = (week: string) => {
 		const weekNumber = parseInt(week, 10);
 		setCurrentWeek(weekNumber);
+	};
+
+	// Helper function to format time ago
+	const getTimeAgo = (date: Date | null) => {
+		if (!date) return '';
+		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+		if (seconds < 60) return 'just now';
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		return `${hours}h ago`;
 	};
 
 	if (loading) return <div>Loading stats...</div>;
@@ -74,7 +102,23 @@ export function SeasonStats() {
 	return (
 		<Card key={key}>
 			<CardHeader>
-				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Season Statistics</CardTitle>
+				<div className='flex items-center justify-between'>
+					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Season Statistics</CardTitle>
+					<div className='flex items-center gap-2'>
+						{isUpdating && (
+							<div className='flex items-center gap-1 text-xs text-primary/80'>
+								<div className='h-2 w-2 rounded-full bg-primary animate-pulse' />
+								<span>Updating...</span>
+							</div>
+						)}
+						{!isUpdating && lastUpdated && (
+							<div className='flex items-center gap-1 text-xs text-muted-foreground'>
+								<div className='h-2 w-2 rounded-full bg-green-500' />
+								<span>Live • {getTimeAgo(lastUpdated)}</span>
+							</div>
+						)}
+					</div>
+				</div>
 			</CardHeader>
 			<CardContent>
 				<div className='grid grid-cols-2 gap-4 mb-6'>
