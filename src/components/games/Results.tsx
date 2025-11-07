@@ -46,12 +46,18 @@ export function Results() {
 				setLoading(true);
 
 				// Pass leagueId to the backend
-				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`)]);
+				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })]);
 
 				const picksData = await picksResponse.json();
 
 				setGames(weeklyGames);
 				setPicks(picksData);
+
+				// Trigger refresh events for leaderboard and season stats
+				// The /api/picks endpoint recalculates scores, so we need to notify other components
+				console.log('[Results] Triggering refresh events for leaderboard and season stats');
+				window.dispatchEvent(new Event('refreshLeaderboard'));
+				window.dispatchEvent(new Event('refreshSeasonStats'));
 			} catch (err) {
 				console.error('[Results] Error loading results:', err);
 				setError('Error loading results');
@@ -61,6 +67,14 @@ export function Results() {
 		};
 
 		loadData();
+
+		// Poll for updates every 2 minutes to catch game score changes
+		const pollInterval = setInterval(() => {
+			console.log('[Results] Polling for score updates...');
+			loadData();
+		}, 2 * 60 * 1000); // 2 minutes
+
+		return () => clearInterval(pollInterval);
 	}, [currentWeek, sessionStatus, leagueId]);
 
 	// Game score calculation utility

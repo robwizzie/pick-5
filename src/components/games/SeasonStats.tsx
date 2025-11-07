@@ -60,7 +60,16 @@ export function SeasonStats() {
 		};
 		window.addEventListener('refreshSeasonStats', handleRefresh);
 
-		return () => window.removeEventListener('refreshSeasonStats', handleRefresh);
+		// Poll for updates every 2 minutes during game days
+		const pollInterval = setInterval(() => {
+			console.log('[SeasonStats Debug] Polling for stats updates...');
+			fetchStats();
+		}, 2 * 60 * 1000); // 2 minutes
+
+		return () => {
+			window.removeEventListener('refreshSeasonStats', handleRefresh);
+			clearInterval(pollInterval);
+		};
 	}, [leagueId]);
 
 	const handleWeekClick = (week: string) => {
