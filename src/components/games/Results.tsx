@@ -31,9 +31,11 @@ export function Results() {
 	const [games, setGames] = useState<Game[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [isUpdating, setIsUpdating] = useState(false);
+	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
 	useEffect(() => {
-		const loadData = async () => {
+		const loadData = async (isPolling = false) => {
 			if (sessionStatus === 'loading') return;
 
 			try {
@@ -43,7 +45,12 @@ export function Results() {
 					return;
 				}
 
-				setLoading(true);
+				// Show updating indicator for polling updates (not initial load)
+				if (isPolling) {
+					setIsUpdating(true);
+				} else {
+					setLoading(true);
+				}
 
 				// Pass leagueId to the backend
 				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })]);
@@ -52,10 +59,13 @@ export function Results() {
 
 				setGames(weeklyGames);
 				setPicks(picksData);
+				setLastUpdated(new Date());
 
 				// Trigger refresh events for leaderboard and season stats
 				// The /api/picks endpoint recalculates scores, so we need to notify other components
-				console.log('[Results] Triggering refresh events for leaderboard and season stats');
+				if (isPolling) {
+					console.log('[Results] Auto-refresh: Triggering leaderboard and stats updates');
+				}
 				window.dispatchEvent(new Event('refreshLeaderboard'));
 				window.dispatchEvent(new Event('refreshSeasonStats'));
 			} catch (err) {
@@ -63,16 +73,17 @@ export function Results() {
 				setError('Error loading results');
 			} finally {
 				setLoading(false);
+				setIsUpdating(false);
 			}
 		};
 
-		loadData();
+		loadData(false); // Initial load
 
-		// Poll for updates every 2 minutes to catch game score changes
+		// Poll for updates every 30 seconds for live score updates
 		const pollInterval = setInterval(() => {
-			console.log('[Results] Polling for score updates...');
-			loadData();
-		}, 2 * 60 * 1000); // 2 minutes
+			console.log('[Results] 🔄 Auto-refreshing scores...');
+			loadData(true); // Polling update
+		}, 30 * 1000); // 30 seconds
 
 		return () => clearInterval(pollInterval);
 	}, [currentWeek, sessionStatus, leagueId]);
@@ -238,10 +249,37 @@ export function Results() {
 		);
 	}
 
+	// Helper function to format time ago
+	const getTimeAgo = (date: Date | null) => {
+		if (!date) return '';
+		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+		if (seconds < 60) return 'just now';
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		return `${hours}h ago`;
+	};
+
 	return (
 		<Card className='bg-card border-primary/20'>
 			<CardHeader>
-				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
+				<div className='flex items-center justify-between'>
+					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
+					<div className='flex items-center gap-2'>
+						{isUpdating && (
+							<div className='flex items-center gap-1 text-xs text-primary/80'>
+								<div className='h-2 w-2 rounded-full bg-primary animate-pulse' />
+								<span>Updating...</span>
+							</div>
+						)}
+						{!isUpdating && lastUpdated && (
+							<div className='flex items-center gap-1 text-xs text-muted-foreground'>
+								<div className='h-2 w-2 rounded-full bg-green-500' />
+								<span>Live • {getTimeAgo(lastUpdated)}</span>
+							</div>
+						)}
+					</div>
+				</div>
 			</CardHeader>
 			<CardContent>
 				{error && (

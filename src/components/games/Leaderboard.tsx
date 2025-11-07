@@ -28,15 +28,21 @@ export function Leaderboard() {
 	const [waitingForResults, setWaitingForResults] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [key, setKey] = useState(0); // Force rerender mechanism
+	const [isUpdating, setIsUpdating] = useState(false);
+	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
 	// Fetch leaderboard data
-	const fetchLeaderboard = async () => {
+	const fetchLeaderboard = async (isPolling = false) => {
 		if (!leagueId) {
 			setError('League ID is missing');
 			return;
 		}
 		try {
-			setLoading(true);
+			if (isPolling) {
+				setIsUpdating(true);
+			} else {
+				setLoading(true);
+			}
 			setError(null);
 
 			const response = await fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' });
@@ -47,6 +53,7 @@ export function Leaderboard() {
 
 			setWeeklyResults(data.weeklyResults);
 			setSeasonStats(data.seasonStats);
+			setLastUpdated(new Date());
 
 			// Check if all results are pending
 			const allPending = data.weeklyResults.every((result: { points: number }) => result.points === 0);
@@ -56,25 +63,26 @@ export function Leaderboard() {
 			setError('Failed to load leaderboard data.');
 		} finally {
 			setLoading(false);
+			setIsUpdating(false);
 		}
 	};
 
 	useEffect(() => {
-		fetchLeaderboard();
+		fetchLeaderboard(false); // Initial load
 
 		const handleRefresh = () => {
-			console.log('[Leaderboard Debug] Refreshing leaderboard');
-			fetchLeaderboard();
+			console.log('[Leaderboard Debug] Event triggered refresh');
+			fetchLeaderboard(true);
 			setKey(prev => prev + 1); // Trigger a rerender
 		};
 
 		window.addEventListener('refreshLeaderboard', handleRefresh);
 
-		// Poll for updates every 2 minutes during game days
+		// Poll for updates every 30 seconds for live standings
 		const pollInterval = setInterval(() => {
-			console.log('[Leaderboard Debug] Polling for leaderboard updates...');
-			fetchLeaderboard();
-		}, 2 * 60 * 1000); // 2 minutes
+			console.log('[Leaderboard Debug] 🔄 Auto-refreshing standings...');
+			fetchLeaderboard(true);
+		}, 30 * 1000); // 30 seconds
 
 		return () => {
 			window.removeEventListener('refreshLeaderboard', handleRefresh);
@@ -101,10 +109,37 @@ export function Leaderboard() {
 		}))
 		.sort((a, b) => b.totalPoints - a.totalPoints);
 
+	// Helper function to format time ago
+	const getTimeAgo = (date: Date | null) => {
+		if (!date) return '';
+		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+		if (seconds < 60) return 'just now';
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		return `${hours}h ago`;
+	};
+
 	return (
 		<Card key={key}>
 			<CardHeader>
-				<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Leaderboard</CardTitle>
+				<div className='flex items-center justify-between'>
+					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Leaderboard</CardTitle>
+					<div className='flex items-center gap-2'>
+						{isUpdating && (
+							<div className='flex items-center gap-1 text-xs text-primary/80'>
+								<div className='h-2 w-2 rounded-full bg-primary animate-pulse' />
+								<span>Updating...</span>
+							</div>
+						)}
+						{!isUpdating && lastUpdated && (
+							<div className='flex items-center gap-1 text-xs text-muted-foreground'>
+								<div className='h-2 w-2 rounded-full bg-green-500' />
+								<span>Live • {getTimeAgo(lastUpdated)}</span>
+							</div>
+						)}
+					</div>
+				</div>
 			</CardHeader>
 			<CardContent>
 				{loading && <Spinner />}
