@@ -102,7 +102,6 @@ const StatsPage = () => {
 					const picksResponse = await fetch(`/api/picks/user?leagueId=${league._id}`);
 					if (picksResponse.ok) {
 						const picks = await picksResponse.json();
-						console.log('[Stats] Picks response for league', league.name, ':', picks);
 
 						let leagueTotalPoints = 0;
 						let leagueCorrectPicks = 0;
@@ -111,49 +110,50 @@ const StatsPage = () => {
 						let leagueBestWeekPoints = 0;
 
 						picks.forEach((pick: any) => {
-							console.log('[Stats] Processing pick for week', pick.week, ':', pick);
-							// Check if all games in this week are finished (all picks have isCorrect defined)
-							const allGamesFinished = pick.picks.every((p: any) => p.isCorrect !== undefined && p.isCorrect !== null);
+							// Count how many games are finished vs total picks
+							const finishedGamesCount = pick.picks.filter((p: any) => p.isCorrect !== undefined && p.isCorrect !== null).length;
 							const totalPicksInWeek = pick.picks.length;
+							const allGamesFinished = finishedGamesCount === totalPicksInWeek && totalPicksInWeek === 5;
 							const correctInWeek = pick.correctPicks || 0;
 
-							console.log('[Stats] Week', pick.week, '- Games finished:', allGamesFinished, 'Total picks:', totalPicksInWeek, 'Correct:', correctInWeek);
-
-							// Count finished games for stats
-							if (allGamesFinished && totalPicksInWeek > 0) {
+							// Count stats for any week with at least one finished game
+							if (finishedGamesCount > 0) {
 								leagueTotalPoints += pick.weeklyPoints || 0;
 								leagueCorrectPicks += correctInWeek;
-								leagueTotalPicks += totalPicksInWeek;
+								leagueTotalPicks += finishedGamesCount; // Only count finished games
 								leagueTotalTFSPoints += pick.tfsPoints || 0;
 								leagueBestWeekPoints = Math.max(leagueBestWeekPoints, pick.weeklyPoints || 0);
 
-								// Check for perfect week (all 5 picks correct and all games finished)
-								const isPerfectWeek = totalPicksInWeek === 5 && correctInWeek === 5 && allGamesFinished;
+								// Check for perfect week (all 5 picks correct and all 5 games finished)
+								const isPerfectWeek = allGamesFinished && totalPicksInWeek === 5 && correctInWeek === 5;
 
-								// Add to allWeeks for streak calculation
-								allWeeks.push({
-									week: pick.week,
-									leagueId: league._id,
-									correctPicks: correctInWeek,
-									totalPicks: totalPicksInWeek,
-									weeklyPoints: pick.weeklyPoints || 0,
-									isPerfectWeek,
-									allGamesFinished
-								});
+								// Only add to allWeeks for streak calculation if all games are finished
+								if (allGamesFinished) {
+									allWeeks.push({
+										week: pick.week,
+										leagueId: league._id,
+										correctPicks: correctInWeek,
+										totalPicks: totalPicksInWeek,
+										weeklyPoints: pick.weeklyPoints || 0,
+										isPerfectWeek,
+										allGamesFinished
+									});
 
-								// Track unique perfect weeks (same week across multiple leagues counts as one)
-								if (isPerfectWeek) {
-									perfectWeeksSet.add(`week-${pick.week}`);
+									// Track unique perfect weeks (same week across multiple leagues counts as one)
+									if (isPerfectWeek) {
+										perfectWeeksSet.add(`week-${pick.week}`);
+									}
 								}
 
-								if (pick.weeklyPoints === leagueBestWeekPoints && pick.weeklyPoints > allTimeData.bestWeekPoints) {
+								if (pick.weeklyPoints > allTimeData.bestWeekPoints) {
 									allTimeData.bestWeekPoints = pick.weeklyPoints;
 									allTimeData.bestWeekNumber = pick.week;
 								}
 							}
 						});
 
-						const weeksPlayed = picks.filter((p: any) => p.picks.every((pick: any) => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
+						// Count weeks with at least one finished game
+						const weeksPlayed = picks.filter((p: any) => p.picks.some((pick: any) => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
 
 						leagueStatsData.push({
 							leagueId: league._id,
