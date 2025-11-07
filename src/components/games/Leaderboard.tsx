@@ -173,11 +173,19 @@ export function Leaderboard() {
 							) : (
 								<div className='space-y-3'>
 									{weeklyLeaderboard.map((entry, index) => {
-										const isFirstPlace = index === 0 && entry.points === weeklyLeaderboard[0].points && entry.points > 0;
+										// Calculate actual rank considering ties
+										let rank = 1;
+										for (let i = 0; i < index; i++) {
+											if (weeklyLeaderboard[i].points > entry.points) {
+												rank = i + 2;
+											}
+										}
+
+										const isFirstPlace = entry.points === weeklyLeaderboard[0].points && entry.points > 0;
 										const getRankBadgeStyle = () => {
-											if (index === 0) return 'bg-yellow-500/20 text-yellow-400 font-bold';
-											if (index === 1) return 'bg-gray-400/20 text-gray-300 font-bold';
-											if (index === 2) return 'bg-orange-500/20 text-orange-400 font-bold';
+											if (rank === 1) return 'bg-yellow-500/20 text-yellow-400 font-bold';
+											if (rank === 2) return 'bg-gray-400/20 text-gray-300 font-bold';
+											if (rank === 3) return 'bg-orange-500/20 text-orange-400 font-bold';
 											return 'bg-primary/10 text-primary/80';
 										};
 
@@ -188,7 +196,7 @@ export function Leaderboard() {
 													{/* Rank with crown for 1st place */}
 													<div className='flex flex-col items-center gap-1'>
 														{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
-														<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{index + 1}</span>
+														<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{rank}</span>
 													</div>
 
 													{/* Avatar */}
@@ -225,11 +233,19 @@ export function Leaderboard() {
 						<TabsContent value='season'>
 							<div className='space-y-3'>
 								{seasonLeaderboard.map((entry, index) => {
-									const isFirstPlace = index === 0 && entry.totalPoints === seasonLeaderboard[0].totalPoints && entry.totalPoints > 0;
+									// Calculate actual rank considering ties
+									let rank = 1;
+									for (let i = 0; i < index; i++) {
+										if (seasonLeaderboard[i].totalPoints > entry.totalPoints) {
+											rank = i + 2;
+										}
+									}
+
+									const isFirstPlace = entry.totalPoints === seasonLeaderboard[0].totalPoints && entry.totalPoints > 0;
 									const getRankBadgeStyle = () => {
-										if (index === 0) return 'bg-yellow-500/20 text-yellow-400 font-bold';
-										if (index === 1) return 'bg-gray-400/20 text-gray-300 font-bold';
-										if (index === 2) return 'bg-orange-500/20 text-orange-400 font-bold';
+										if (rank === 1) return 'bg-yellow-500/20 text-yellow-400 font-bold';
+										if (rank === 2) return 'bg-gray-400/20 text-gray-300 font-bold';
+										if (rank === 3) return 'bg-orange-500/20 text-orange-400 font-bold';
 										return 'bg-primary/10 text-primary/80';
 									};
 
@@ -240,7 +256,7 @@ export function Leaderboard() {
 												{/* Rank with crown for 1st place */}
 												<div className='flex flex-col items-center gap-1'>
 													{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
-													<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{index + 1}</span>
+													<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{rank}</span>
 												</div>
 
 												{/* Avatar */}
