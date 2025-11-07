@@ -161,7 +161,7 @@ const StatsPage = () => {
 									}
 								}
 
-								if (pick.weeklyPoints > allTimeData.bestWeekPoints) {
+								if (pick.weeklyPoints && pick.weeklyPoints > allTimeData.bestWeekPoints) {
 									allTimeData.bestWeekPoints = pick.weeklyPoints;
 									allTimeData.bestWeekNumber = pick.week;
 								}
