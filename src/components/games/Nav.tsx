@@ -3,7 +3,7 @@
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Home, Settings, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Settings, LogOut, BarChart3 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
@@ -26,6 +26,7 @@ export function Nav() {
 	const isLeaguePage = pathname?.startsWith('/league/');
 	const isDashboard = pathname === '/dashboard';
 	const isCreateLeague = pathname === '/league/create';
+	const isJoinLeague = pathname === '/league/join';
 
 	// Fetch weeks with picks for the current league
 	useEffect(() => {
@@ -67,7 +68,7 @@ export function Nav() {
 				<div className='flex justify-between items-center h-20'>
 					{/* Left side - Week navigation for league pages */}
 					<div className='flex items-center space-x-4'>
-						{isLeaguePage && !isCreateLeague ? (
+						{isLeaguePage && !isCreateLeague && !isJoinLeague ? (
 							<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
 								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
 									<ChevronLeft className='h-4 w-4' />
@@ -81,7 +82,7 @@ export function Nav() {
 							</div>
 						) : !isDashboard ? (
 							<div className='flex items-center space-x-2'>
-								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors'>
+								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-primary/10 transition-colors'>
 									<Home className='h-4 w-4' />
 									<span className='hidden sm:inline font-medium'>Dashboard</span>
 								</Button>
@@ -120,13 +121,18 @@ export function Nav() {
 									<DropdownMenuSeparator className='bg-white/10' />
 									{!isDashboard && (
 										<>
-											<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
+											<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-card/80 hover:text-foreground'>
 												<Home className='h-4 w-4' />
 												<span>Dashboard</span>
 											</DropdownMenuItem>
 											<DropdownMenuSeparator className='bg-white/10' />
 										</>
 									)}
+									<DropdownMenuItem onClick={() => router.push('/stats')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
+										<BarChart3 className='h-4 w-4' />
+										<span>My Stats</span>
+									</DropdownMenuItem>
+									<DropdownMenuSeparator className='bg-white/10' />
 									<DropdownMenuItem onClick={() => router.push('/settings')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
 										<Settings className='h-4 w-4' />
 										<span>Settings</span>
