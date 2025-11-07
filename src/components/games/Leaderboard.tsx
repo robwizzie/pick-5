@@ -7,11 +7,14 @@ import { Spinner } from '@/components/ui/spinner';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { NFLService } from '@/services/nflService';
+import { UserPicksModal } from './UserPicksModal';
 
 export function Leaderboard() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
-	const [weeklyResults, setWeeklyResults] = useState<Record<string, { player: string; points: number; correct: number; tfsPoints: number }>>({});
+	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; points: number; correct: number; tfsPoints: number; hasPicks: boolean }>>([]);
+	const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+	const [showUserPicks, setShowUserPicks] = useState(false);
 	const [seasonStats, setSeasonStats] = useState<
 		Record<
 			string,
@@ -96,11 +99,16 @@ export function Leaderboard() {
 	}, [currentWeek, leagueId]);
 
 	// Generate leaderboard data
-	const weeklyLeaderboard = Object.entries(weeklyResults)
-		.map(([, stats]) => ({
-			...stats
-		}))
-		.sort((a, b) => b.points - a.points);
+	const weeklyLeaderboard = [...weeklyResults].sort((a, b) => {
+		// Sort by points, then by hasPicks (those with picks first)
+		if (b.points !== a.points) return b.points - a.points;
+		return b.hasPicks ? 1 : -1;
+	});
+
+	const handleUserClick = (userId: string) => {
+		setSelectedUserId(userId);
+		setShowUserPicks(true);
+	};
 
 	const seasonLeaderboard = Object.entries(seasonStats)
 		.map(([key, stats]) => ({
@@ -156,17 +164,18 @@ export function Leaderboard() {
 						</TabsList>
 
 						<TabsContent value='weekly'>
-							{waitingForResults ? (
-								<div className='text-primary/80 text-center'>Results for this week are not yet available.</div>
+							{weeklyLeaderboard.length === 0 ? (
+								<div className='text-primary/80 text-center'>No users in this league yet.</div>
 							) : (
 								<div className='space-y-2'>
 									{weeklyLeaderboard.map((entry, index) => (
-										<div key={index} className='flex justify-between items-center p-2 bg-card border-2 border-primary/20 rounded-lg'>
-											<div className='flex items-center space-x-4'>
+										<div key={entry.userId || index} className={`flex justify-between items-center p-3 bg-card border-2 border-primary/20 rounded-lg ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 transition-colors' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
+											<div className='flex items-center space-x-4 flex-1'>
 												<span className='text-lg font-bold w-8 text-primary/80'>{index + 1}.</span>
-												<span className='text-primary'>{entry.player}</span>
+												<span className='text-primary flex-1'>{entry.player}</span>
+												<span className={`text-xs px-3 py-1.5 rounded-full font-medium mx-2 ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks are in' : 'Needs to Pick'}</span>
 											</div>
-											<div className='flex space-x-4'>
+											<div className='flex space-x-4 ml-4'>
 												<div className='text-right'>
 													<p className='text-sm text-primary/80'>Points</p>
 													<p className='font-bold text-primary'>{entry.points}</p>
@@ -207,6 +216,18 @@ export function Leaderboard() {
 					</Tabs>
 				)}
 			</CardContent>
+			{showUserPicks && selectedUserId && leagueId && (
+				<UserPicksModal
+					userId={selectedUserId}
+					playerName={weeklyLeaderboard.find(e => e.userId === selectedUserId)?.player || 'Unknown'}
+					week={currentWeek}
+					leagueId={leagueId}
+					onClose={() => {
+						setShowUserPicks(false);
+						setSelectedUserId(null);
+					}}
+				/>
+			)}
 		</Card>
 	);
 }
