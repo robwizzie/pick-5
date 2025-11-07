@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
-import { ObjectId } from 'mongodb';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +25,7 @@ export async function GET(req: Request) {
 
 		// Aggregate weekly results specific to the league
 		const weeklyResults = await Pick.aggregate([
-			{ $match: { week, leagueId: new ObjectId(leagueId) } },
+			{ $match: { week, leagueId } },
 			{
 				$group: {
 					_id: '$userId',
@@ -55,7 +54,7 @@ export async function GET(req: Request) {
 
 		// Aggregate season stats specific to the league
 		const seasonStats = await Pick.aggregate([
-			{ $match: { leagueId: new ObjectId(leagueId) } },
+			{ $match: { leagueId } },
 			{
 				$group: {
 					_id: '$userId',
