@@ -27,6 +27,7 @@ export function Nav() {
 	const isDashboard = pathname === '/dashboard';
 	const isCreateLeague = pathname === '/league/create';
 	const isJoinLeague = pathname === '/league/join';
+	const isBrowseLeague = pathname === '/league/browse';
 
 	// Fetch weeks with picks for the current league
 	useEffect(() => {
@@ -72,7 +73,7 @@ export function Nav() {
 				<div className='flex justify-between items-center h-20'>
 					{/* Left side - Week navigation for league pages */}
 					<div className='flex items-center space-x-4'>
-						{isLeaguePage && !isCreateLeague && !isJoinLeague ? (
+						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
 							<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
 								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
 									<ChevronLeft className='h-4 w-4' />
