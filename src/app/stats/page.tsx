@@ -102,6 +102,7 @@ const StatsPage = () => {
 					const picksResponse = await fetch(`/api/picks/user?leagueId=${league._id}`);
 					if (picksResponse.ok) {
 						const picks = await picksResponse.json();
+						console.log('[Stats] Picks response for league', league.name, ':', picks);
 
 						let leagueTotalPoints = 0;
 						let leagueCorrectPicks = 0;
@@ -110,12 +111,15 @@ const StatsPage = () => {
 						let leagueBestWeekPoints = 0;
 
 						picks.forEach((pick: any) => {
+							console.log('[Stats] Processing pick for week', pick.week, ':', pick);
 							// Check if all games in this week are finished (all picks have isCorrect defined)
 							const allGamesFinished = pick.picks.every((p: any) => p.isCorrect !== undefined && p.isCorrect !== null);
 							const totalPicksInWeek = pick.picks.length;
 							const correctInWeek = pick.correctPicks || 0;
 
-							// Only count this week if games are finished
+							console.log('[Stats] Week', pick.week, '- Games finished:', allGamesFinished, 'Total picks:', totalPicksInWeek, 'Correct:', correctInWeek);
+
+							// Count finished games for stats
 							if (allGamesFinished && totalPicksInWeek > 0) {
 								leagueTotalPoints += pick.weeklyPoints || 0;
 								leagueCorrectPicks += correctInWeek;
