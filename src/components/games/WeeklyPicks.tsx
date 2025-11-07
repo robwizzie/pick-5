@@ -16,6 +16,19 @@ import { hasGameStarted, haveAllPickedGamesStarted } from '@/services/gameUtils'
 import { Toast } from '@/components/ui/toast';
 import type { Game } from './GameCard';
 
+interface UserPick {
+	userId: string;
+	name: string;
+	image: string | null;
+}
+
+interface LeaguePicksData {
+	[gameId: string]: {
+		away: UserPick[];
+		home: UserPick[];
+	};
+}
+
 export function WeeklyPicks() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
@@ -34,6 +47,7 @@ export function WeeklyPicks() {
 	const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const initialLoadRef = useRef(true);
 	const lastSavedRef = useRef<{ picks: typeof picks; tfsGame: string; tfsScore: string } | null>(null);
+	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
@@ -47,6 +61,7 @@ export function WeeklyPicks() {
 	useEffect(() => {
 		if (games.length > 0 && sessionStatus === 'authenticated') {
 			loadExistingPicks();
+			loadLeaguePicks();
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [games, sessionStatus]);
@@ -112,6 +127,20 @@ export function WeeklyPicks() {
 		} catch (error) {
 			console.error('[WeeklyPicks] Error loading picks:', error);
 			setError('Error loading picks');
+		}
+	};
+
+	const loadLeaguePicks = async () => {
+		if (!leagueId) return;
+
+		try {
+			const response = await fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' });
+			if (response.ok) {
+				const data = await response.json();
+				setLeaguePicks(data);
+			}
+		} catch (error) {
+			console.error('[WeeklyPicks] Error loading league picks:', error);
 		}
 	};
 
@@ -332,12 +361,13 @@ export function WeeklyPicks() {
 								{picks.map((pick, index) => {
 									const game = games.find(g => g.id === pick.gameId);
 									const isCorrect = isPickCorrect(pick, game);
+									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
 									return (
 										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
 											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
 											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
 											<div className='mt-8'>
-												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} isCorrect={isCorrect} />
+												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} isCorrect={isCorrect} leaguePicks={gameCompleted ? leaguePicks[pick.gameId] : undefined} />
 											</div>
 										</div>
 									);
