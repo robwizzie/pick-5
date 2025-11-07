@@ -163,7 +163,7 @@ const Dashboard = () => {
 						</div>
 
 						{leagues.length > 0 ? (
-							<ActiveLeagues leagues={leagues} />
+							<ActiveLeagues leagues={leagues} userId={session?.user?.id} />
 						) : (
 							<Card className='glass border-white/10'>
 								<CardContent className='p-12 text-center space-y-6'>
