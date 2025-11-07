@@ -6,6 +6,34 @@ import { cachedFetch } from './cacheService';
 export class NFLService {
 	private static readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes for live data
 
+	/**
+	 * Get recommended polling interval based on whether games are likely in progress
+	 * This helps avoid rate limiting while still providing timely updates during games
+	 */
+	static getPollingInterval(): number {
+		const now = new Date();
+		const day = now.getDay(); // 0 = Sunday, 4 = Thursday, 1 = Monday
+		const hour = now.getHours();
+
+		// Thursday Night Football (typically 8:15 PM ET - midnight ET)
+		if (day === 4 && hour >= 19 && hour <= 23) {
+			return 2 * 60 * 1000; // 2 minutes during Thursday games
+		}
+
+		// Sunday games (typically 1 PM - midnight ET)
+		if (day === 0 && hour >= 12 && hour <= 23) {
+			return 2 * 60 * 1000; // 2 minutes during Sunday games
+		}
+
+		// Monday Night Football (typically 8:15 PM ET - midnight ET)
+		if (day === 1 && hour >= 19 && hour <= 23) {
+			return 2 * 60 * 1000; // 2 minutes during Monday games
+		}
+
+		// Outside game windows: poll every 5 minutes to reduce API load
+		return 5 * 60 * 1000; // 5 minutes
+	}
+
 	private static getCurrentSeason(): number {
 		const now = new Date();
 		const year = now.getFullYear();

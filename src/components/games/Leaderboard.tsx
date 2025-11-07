@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
+import { NFLService } from '@/services/nflService';
 
 export function Leaderboard() {
 	const { currentWeek } = useWeek();
@@ -78,11 +79,14 @@ export function Leaderboard() {
 
 		window.addEventListener('refreshLeaderboard', handleRefresh);
 
-		// Poll for updates every 30 seconds for live standings
+		// Use smart polling interval (2 min during games, 5 min outside)
+		const pollingInterval = NFLService.getPollingInterval();
+		console.log(`[Leaderboard] Using ${pollingInterval / 1000 / 60} minute polling interval`);
+
 		const pollInterval = setInterval(() => {
 			console.log('[Leaderboard Debug] 🔄 Auto-refreshing standings...');
 			fetchLeaderboard(true);
-		}, 30 * 1000); // 30 seconds
+		}, pollingInterval);
 
 		return () => {
 			window.removeEventListener('refreshLeaderboard', handleRefresh);
