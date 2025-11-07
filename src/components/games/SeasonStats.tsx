@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { useEffect, useState } from 'react';
+import { NFLService } from '@/services/nflService';
 
 export function SeasonStats() {
 	const { setCurrentWeek } = useWeek();
@@ -68,11 +69,14 @@ export function SeasonStats() {
 		};
 		window.addEventListener('refreshSeasonStats', handleRefresh);
 
-		// Poll for updates every 30 seconds for live stats
+		// Use smart polling interval (2 min during games, 5 min outside)
+		const pollingInterval = NFLService.getPollingInterval();
+		console.log(`[SeasonStats] Using ${pollingInterval / 1000 / 60} minute polling interval`);
+
 		const pollInterval = setInterval(() => {
 			console.log('[SeasonStats Debug] 🔄 Auto-refreshing stats...');
 			fetchStats(true);
-		}, 30 * 1000); // 30 seconds
+		}, pollingInterval);
 
 		return () => {
 			window.removeEventListener('refreshSeasonStats', handleRefresh);
