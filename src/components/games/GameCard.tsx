@@ -64,7 +64,7 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 					</Avatar>
 				))}
 			</div>
-			{remainingCount > 0 && <span className='text-xs text-primary/60 ml-1'>+{remainingCount}</span>}
+			{remainingCount > 0 && <span className='text-xs text-black ml-1'>+{remainingCount}</span>}
 		</div>
 	);
 }

@@ -8,10 +8,19 @@ import { Plus, LogIn, Trophy, Users, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
 
+interface RecentActivity {
+	type: 'pick' | 'league_join';
+	message: string;
+	timestamp: Date;
+	leagueId?: string;
+	leagueName?: string;
+}
+
 const Dashboard = () => {
 	const router = useRouter();
 	const { data: session, status } = useSession();
 	const [leagues, setLeagues] = useState([]);
+	const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
 
 	useEffect(() => {
 		if (status === 'unauthenticated') {
@@ -47,6 +56,46 @@ const Dashboard = () => {
 
 		fetchLeagues();
 	}, [session]);
+
+	useEffect(() => {
+		const fetchRecentActivity = async () => {
+			if (!session || leagues.length === 0) return;
+
+			try {
+				const activities: RecentActivity[] = [];
+
+				// Fetch recent picks from all leagues
+				for (const league of leagues) {
+					try {
+						const response = await fetch(`/api/picks/user?leagueId=${(league as any).id}`);
+						if (response.ok) {
+							const picks = await response.json();
+							// Get the most recent 5 picks
+							picks.slice(0, 5).forEach((pick: any) => {
+								activities.push({
+									type: 'pick',
+									message: `Made picks for Week ${pick.week}`,
+									timestamp: new Date(pick.createdAt || pick.updatedAt),
+									leagueId: (league as any).id,
+									leagueName: (league as any).name
+								});
+							});
+						}
+					} catch (error) {
+						console.error('Error fetching picks for league:', error);
+					}
+				}
+
+				// Sort by timestamp and take the 10 most recent
+				activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+				setRecentActivity(activities.slice(0, 10));
+			} catch (error) {
+				console.error('Error fetching recent activity:', error);
+			}
+		};
+
+		fetchRecentActivity();
+	}, [session, leagues]);
 
 	return (
 		<div className='min-h-screen p-4 pt-8'>
@@ -162,11 +211,24 @@ const Dashboard = () => {
 							<CardHeader>
 								<CardTitle className='text-lg font-display font-semibold'>Recent Activity</CardTitle>
 							</CardHeader>
-							<CardContent className='space-y-4'>
-								<div className='text-center py-8 text-muted-foreground'>
-									<Calendar className='h-8 w-8 mx-auto mb-2' />
-									<p className='text-sm'>No recent activity</p>
-								</div>
+							<CardContent className='space-y-3'>
+								{recentActivity.length > 0 ? (
+									recentActivity.map((activity, index) => (
+										<div key={index} className='flex items-start gap-3 p-3 rounded-lg bg-card/50 hover:bg-card/80 transition-colors cursor-pointer' onClick={() => activity.leagueId && router.push(`/league/${activity.leagueId}`)}>
+											<div className='w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0' />
+											<div className='flex-1 min-w-0'>
+												<p className='text-sm text-foreground'>{activity.message}</p>
+												{activity.leagueName && <p className='text-xs text-muted-foreground truncate'>{activity.leagueName}</p>}
+												<p className='text-xs text-muted-foreground mt-1'>{new Date(activity.timestamp).toLocaleDateString()}</p>
+											</div>
+										</div>
+									))
+								) : (
+									<div className='text-center py-8 text-muted-foreground'>
+										<Calendar className='h-8 w-8 mx-auto mb-2' />
+										<p className='text-sm'>No recent activity</p>
+									</div>
+								)}
 							</CardContent>
 						</Card>
 					</div>
