@@ -19,10 +19,6 @@ export async function GET(req: Request) {
 		const leagueId = searchParams.get('leagueId');
 		const userId = searchParams.get('userId') || (session.user as any).id;
 
-		console.log('[Picks API] Session user:', session.user);
-		console.log('[Picks API] Extracted userId:', userId);
-		console.log('[Picks API] Query params - week:', week, 'leagueId:', leagueId);
-
 		await connectDB();
 
 		// If week is provided, return picks for that specific week
@@ -58,13 +54,11 @@ export async function GET(req: Request) {
 				leagueId
 			}).sort({ week: 1 });
 
-			console.log('[Picks API] Found', picks.length, 'picks for userId:', userId, 'leagueId:', leagueId);
 			return NextResponse.json(picks);
 		}
 
 		// If no params provided, return all picks for the user
 		const picks = await Pick.find({ userId }).sort({ week: 1 });
-		console.log('[Picks API] Found', picks.length, 'picks for userId:', userId);
 		return NextResponse.json(picks);
 	} catch (error) {
 		console.error('Error fetching user picks:', error);
