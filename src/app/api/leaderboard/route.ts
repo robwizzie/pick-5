@@ -57,7 +57,7 @@ export async function GET(req: Request) {
 			userIdsWithPicks.add(userId);
 
 			// Re-score this pick with current game results
-			const { weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(
+			const { weeklyPoints, correctPicks, tfsPoints, completedGames } = ScoringService.calculateWeekScore(
 				pick.picks,
 				gameResults,
 				pick.tfsGame,
@@ -67,7 +67,8 @@ export async function GET(req: Request) {
 			weeklyResultsMap.set(userId, {
 				points: weeklyPoints,
 				correct: correctPicks,
-				tfsPoints: tfsPoints
+				tfsPoints: tfsPoints,
+				completedGames: completedGames
 			});
 		}
 
@@ -121,7 +122,7 @@ export async function GET(req: Request) {
 			const weekResults = gameResultsByWeek.get(pick.week) || [];
 
 			// Re-score this week's picks
-			const { weeklyPoints, correctPicks: correct, tfsPoints } = ScoringService.calculateWeekScore(
+			const { weeklyPoints, correctPicks: correct, tfsPoints, completedGames } = ScoringService.calculateWeekScore(
 				pick.picks,
 				weekResults,
 				pick.tfsGame,
@@ -142,7 +143,7 @@ export async function GET(req: Request) {
 			userStats.totalPoints += weeklyPoints;
 			userStats.totalTFSPoints += tfsPoints;
 			userStats.correctPicks += correct;
-			userStats.totalPicks += pick.picks.length;
+			userStats.totalPicks += completedGames; // Use completed games, not pick.picks.length
 		}
 
 		console.log('[API Debug] Re-calculated season stats:', Array.from(seasonStatsMap.entries()));
