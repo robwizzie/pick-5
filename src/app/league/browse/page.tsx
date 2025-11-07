@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Search, Users, Lock, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Users, Lock, Loader2, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { Spinner } from '@/components/ui/spinner';
 
 interface League {
@@ -15,6 +15,7 @@ interface League {
 	name: string;
 	memberCount: number;
 	createdAt: string;
+	isMember: boolean;
 }
 
 interface Pagination {
@@ -82,6 +83,13 @@ export default function BrowseLeaguesPage() {
 	};
 
 	const handleLeagueClick = (league: League) => {
+		// If user is already a member, navigate directly to the league
+		if (league.isMember) {
+			router.push(`/league/${league.id}`);
+			return;
+		}
+
+		// Otherwise, show the password modal
 		setSelectedLeague(league);
 		setPassword('');
 		setJoinError('');
@@ -211,12 +219,22 @@ export default function BrowseLeaguesPage() {
 						{leagues.map(league => (
 							<Card
 								key={league.id}
-								className='glass border-white/10 hover:border-primary/50 transition-all cursor-pointer group'
+								className={`glass border-white/10 hover:border-primary/50 transition-all cursor-pointer group ${
+									league.isMember ? 'border-primary/30' : ''
+								}`}
 								onClick={() => handleLeagueClick(league)}>
 								<CardContent className='p-6'>
 									<div className='flex items-center justify-between'>
 										<div className='flex-1'>
-											<h3 className='text-xl font-semibold text-foreground group-hover:text-primary transition-colors'>{league.name}</h3>
+											<div className='flex items-center gap-2'>
+												<h3 className='text-xl font-semibold text-foreground group-hover:text-primary transition-colors'>{league.name}</h3>
+												{league.isMember && (
+													<div className='flex items-center gap-1 px-2 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold'>
+														<CheckCircle2 className='h-3 w-3' />
+														<span>Member</span>
+													</div>
+												)}
+											</div>
 											<div className='flex items-center gap-4 mt-2 text-sm text-muted-foreground'>
 												<div className='flex items-center gap-1'>
 													<Users className='h-4 w-4' />
@@ -230,8 +248,14 @@ export default function BrowseLeaguesPage() {
 												</div>
 											</div>
 										</div>
-										<Button variant='outline' className='group-hover:bg-primary group-hover:text-primary-foreground transition-colors'>
-											Join League
+										<Button
+											variant='outline'
+											className={
+												league.isMember
+													? 'bg-primary/20 text-primary hover:bg-primary/30 border-primary/50'
+													: 'group-hover:bg-primary group-hover:text-primary-foreground transition-colors'
+											}>
+											{league.isMember ? 'View League' : 'Join League'}
 										</Button>
 									</div>
 								</CardContent>
