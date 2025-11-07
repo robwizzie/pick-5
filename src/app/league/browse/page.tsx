@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -48,13 +48,7 @@ export default function BrowseLeaguesPage() {
 		}
 	}, [status, router]);
 
-	useEffect(() => {
-		if (status === 'authenticated') {
-			fetchLeagues();
-		}
-	}, [status, searchTerm, currentPage]);
-
-	const fetchLeagues = async () => {
+	const fetchLeagues = useCallback(async () => {
 		try {
 			setLoading(true);
 			const params = new URLSearchParams({
@@ -73,7 +67,13 @@ export default function BrowseLeaguesPage() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, [currentPage, searchTerm]);
+
+	useEffect(() => {
+		if (status === 'authenticated') {
+			fetchLeagues();
+		}
+	}, [status, fetchLeagues]);
 
 	const handleSearch = (e: React.FormEvent) => {
 		e.preventDefault();
@@ -176,7 +176,7 @@ export default function BrowseLeaguesPage() {
 						</p>
 						{searchTerm && (
 							<p>
-								Search: <span className='text-primary font-semibold'>"{searchTerm}"</span>
+								Search: <span className='text-primary font-semibold'>&ldquo;{searchTerm}&rdquo;</span>
 							</p>
 						)}
 					</div>

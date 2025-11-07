@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { use } from 'react';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 interface JoinInvitePageProps {
 	params: Promise<{ inviteCode: string }>;
@@ -17,23 +17,13 @@ export default function JoinInvitePage({ params }: JoinInvitePageProps) {
 	const resolvedParams = use(params);
 	const inviteCode = resolvedParams.inviteCode;
 	const router = useRouter();
-	const { data: session, status } = useSession();
+	const { status } = useSession();
 	const [joinStatus, setJoinStatus] = useState<'loading' | 'success' | 'error' | 'already_member'>('loading');
 	const [leagueName, setLeagueName] = useState('');
 	const [leagueId, setLeagueId] = useState('');
 	const [errorMessage, setErrorMessage] = useState('');
 
-	useEffect(() => {
-		if (status === 'unauthenticated') {
-			// Store the invite code in sessionStorage so we can join after login
-			sessionStorage.setItem('pendingInviteCode', inviteCode);
-			router.push('/login');
-		} else if (status === 'authenticated') {
-			handleJoinLeague();
-		}
-	}, [status, inviteCode]);
-
-	const handleJoinLeague = async () => {
+	const handleJoinLeague = useCallback(async () => {
 		try {
 			setJoinStatus('loading');
 
@@ -65,7 +55,17 @@ export default function JoinInvitePage({ params }: JoinInvitePageProps) {
 			setJoinStatus('error');
 			setErrorMessage('An unexpected error occurred');
 		}
-	};
+	}, [inviteCode]);
+
+	useEffect(() => {
+		if (status === 'unauthenticated') {
+			// Store the invite code in sessionStorage so we can join after login
+			sessionStorage.setItem('pendingInviteCode', inviteCode);
+			router.push('/login');
+		} else if (status === 'authenticated') {
+			handleJoinLeague();
+		}
+	}, [status, inviteCode, router, handleJoinLeague]);
 
 	if (status === 'loading' || joinStatus === 'loading') {
 		return (
