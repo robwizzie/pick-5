@@ -40,8 +40,8 @@ export default function JoinLeaguePage() {
 	};
 
 	return (
-		<div className='h-[calc(100vh-4rem)] flex items-center justify-center'>
-			<Card className='w-[400px] p-6'>
+		<div className='h-[calc(100vh-4rem)] flex items-center justify-center px-4'>
+			<Card className='w-full max-w-[400px] p-6'>
 				<CardHeader className='relative'>
 					<Button variant='ghost' size='icon' className='absolute top-0 left-0 text-muted-foreground hover:text-primary hover:bg-transparent' onClick={() => router.push('/dashboard')}>
 						<ArrowLeft className='w-5 h-5' />

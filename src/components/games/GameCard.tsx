@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 interface TeamInfo {
 	team: string;
@@ -17,6 +18,17 @@ interface Game {
 	status?: string;
 }
 
+interface UserPick {
+	userId: string;
+	name: string;
+	image: string | null;
+}
+
+interface GamePicksData {
+	away: UserPick[];
+	home: UserPick[];
+}
+
 interface GameCardProps {
 	game?: Game;
 	selected?: string;
@@ -25,9 +37,39 @@ interface GameCardProps {
 	disabled?: boolean;
 	isCorrect?: boolean | null;
 	noHover?: boolean;
+	leaguePicks?: GamePicksData;
 }
 
-export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover }: GameCardProps) {
+// Component to render stacked avatars
+function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisible?: number }) {
+	if (!picks || picks.length === 0) return null;
+
+	const visiblePicks = picks.slice(0, maxVisible);
+	const remainingCount = picks.length - maxVisible;
+
+	return (
+		<div className='flex items-center gap-0.5 mt-2'>
+			<div className='flex -space-x-2'>
+				{visiblePicks.map((pick, index) => (
+					<Avatar key={pick.userId} className='w-6 h-6 border-2 border-card' style={{ zIndex: maxVisible - index }}>
+						<AvatarImage src={pick.image || undefined} alt={pick.name} />
+						<AvatarFallback className='bg-primary/20 text-primary text-[10px] font-semibold'>
+							{pick.name
+								.split(' ')
+								.map(n => n[0])
+								.join('')
+								.toUpperCase()
+								.slice(0, 2)}
+						</AvatarFallback>
+					</Avatar>
+				))}
+			</div>
+			{remainingCount > 0 && <span className='text-xs text-primary/60 ml-1'>+{remainingCount}</span>}
+		</div>
+	);
+}
+
+export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks }: GameCardProps) {
 	if (!game) return null;
 
 	const getTeamButtonStyle = (isTeamSelected: boolean, isTeamCorrect: boolean | null) => {
@@ -62,14 +104,15 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
 						<Button {...buttonProps} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null)}`}>
-							<div className='flex items-center space-x-3'>
-								<div className='relative w-6 h-6 xl:w-8 xl:h-8'>
+							<div className='flex items-center space-x-3 w-full'>
+								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
 									<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
 								</div>
-								<div className='text-left'>
+								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.team}</div>
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
 									{showScores && game.away.score !== undefined && <div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>}
+									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 								</div>
 							</div>
 						</Button>
@@ -83,14 +126,15 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					{/* Home Team */}
 					<div className='flex-1 xl:ml-4'>
 						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null)}`}>
-							<div className='flex items-center space-x-3'>
-								<div className='relative w-6 h-6 xl:w-8 xl:h-8'>
+							<div className='flex items-center space-x-3 w-full'>
+								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
 									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
 								</div>
-								<div className='text-left'>
+								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.team}</div>
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
 									{showScores && game.home.score !== undefined && <div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>}
+									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 								</div>
 							</div>
 						</Button>
