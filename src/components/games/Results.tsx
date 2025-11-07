@@ -24,6 +24,19 @@ interface WeeklyPicks {
 	submitted: boolean;
 }
 
+interface UserPick {
+	userId: string;
+	name: string;
+	image: string | null;
+}
+
+interface LeaguePicksData {
+	[gameId: string]: {
+		away: UserPick[];
+		home: UserPick[];
+	};
+}
+
 export function Results() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
@@ -34,6 +47,7 @@ export function Results() {
 	const [error, setError] = useState<string | null>(null);
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 
 	useEffect(() => {
 		const loadData = async (isPolling = false) => {
@@ -54,12 +68,18 @@ export function Results() {
 				}
 
 				// Pass leagueId to the backend
-				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(currentWeek), fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })]);
+				const [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
+					NFLService.getWeeklyGames(currentWeek),
+					fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
+					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
+				]);
 
 				const picksData = await picksResponse.json();
+				const leaguePicksData = await leaguePicksResponse.json();
 
 				setGames(weeklyGames);
 				setPicks(picksData);
+				setLeaguePicks(leaguePicksData);
 				setLastUpdated(new Date());
 
 				// Trigger refresh events for leaderboard and season stats
@@ -204,6 +224,7 @@ export function Results() {
 							disabled={true}
 							isCorrect={gameFinished ? isCorrect : null}
 							noHover={true}
+							leaguePicks={gameFinished ? leaguePicks[pick.gameId] : undefined}
 						/>
 					</div>
 				</div>
