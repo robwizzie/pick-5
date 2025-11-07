@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
 		await connectDB();
 
-		let query: any = {};
+		const query: Record<string, unknown> = {};
 
 		// If search term is provided, use text search on league name
 		if (search.trim()) {
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 			.lean();
 
 		// Transform the data to include member count
-		const leaguesWithCount = leagues.map((league: any) => ({
+		const leaguesWithCount = leagues.map((league: { _id: unknown; name: string; members?: string[]; createdAt: Date }) => ({
 			id: league._id.toString(),
 			name: league.name,
 			memberCount: league.members ? league.members.length : 0,
