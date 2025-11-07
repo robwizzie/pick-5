@@ -14,11 +14,12 @@ import { SeasonStats } from '@/components/games/SeasonStats';
 import { Leaderboard } from '@/components/games/Leaderboard';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
-import { Share2, Copy, Check } from 'lucide-react';
+import { Share2, Copy, Check, Info } from 'lucide-react';
 
 interface League {
 	name: string;
 	sport: string;
+	mode: string;
 	creatorId?: string;
 }
 
@@ -29,6 +30,7 @@ export default function LeagueDetails() {
 	const router = useRouter();
 	const { data: session } = useSession();
 	const [showInviteModal, setShowInviteModal] = useState(false);
+	const [showRulesModal, setShowRulesModal] = useState(false);
 	const [inviteUrl, setInviteUrl] = useState('');
 	const [copied, setCopied] = useState(false);
 	const [loadingInvite, setLoadingInvite] = useState(false);
@@ -102,12 +104,18 @@ export default function LeagueDetails() {
 							<p className='text-primary/80 font-medium mt-1'>{league.sport}</p>
 						</div>
 					</div>
-					{isCommissioner && (
-						<Button onClick={handleGetInviteLink} disabled={loadingInvite} variant='outline' className='flex items-center gap-2 border-primary/50 hover:bg-primary/10'>
-							<Share2 className='h-4 w-4' />
-							Invite Link
+					<div className='flex items-center gap-2'>
+						<Button onClick={() => setShowRulesModal(true)} variant='outline' className='flex items-center gap-2 border-primary/50 hover:bg-primary/10'>
+							<Info className='h-4 w-4' />
+							Rules
 						</Button>
-					)}
+						{isCommissioner && (
+							<Button onClick={handleGetInviteLink} disabled={loadingInvite} variant='outline' className='flex items-center gap-2 border-primary/50 hover:bg-primary/10'>
+								<Share2 className='h-4 w-4' />
+								Invite Link
+							</Button>
+						)}
+					</div>
 				</div>
 			</Card>
 
@@ -170,6 +178,218 @@ export default function LeagueDetails() {
 								<strong className='text-foreground'>How it works:</strong> Anyone with this link can join your league instantly after logging in or creating an
 								account. No password needed!
 							</p>
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			{/* Rules Modal */}
+			<Dialog open={showRulesModal} onOpenChange={setShowRulesModal}>
+				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-2xl max-h-[80vh] overflow-y-auto'>
+					<DialogHeader>
+						<DialogTitle className='text-2xl font-bold text-primary'>League Rules & Scoring</DialogTitle>
+						<DialogDescription className='text-muted-foreground'>
+							{league.mode === 'steve' ? 'Steve Mode - Confidence-Based Scoring' : 'Standard Pick 5 Mode'}
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className='space-y-6 py-4'>
+						{league.mode === 'steve' ? (
+							// Steve Mode Rules
+							<>
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>How to Play</h3>
+									<ul className='space-y-2 text-sm text-muted-foreground'>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Each week, select up to 5 games from the available matchups</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Pick which team you think will win each game</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Assign a confidence level (1-5) to each pick, with 5 being most confident</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Each confidence level can only be used once per week</span>
+										</li>
+									</ul>
+								</div>
+
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>Scoring System</h3>
+									<div className='p-4 rounded-lg bg-card border border-primary/20'>
+										<p className='text-sm text-muted-foreground mb-3'>Points are awarded based on your confidence level when you pick correctly:</p>
+										<ul className='space-y-2 text-sm'>
+											<li className='flex items-center justify-between'>
+												<span className='text-foreground'>Confidence 5 (Highest) - Correct Pick:</span>
+												<span className='font-bold text-primary'>5 points</span>
+											</li>
+											<li className='flex items-center justify-between'>
+												<span className='text-foreground'>Confidence 4 - Correct Pick:</span>
+												<span className='font-bold text-primary'>4 points</span>
+											</li>
+											<li className='flex items-center justify-between'>
+												<span className='text-foreground'>Confidence 3 - Correct Pick:</span>
+												<span className='font-bold text-primary'>3 points</span>
+											</li>
+											<li className='flex items-center justify-between'>
+												<span className='text-foreground'>Confidence 2 - Correct Pick:</span>
+												<span className='font-bold text-primary'>2 points</span>
+											</li>
+											<li className='flex items-center justify-between'>
+												<span className='text-foreground'>Confidence 1 (Lowest) - Correct Pick:</span>
+												<span className='font-bold text-primary'>1 point</span>
+											</li>
+										</ul>
+									</div>
+									<div className='p-3 rounded-lg bg-primary/10 border border-primary/20'>
+										<p className='text-sm text-foreground'>
+											<strong>Maximum Weekly Score:</strong> 15 points (1 + 2 + 3 + 4 + 5 if all picks are correct)
+										</p>
+									</div>
+								</div>
+
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>Strategy Tips</h3>
+									<ul className='space-y-2 text-sm text-muted-foreground'>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Save your highest confidence levels (4-5) for games you feel most certain about</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Use lower confidence levels (1-2) for riskier upset picks</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>You don&apos;t have to pick 5 games - pick only the games you feel confident about</span>
+										</li>
+									</ul>
+								</div>
+							</>
+						) : (
+							// Standard Mode Rules
+							<>
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>How to Play</h3>
+									<ul className='space-y-2 text-sm text-muted-foreground'>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Each week, select exactly 5 games from the available matchups</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Pick which team you think will win each game</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Predict the Total Final Score (TFS) for one designated game</span>
+										</li>
+									</ul>
+								</div>
+
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>Scoring System</h3>
+									<div className='p-4 rounded-lg bg-card border border-primary/20 space-y-4'>
+										<div>
+											<p className='text-sm font-semibold text-foreground mb-2'>Regular Picks (5 games):</p>
+											<ul className='space-y-2 text-sm'>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Each correct pick:</span>
+													<span className='font-bold text-primary'>2 points</span>
+												</li>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Each incorrect pick:</span>
+													<span className='font-bold text-muted-foreground'>0 points</span>
+												</li>
+												<li className='flex items-center justify-between border-t border-primary/20 pt-2 mt-2'>
+													<span className='text-foreground'>Maximum from picks:</span>
+													<span className='font-bold text-primary'>10 points</span>
+												</li>
+											</ul>
+										</div>
+
+										<div className='border-t border-primary/20 pt-4'>
+											<p className='text-sm font-semibold text-foreground mb-2'>Total Final Score (TFS) Bonus:</p>
+											<ul className='space-y-2 text-sm'>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Exact score:</span>
+													<span className='font-bold text-primary'>5 points</span>
+												</li>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Within 1-3 points:</span>
+													<span className='font-bold text-primary'>4 points</span>
+												</li>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Within 4-5 points:</span>
+													<span className='font-bold text-primary'>3 points</span>
+												</li>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Within 6-7 points:</span>
+													<span className='font-bold text-primary'>2 points</span>
+												</li>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>Within 8-10 points:</span>
+													<span className='font-bold text-primary'>1 point</span>
+												</li>
+												<li className='flex items-center justify-between'>
+													<span className='text-foreground'>More than 10 points off:</span>
+													<span className='font-bold text-muted-foreground'>0 points</span>
+												</li>
+											</ul>
+										</div>
+									</div>
+									<div className='p-3 rounded-lg bg-primary/10 border border-primary/20'>
+										<p className='text-sm text-foreground'>
+											<strong>Maximum Weekly Score:</strong> 15 points (10 from picks + 5 from TFS)
+										</p>
+									</div>
+								</div>
+
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>Strategy Tips</h3>
+									<ul className='space-y-2 text-sm text-muted-foreground'>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Pick games you feel most confident about to maximize your correct picks</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>The TFS prediction can be a tiebreaker - take time to research both teams&apos; scoring trends</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Even if you&apos;re off on the exact TFS, you can still earn partial points</span>
+										</li>
+									</ul>
+								</div>
+							</>
+						)}
+
+						<div className='p-4 rounded-lg bg-card border border-primary/20'>
+							<h3 className='text-sm font-semibold text-foreground mb-2'>Important Notes</h3>
+							<ul className='space-y-2 text-xs text-muted-foreground'>
+								<li className='flex gap-2'>
+									<span className='text-primary font-bold'>•</span>
+									<span>All picks must be submitted before the first game of the week starts</span>
+								</li>
+								<li className='flex gap-2'>
+									<span className='text-primary font-bold'>•</span>
+									<span>You can edit your picks until the deadline</span>
+								</li>
+								<li className='flex gap-2'>
+									<span className='text-primary font-bold'>•</span>
+									<span>Points are calculated automatically after all games in the week are completed</span>
+								</li>
+								<li className='flex gap-2'>
+									<span className='text-primary font-bold'>•</span>
+									<span>Season standings are based on total points accumulated throughout the season</span>
+								</li>
+							</ul>
 						</div>
 					</div>
 				</DialogContent>
