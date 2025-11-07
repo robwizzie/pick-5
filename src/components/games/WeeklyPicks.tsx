@@ -48,6 +48,25 @@ export function WeeklyPicks() {
 	const initialLoadRef = useRef(true);
 	const lastSavedRef = useRef<{ picks: typeof picks; tfsGame: string; tfsScore: string } | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
+	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [tfsError, setTfsError] = useState<string | null>(null);
+
+	// Fetch league details to get the mode
+	useEffect(() => {
+		const fetchLeagueDetails = async () => {
+			if (!leagueId) return;
+			try {
+				const response = await fetch(`/api/league/${leagueId}`);
+				if (response.ok) {
+					const data = await response.json();
+					setLeagueMode(data.mode || 'standard');
+				}
+			} catch (error) {
+				console.error('[WeeklyPicks] Error fetching league details:', error);
+			}
+		};
+		fetchLeagueDetails();
+	}, [leagueId]);
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
@@ -141,6 +160,42 @@ export function WeeklyPicks() {
 			}
 		} catch (error) {
 			console.error('[WeeklyPicks] Error loading league picks:', error);
+		}
+	};
+
+	const validateTfsScore = (value: string): string | null => {
+		if (!value || value.trim() === '') {
+			return 'Total Final Score is required';
+		}
+
+		const numValue = parseInt(value);
+
+		if (isNaN(numValue)) {
+			return 'Please enter a valid number';
+		}
+
+		if (numValue < 0) {
+			return 'Score cannot be negative';
+		}
+
+		if (numValue > 200) {
+			return 'Score seems unrealistically high (max 200)';
+		}
+
+		if (!Number.isInteger(parseFloat(value))) {
+			return 'Score must be a whole number';
+		}
+
+		return null;
+	};
+
+	const handleTfsScoreChange = (value: string) => {
+		setTfsScore(value);
+		if (value) {
+			const error = validateTfsScore(value);
+			setTfsError(error);
+		} else {
+			setTfsError(null);
 		}
 	};
 
@@ -264,8 +319,15 @@ export function WeeklyPicks() {
 			return;
 		}
 
-		if (!tfsGame || isNaN(parseInt(tfsScore))) {
-			setError('Please select a TFS game and enter a valid predicted score');
+		if (!tfsGame) {
+			setError('Please select a TFS game');
+			return;
+		}
+
+		const tfsValidationError = validateTfsScore(tfsScore);
+		if (tfsValidationError) {
+			setError(tfsValidationError);
+			setTfsError(tfsValidationError);
 			return;
 		}
 
@@ -414,6 +476,7 @@ export function WeeklyPicks() {
 								<div className='mt-6 space-y-4'>
 									<div>
 										<h3 className='text-lg font-medium mb-2'>Total Final Score Prediction</h3>
+										<p className='text-sm text-muted-foreground mb-3'>Select one of your picked games and predict the combined final score of both teams</p>
 										<select className='w-full p-2 rounded mb-2 bg-card border-2 border-primary/20 text-foreground' value={tfsGame} onChange={e => setTfsGame(e.target.value)}>
 											<option value=''>Select Game</option>
 											{picks.map(pick => {
@@ -425,7 +488,43 @@ export function WeeklyPicks() {
 												);
 											})}
 										</select>
-										<Input type='number' placeholder='Predicted Total Score' value={tfsScore} onChange={e => setTfsScore(e.target.value)} className='bg-card border-2 border-primary/20' />
+										<div className='space-y-1'>
+											<Input type='number' placeholder='Predicted Total Score (e.g., 45)' value={tfsScore} onChange={e => handleTfsScoreChange(e.target.value)} className={`bg-card border-2 ${tfsError ? 'border-red-500' : 'border-primary/20'}`} />
+											{tfsError && <p className='text-sm text-red-500'>{tfsError}</p>}
+											{tfsScore && !tfsError && (
+												<div className='p-3 rounded-lg bg-primary/10 border border-primary/20 mt-2'>
+													<p className='text-sm text-foreground'>
+														<strong>Potential TFS Points:</strong>
+													</p>
+													<ul className='text-xs text-muted-foreground mt-1 space-y-1'>
+														<li>• Exact score: <span className='text-primary font-semibold'>5 points</span></li>
+														<li>• Within 1-3: <span className='text-primary font-semibold'>4 points</span></li>
+														<li>• Within 4-5: <span className='text-primary font-semibold'>3 points</span></li>
+														<li>• Within 6-7: <span className='text-primary font-semibold'>2 points</span></li>
+														<li>• Within 8-10: <span className='text-primary font-semibold'>1 point</span></li>
+													</ul>
+												</div>
+											)}
+										</div>
+									</div>
+
+									{/* Point Summary */}
+									<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
+										<h4 className='text-sm font-semibold text-foreground mb-2'>Potential Weekly Score</h4>
+										<div className='space-y-2 text-sm'>
+											<div className='flex justify-between'>
+												<span className='text-muted-foreground'>5 Game Picks (2 pts each):</span>
+												<span className='font-semibold text-primary'>Up to 10 points</span>
+											</div>
+											<div className='flex justify-between'>
+												<span className='text-muted-foreground'>TFS Bonus:</span>
+												<span className='font-semibold text-primary'>Up to 5 points</span>
+											</div>
+											<div className='border-t border-primary/20 pt-2 flex justify-between'>
+												<span className='font-semibold text-foreground'>Maximum Total:</span>
+												<span className='font-bold text-primary text-lg'>15 points</span>
+											</div>
+										</div>
 									</div>
 
 									<Button
@@ -437,7 +536,7 @@ export function WeeklyPicks() {
 											window.dispatchEvent(leaderboardEvent);
 											await refreshStats();
 										}}
-										disabled={!tfsGame || !tfsScore || isSaving}>
+										disabled={!tfsGame || !tfsScore || !!tfsError || isSaving}>
 										{isSaving ? 'Saving...' : hasExistingPicks ? 'Update Picks' : 'Submit Picks'}
 									</Button>
 								</div>
