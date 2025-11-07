@@ -226,6 +226,18 @@ const StatsPage = () => {
 				}
 			}
 
+			// If no complete weeks but user has picks with good win rate, count current streak as 1
+			if (currentStreak === 0 && allTimeData.totalPicks > 0) {
+				const currentWinRate = allTimeData.correctPicks / allTimeData.totalPicks;
+				if (currentWinRate >= 0.6) {
+					currentStreak = 1;
+					// Also set best streak to 1 if it's 0 and user is doing well
+					if (bestStreak === 0) {
+						bestStreak = 1;
+					}
+				}
+			}
+
 			allTimeData.currentStreak = currentStreak;
 			allTimeData.bestStreak = bestStreak;
 
@@ -258,72 +270,156 @@ const StatsPage = () => {
 
 		// Perfect Week - Get 5/5 picks correct in a week
 		if (allTimeStats.perfectWeeks > 0) {
-			achievements.push({ icon: Crown, label: 'Perfect Week', value: `${allTimeStats.perfectWeeks}x`, color: 'text-yellow-400' });
+			achievements.push({
+				icon: Crown,
+				label: 'Perfect Week',
+				value: `${allTimeStats.perfectWeeks}x`,
+				color: 'text-yellow-400',
+				description: 'Got all 5 picks correct in a week'
+			});
 		}
 
 		// Century Club - Reach 100 total points
 		if (allTimeStats.totalPoints >= 100) {
-			achievements.push({ icon: Trophy, label: 'Century Club', value: '100+ pts', color: 'text-primary' });
+			achievements.push({
+				icon: Trophy,
+				label: 'Century Club',
+				value: '100+ pts',
+				color: 'text-primary',
+				description: 'Earned 100+ total points'
+			});
 		}
 
 		// Points Machine - Reach 200 total points
 		if (allTimeStats.totalPoints >= 200) {
-			achievements.push({ icon: Rocket, label: 'Points Machine', value: '200+ pts', color: 'text-pink-400' });
+			achievements.push({
+				icon: Rocket,
+				label: 'Points Machine',
+				value: '200+ pts',
+				color: 'text-pink-400',
+				description: 'Earned 200+ total points'
+			});
 		}
 
 		// Elite Picker - 60%+ win rate
 		if (allTimeStats.winPercentage >= 60) {
-			achievements.push({ icon: Star, label: 'Elite Picker', value: `${Math.round(allTimeStats.winPercentage)}%`, color: 'text-accent' });
+			achievements.push({
+				icon: Star,
+				label: 'Elite Picker',
+				value: `${Math.round(allTimeStats.winPercentage)}%`,
+				color: 'text-accent',
+				description: 'Maintained 60%+ win rate'
+			});
 		}
 
 		// Sharpshooter - 80%+ win rate
 		if (allTimeStats.winPercentage >= 80) {
-			achievements.push({ icon: Crosshair, label: 'Sharpshooter', value: `${Math.round(allTimeStats.winPercentage)}%`, color: 'text-red-400' });
+			achievements.push({
+				icon: Crosshair,
+				label: 'Sharpshooter',
+				value: `${Math.round(allTimeStats.winPercentage)}%`,
+				color: 'text-red-400',
+				description: 'Achieved 80%+ win rate'
+			});
 		}
 
 		// Hot Streak - 5+ week winning streak
 		if (allTimeStats.bestStreak >= 5) {
-			achievements.push({ icon: Flame, label: 'Hot Streak', value: `${allTimeStats.bestStreak}`, color: 'text-orange-400' });
+			achievements.push({
+				icon: Flame,
+				label: 'Hot Streak',
+				value: `${allTimeStats.bestStreak}`,
+				color: 'text-orange-400',
+				description: '5+ weeks with 60%+ win rate'
+			});
 		}
 
 		// Unstoppable - 10+ week winning streak
 		if (allTimeStats.bestStreak >= 10) {
-			achievements.push({ icon: Sparkles, label: 'Unstoppable', value: `${allTimeStats.bestStreak}`, color: 'text-yellow-300' });
+			achievements.push({
+				icon: Sparkles,
+				label: 'Unstoppable',
+				value: `${allTimeStats.bestStreak}`,
+				color: 'text-yellow-300',
+				description: '10+ week winning streak'
+			});
 		}
 
 		// TFS Master - 20+ TFS bonus points
 		if (allTimeStats.totalTFSPoints >= 20) {
-			achievements.push({ icon: Zap, label: 'TFS Master', value: `${allTimeStats.totalTFSPoints}`, color: 'text-purple-400' });
+			achievements.push({
+				icon: Zap,
+				label: 'TFS Master',
+				value: `${allTimeStats.totalTFSPoints}`,
+				color: 'text-purple-400',
+				description: 'Earned 20+ TFS bonus points'
+			});
 		}
 
 		// TFS Expert - 50+ TFS bonus points
 		if (allTimeStats.totalTFSPoints >= 50) {
-			achievements.push({ icon: Zap, label: 'TFS Expert', value: `${allTimeStats.totalTFSPoints}`, color: 'text-purple-300' });
+			achievements.push({
+				icon: Zap,
+				label: 'TFS Expert',
+				value: `${allTimeStats.totalTFSPoints}`,
+				color: 'text-purple-300',
+				description: 'Earned 50+ TFS bonus points'
+			});
 		}
 
 		// League Warrior - Join 3+ leagues
 		if (allTimeStats.totalLeagues >= 3) {
-			achievements.push({ icon: Users, label: 'League Warrior', value: `${allTimeStats.totalLeagues}`, color: 'text-blue-400' });
+			achievements.push({
+				icon: Users,
+				label: 'League Warrior',
+				value: `${allTimeStats.totalLeagues}`,
+				color: 'text-blue-400',
+				description: 'Competing in 3+ leagues'
+			});
 		}
 
 		// Consistency King - Play 10+ weeks
 		if (allTimeStats.totalWeeksPlayed >= 10) {
-			achievements.push({ icon: Calendar, label: 'Consistency King', value: `${allTimeStats.totalWeeksPlayed} wks`, color: 'text-green-400' });
+			achievements.push({
+				icon: Calendar,
+				label: 'Consistency King',
+				value: `${allTimeStats.totalWeeksPlayed} wks`,
+				color: 'text-green-400',
+				description: 'Played in 10+ weeks'
+			});
 		}
 
 		// Marathon Runner - Play 15+ weeks
 		if (allTimeStats.totalWeeksPlayed >= 15) {
-			achievements.push({ icon: Medal, label: 'Marathon Runner', value: `${allTimeStats.totalWeeksPlayed} wks`, color: 'text-teal-400' });
+			achievements.push({
+				icon: Medal,
+				label: 'Marathon Runner',
+				value: `${allTimeStats.totalWeeksPlayed} wks`,
+				color: 'text-teal-400',
+				description: 'Played in 15+ weeks'
+			});
 		}
 
 		// Champion - 100+ correct picks
 		if (allTimeStats.correctPicks >= 100) {
-			achievements.push({ icon: Shield, label: 'Champion', value: `${allTimeStats.correctPicks}`, color: 'text-amber-400' });
+			achievements.push({
+				icon: Shield,
+				label: 'Champion',
+				value: `${allTimeStats.correctPicks}`,
+				color: 'text-amber-400',
+				description: 'Made 100+ correct picks'
+			});
 		}
 
 		// On Fire - Current streak of 3+ weeks
 		if (allTimeStats.currentStreak >= 3) {
-			achievements.push({ icon: Flame, label: 'On Fire', value: `${allTimeStats.currentStreak} now`, color: 'text-orange-500' });
+			achievements.push({
+				icon: Flame,
+				label: 'On Fire',
+				value: `${allTimeStats.currentStreak} now`,
+				color: 'text-orange-500',
+				description: 'Currently on a 3+ week streak'
+			});
 		}
 
 		return achievements;
@@ -350,10 +446,11 @@ const StatsPage = () => {
 							</h3>
 							<div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4'>
 								{achievements.map((achievement, i) => (
-									<div key={i} className='text-center p-3 rounded-lg bg-card/50 border border-white/10 hover:border-primary/50 transition-all'>
+									<div key={i} className='text-center p-3 rounded-lg bg-card/50 border border-white/10 hover:border-primary/50 transition-all group cursor-default'>
 										<achievement.icon className={`h-8 w-8 mx-auto mb-2 ${achievement.color}`} />
 										<p className='text-xs font-semibold text-foreground'>{achievement.label}</p>
 										<p className='text-sm font-bold text-primary'>{achievement.value}</p>
+										<p className='text-[10px] text-muted-foreground mt-1 leading-tight'>{achievement.description}</p>
 									</div>
 								))}
 							</div>
