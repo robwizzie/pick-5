@@ -120,7 +120,7 @@ export async function POST(req: Request) {
 
 		console.log('Calculated scores:', { scoredPicks, weeklyPoints, correctPicks, tfsPoints });
 
-		// Create new picks with scores (will be 0 for games that haven't finished)
+		// Create new picks with scores (will be 0 for games that haven't finished yet)
 		const newPicks = await Pick.create({
 			userId: session.user.id,
 			leagueId,
