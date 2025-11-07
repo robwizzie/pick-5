@@ -37,11 +37,11 @@ export async function GET(req: Request) {
 			.lean();
 
 		// Transform the data to include member count
-		const leaguesWithCount = leagues.map((league: { _id: unknown; name: string; members?: string[]; createdAt: Date }) => ({
-			id: league._id.toString(),
-			name: league.name,
-			memberCount: league.members ? league.members.length : 0,
-			createdAt: league.createdAt
+		const leaguesWithCount = leagues.map(league => ({
+			id: (league._id as string).toString(),
+			name: league.name as string,
+			memberCount: (league.members as string[] | undefined)?.length || 0,
+			createdAt: league.createdAt as Date
 		}));
 
 		return NextResponse.json({
