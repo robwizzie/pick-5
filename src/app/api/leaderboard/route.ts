@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
+import { League } from '@/models/League';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,9 +20,15 @@ export async function GET(req: Request) {
 
 		console.log(`[API Debug] Fetching leaderboard for week ${week} in league ${leagueId}`);
 
-		// Fetch all users in the league
-		const allUsers = await User.find({}, 'name totalPoints totalTFSPoints correctPicks totalPicks');
-		console.log('[API Debug] All Users:', allUsers);
+		// Fetch the league to get member list
+		const league = await League.findById(leagueId);
+		if (!league) {
+			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+		}
+
+		// Fetch only users who are members of this league
+		const allUsers = await User.find({ _id: { $in: league.members } }, 'name');
+		console.log('[API Debug] League Members:', allUsers);
 
 		// Aggregate weekly results specific to the league
 		const weeklyResults = await Pick.aggregate([
