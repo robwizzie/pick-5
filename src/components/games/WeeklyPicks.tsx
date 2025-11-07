@@ -396,6 +396,7 @@ export function WeeklyPicks() {
 								{games.map(game => {
 									const isPicked = picks.find(p => p.gameId === game.id);
 									const gameStarted = hasGameStarted(game);
+									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
 
 									// Allow editing if game has not started, even if already picked
 									// If game has started, do not allow selection (unless it is not picked)
@@ -403,7 +404,7 @@ export function WeeklyPicks() {
 
 									return (
 										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
-											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} />
+											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} leaguePicks={gameCompleted ? leaguePicks[game.id] : undefined} />
 										</div>
 									);
 								})}
