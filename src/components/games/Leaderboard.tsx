@@ -33,7 +33,6 @@ export function Leaderboard() {
 	>({});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [waitingForResults, setWaitingForResults] = useState(false);
 	const [key, setKey] = useState(0); // Force rerender mechanism
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -61,10 +60,6 @@ export function Leaderboard() {
 			setWeeklyResults(data.weeklyResults);
 			setSeasonStats(data.seasonStats);
 			setLastUpdated(new Date());
-
-			// Check if all results are pending
-			const allPending = data.weeklyResults.every((result: { points: number }) => result.points === 0);
-			setWaitingForResults(allPending);
 		} catch (err) {
 			console.error('Failed to load leaderboard data:', err);
 			setError('Failed to load leaderboard data.');

@@ -39,9 +39,25 @@ interface AllTimeStats {
 	totalLosses: number;
 }
 
+interface PickData {
+	week: number;
+	picks: Array<{
+		gameId: string;
+		isCorrect?: boolean | null;
+	}>;
+	correctPicks?: number;
+	weeklyPoints?: number;
+	tfsPoints?: number;
+}
+
+interface LeagueData {
+	_id: string;
+	name: string;
+}
+
 const StatsPage = () => {
 	const router = useRouter();
-	const { data: session, status } = useSession();
+	const { status } = useSession();
 	const [loading, setLoading] = useState(true);
 	const [allTimeStats, setAllTimeStats] = useState<AllTimeStats | null>(null);
 	const [leagueStats, setLeagueStats] = useState<LeagueStats[]>([]);
@@ -64,11 +80,11 @@ const StatsPage = () => {
 			// Fetch user's leagues
 			const leaguesResponse = await fetch('/api/user/leagues');
 			if (!leaguesResponse.ok) throw new Error('Failed to fetch leagues');
-			const leagues = await leaguesResponse.json();
+			const leagues: LeagueData[] = await leaguesResponse.json();
 
 			// Fetch picks for all leagues
 			const leagueStatsData: LeagueStats[] = [];
-			let allTimeData = {
+			const allTimeData = {
 				totalPoints: 0,
 				correctPicks: 0,
 				totalPicks: 0,
@@ -109,9 +125,9 @@ const StatsPage = () => {
 						let leagueTotalTFSPoints = 0;
 						let leagueBestWeekPoints = 0;
 
-						picks.forEach((pick: any) => {
+						picks.forEach((pick: PickData) => {
 							// Count how many games are finished vs total picks
-							const finishedGamesCount = pick.picks.filter((p: any) => p.isCorrect !== undefined && p.isCorrect !== null).length;
+							const finishedGamesCount = pick.picks.filter(p => p.isCorrect !== undefined && p.isCorrect !== null).length;
 							const totalPicksInWeek = pick.picks.length;
 							const allGamesFinished = finishedGamesCount === totalPicksInWeek && totalPicksInWeek === 5;
 							const correctInWeek = pick.correctPicks || 0;
@@ -153,7 +169,7 @@ const StatsPage = () => {
 						});
 
 						// Count weeks with at least one finished game
-						const weeksPlayed = picks.filter((p: any) => p.picks.some((pick: any) => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
+						const weeksPlayed = picks.filter((p: PickData) => p.picks.some(pick => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
 
 						leagueStatsData.push({
 							leagueId: league._id,
