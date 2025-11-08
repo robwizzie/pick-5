@@ -309,7 +309,11 @@ export default function LeagueDetails() {
 										</li>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
-											<span>Points earned are based on moneyline odds - underdogs earn more points!</span>
+											<span>Points are based on moneyline odds - bigger underdogs earn WAY more points!</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Every correct pick earns at least 1 point (all whole numbers, no decimals)</span>
 										</li>
 									</ul>
 								</div>
@@ -317,10 +321,10 @@ export default function LeagueDetails() {
 								<div className='space-y-3'>
 									<h3 className='text-lg font-semibold text-primary'>Scoring System</h3>
 									<div className='p-4 rounded-lg bg-card border border-primary/20 space-y-3'>
-										<p className='text-sm text-muted-foreground'>Points are calculated based on betting odds. Higher risk = Higher reward!</p>
+										<p className='text-sm text-muted-foreground'>Points are based on betting odds. Bigger underdogs = WAY bigger rewards! All values are whole numbers, minimum 1 point per correct pick.</p>
 
 										<div className='space-y-2 text-sm'>
-											<p className='font-semibold text-foreground'>Examples:</p>
+											<p className='font-semibold text-foreground'>Point Examples:</p>
 											<ul className='space-y-2'>
 												<li className='flex items-start gap-2'>
 													<span className='text-primary font-bold'>•</span>
@@ -339,32 +343,47 @@ export default function LeagueDetails() {
 												<li className='flex items-start gap-2'>
 													<span className='text-primary font-bold'>•</span>
 													<div>
-														<span className='text-foreground'>Underdog at <span className='text-primary font-semibold'>+200</span>: Win = <span className='text-primary font-semibold'>3 points</span></span>
+														<span className='text-foreground'>Underdog at <span className='text-primary font-semibold'>+200</span>: Win = <span className='text-primary font-semibold'>4 points</span></span>
 														<p className='text-xs text-muted-foreground mt-0.5'>Higher risk, higher reward</p>
 													</div>
 												</li>
 												<li className='flex items-start gap-2'>
 													<span className='text-primary font-bold'>•</span>
 													<div>
-														<span className='text-foreground'>Big underdog at <span className='text-primary font-semibold'>+400+</span>: Win = <span className='text-primary font-semibold'>5 points</span></span>
-														<p className='text-xs text-muted-foreground mt-0.5'>Maximum risk, maximum reward</p>
+														<span className='text-foreground'>Medium underdog at <span className='text-primary font-semibold'>+300</span>: Win = <span className='text-primary font-semibold'>6 points</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>Risky pick, great reward</p>
+													</div>
+												</li>
+												<li className='flex items-start gap-2'>
+													<span className='text-primary font-bold'>•</span>
+													<div>
+														<span className='text-foreground'>Big underdog at <span className='text-primary font-semibold'>+400</span>: Win = <span className='text-primary font-semibold'>8 points</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>High risk, high reward</p>
+													</div>
+												</li>
+												<li className='flex items-start gap-2'>
+													<span className='text-primary font-bold'>•</span>
+													<div>
+														<span className='text-foreground'>Longshot at <span className='text-primary font-semibold'>+1000+</span>: Win = <span className='text-primary font-semibold'>20-30 points</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>Extreme risk, game-changing reward!</p>
 													</div>
 												</li>
 											</ul>
 										</div>
 
 										<div className='border-t border-primary/20 pt-3'>
-											<p className='text-sm font-semibold text-foreground mb-2'>Point Formula:</p>
+											<p className='text-sm font-semibold text-foreground mb-2'>Scoring Details:</p>
 											<ul className='space-y-1 text-xs text-muted-foreground'>
-												<li>• <span className='text-foreground'>Favorites</span> (negative odds): Base points scaled down</li>
-												<li>• <span className='text-foreground'>Underdogs</span> (positive odds): Base points scaled up</li>
+												<li>• <span className='text-foreground'>All points are whole numbers</span> - no fractions or decimals</li>
+												<li>• <span className='text-foreground'>Minimum 1 point</span> for any correct pick</li>
+												<li>• <span className='text-foreground'>Maximum 30 points</span> for extreme longshot underdogs</li>
 												<li>• <span className='text-foreground'>Wrong pick</span>: 0 points</li>
 											</ul>
 										</div>
 									</div>
 									<div className='p-3 rounded-lg bg-primary/10 border border-primary/20'>
 										<p className='text-sm text-foreground'>
-											<strong>Strategy:</strong> Balance safe picks with underdog risks to maximize your weekly score!
+											<strong>Strategy:</strong> One big underdog win (+600) can be worth 12 favorite picks! High-risk plays can completely change your standings.
 										</p>
 									</div>
 								</div>
@@ -374,19 +393,23 @@ export default function LeagueDetails() {
 									<ul className='space-y-2 text-sm text-muted-foreground'>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
-											<span>Mix favorites with underdogs to balance risk and reward</span>
+											<span>Playing all favorites is safe but limits you to ~5-10 points per week maximum</span>
 										</li>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
-											<span>Picking all favorites is safe but yields fewer points than mixing in underdogs</span>
+											<span>One successful +300 underdog (6 pts) is worth 6 heavy favorite picks (1 pt each)</span>
 										</li>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
-											<span>One successful underdog pick can outscore multiple favorite picks</span>
+											<span>Mix 2-3 safe picks with 2-3 underdogs to maximize your upside potential</span>
 										</li>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
-											<span>Check the odds displayed on each game to see potential points before picking</span>
+											<span>The odds and exact point values are shown on each game card before you pick</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Look for undervalued underdogs - sometimes a +300 team has a real chance to win!</span>
 										</li>
 									</ul>
 								</div>
