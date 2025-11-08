@@ -3,28 +3,24 @@
 /**
  * Calculate points earned from American moneyline odds
  * Generous rewards for underdogs to incentivize risk-taking
+ * All picks are worth at least 1 point, rounded to whole numbers
  *
  * @param odds - American odds (e.g., -200, +150, +300)
- * @returns Points earned for a correct pick (0-10+ range)
+ * @returns Points earned for a correct pick (1-30 range)
  */
 export function calculatePointsFromOdds(odds: number): number {
-	// Huge favorites (extremely low risk)
-	if (odds <= -400) return 0.5;
-	if (odds <= -300) return 0.75;
+	// Heavy favorites (extremely low risk) - minimum 1 point
+	if (odds <= -300) return 1;
 	if (odds <= -200) return 1;
 
 	// Strong favorites (low risk)
-	if (odds <= -150) return 1.5;
-	if (odds <= -120) return 1.75;
+	if (odds <= -150) return 2;
 
 	// Slight favorites/Pick'em (balanced)
-	if (odds > -120 && odds < -100) return 2;
 	if (odds >= -100 && odds <= 100) return 2;
 
 	// Slight underdogs (moderate risk)
-	if (odds > 100 && odds <= 125) return 2.5;
 	if (odds <= 150) return 3;
-	if (odds <= 175) return 3.5;
 	if (odds <= 200) return 4;
 
 	// Medium underdogs (good risk/reward)

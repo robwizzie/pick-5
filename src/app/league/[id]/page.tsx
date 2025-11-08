@@ -94,25 +94,27 @@ export default function LeagueDetails() {
 	return (
 		<div className='container mx-auto px-4 py-8'>
 			<Card className='mb-8 bg-card border-2 border-primary/20'>
-				<div className='flex items-center justify-between p-6 gap-8'>
-					<div className='flex items-center gap-8'>
-						<div className='relative w-24 h-24 flex-shrink-0'>
-							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' fill sizes='96px' className='object-contain' priority />
+				<div className='flex flex-col md:flex-row md:items-center md:justify-between p-4 md:p-6 gap-4'>
+					<div className='flex items-center gap-4 md:gap-8'>
+						<div className='relative w-16 h-16 md:w-24 md:h-24 flex-shrink-0'>
+							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' fill sizes='(max-width: 768px) 64px, 96px' className='object-contain' priority />
 						</div>
 						<div>
-							<h1 className='text-2xl font-oswald uppercase tracking-wide text-primary'>{league.name}</h1>
-							<p className='text-primary/80 font-medium mt-1'>{league.sport}</p>
+							<h1 className='text-xl md:text-2xl font-oswald uppercase tracking-wide text-primary'>{league.name}</h1>
+							<p className='text-sm md:text-base text-primary/80 font-medium mt-1'>{league.sport}</p>
 						</div>
 					</div>
-					<div className='flex items-center gap-2'>
-						<Button onClick={() => setShowRulesModal(true)} variant='outline' className='flex items-center gap-2 border-primary/50 hover:bg-primary/10'>
-							<Info className='h-4 w-4' />
-							Rules
+					<div className='flex items-center gap-2 flex-shrink-0'>
+						<Button onClick={() => setShowRulesModal(true)} variant='outline' className='flex items-center gap-1.5 md:gap-2 border-primary/50 hover:bg-primary/10 text-sm md:text-base px-3 md:px-4'>
+							<Info className='h-3.5 w-3.5 md:h-4 md:w-4' />
+							<span className='hidden sm:inline'>Rules</span>
+							<span className='sm:hidden'>Info</span>
 						</Button>
 						{isCommissioner && (
-							<Button onClick={handleGetInviteLink} disabled={loadingInvite} variant='outline' className='flex items-center gap-2 border-primary/50 hover:bg-primary/10'>
-								<Share2 className='h-4 w-4' />
-								Invite Link
+							<Button onClick={handleGetInviteLink} disabled={loadingInvite} variant='outline' className='flex items-center gap-1.5 md:gap-2 border-primary/50 hover:bg-primary/10 text-sm md:text-base px-3 md:px-4'>
+								<Share2 className='h-3.5 w-3.5 md:h-4 md:w-4' />
+								<span className='hidden sm:inline'>Invite Link</span>
+								<span className='sm:hidden'>Share</span>
 							</Button>
 						)}
 					</div>
