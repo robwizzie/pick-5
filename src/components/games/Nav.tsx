@@ -1,24 +1,51 @@
 'use client';
 
 import { useWeek } from '@/contexts/WeekContext';
+import { useLeague } from '@/contexts/LeagueContext';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Home, Trophy, Users, Settings, LogOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Settings, LogOut } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AuthDialog } from './AuthDialog';
-import { useState } from 'react';
+import { WeekSelectorModal } from './WeekSelectorModal';
+import { useState, useEffect } from 'react';
 
 export function Nav() {
 	const { currentWeek, setCurrentWeek } = useWeek();
+	const { leagueId } = useLeague();
 	const pathname = usePathname();
 	const router = useRouter();
 	const { data: session, status } = useSession();
 	const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+	const [isWeekSelectorOpen, setIsWeekSelectorOpen] = useState(false);
+	const [weeksWithPicks, setWeeksWithPicks] = useState<number[]>([]);
 	const isLoading = status === 'loading';
 	const isLeaguePage = pathname?.startsWith('/league/');
+	const isDashboard = pathname === '/dashboard';
+	const isCreateLeague = pathname === '/league/create';
+
+	// Fetch weeks with picks for the current league
+	useEffect(() => {
+		const fetchWeeksWithPicks = async () => {
+			if (!session || !leagueId) return;
+
+			try {
+				const response = await fetch(`/api/picks/user?leagueId=${leagueId}`);
+				if (response.ok) {
+					const data = await response.json();
+					const weeks = data.map((pick: any) => pick.week);
+					setWeeksWithPicks(weeks);
+				}
+			} catch (error) {
+				console.error('Error fetching weeks with picks:', error);
+			}
+		};
+
+		fetchWeeksWithPicks();
+	}, [session, leagueId]);
 
 	const handleNextWeek = () => {
 		if (currentWeek < 18) {
@@ -40,24 +67,26 @@ export function Nav() {
 				<div className='flex justify-between items-center h-20'>
 					{/* Left side - Week navigation for league pages */}
 					<div className='flex items-center space-x-4'>
-						{isLeaguePage ? (
+						{isLeaguePage && !isCreateLeague ? (
 							<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
 								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
 									<ChevronLeft className='h-4 w-4' />
 								</Button>
-								<span className='text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[80px] text-center'>Week {currentWeek}</span>
+								<button onClick={() => setIsWeekSelectorOpen(true)} className='text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[80px] text-center hover:bg-primary/10 px-2 py-1 rounded transition-colors cursor-pointer'>
+									Week {currentWeek}
+								</button>
 								<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full'>
 									<ChevronRight className='h-4 w-4' />
 								</Button>
 							</div>
-						) : (
+						) : !isDashboard ? (
 							<div className='flex items-center space-x-2'>
 								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-primary transition-colors'>
 									<Home className='h-4 w-4' />
 									<span className='hidden sm:inline font-medium'>Dashboard</span>
 								</Button>
 							</div>
-						)}
+						) : null}
 					</div>
 
 					{/* Center - Logo (hidden on small screens when on league page to prevent overlap) */}
@@ -89,19 +118,15 @@ export function Nav() {
 										</div>
 									</DropdownMenuLabel>
 									<DropdownMenuSeparator className='bg-white/10' />
-									<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
-										<Home className='h-4 w-4' />
-										<span>Dashboard</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
-										<Trophy className='h-4 w-4' />
-										<span>My Leagues</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
-										<Users className='h-4 w-4' />
-										<span>Leaderboard</span>
-									</DropdownMenuItem>
-									<DropdownMenuSeparator className='bg-white/10' />
+									{!isDashboard && (
+										<>
+											<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
+												<Home className='h-4 w-4' />
+												<span>Dashboard</span>
+											</DropdownMenuItem>
+											<DropdownMenuSeparator className='bg-white/10' />
+										</>
+									)}
 									<DropdownMenuItem onClick={() => router.push('/settings')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
 										<Settings className='h-4 w-4' />
 										<span>Settings</span>
@@ -121,6 +146,7 @@ export function Nav() {
 				</div>
 			</div>
 			<AuthDialog open={isAuthDialogOpen} onOpenChange={setIsAuthDialogOpen} />
+			<WeekSelectorModal open={isWeekSelectorOpen} onOpenChange={setIsWeekSelectorOpen} currentWeek={currentWeek} onWeekSelect={setCurrentWeek} weeksWithPicks={weeksWithPicks} />
 		</nav>
 	);
 }
