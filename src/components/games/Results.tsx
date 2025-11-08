@@ -10,6 +10,7 @@ import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
+import { hasGameFinished } from '@/services/gameUtils';
 
 interface WeeklyPicks {
 	picks: Array<{
@@ -90,25 +91,32 @@ export function Results() {
 
 	// Game score calculation utility
 	const getGameScore = (game: Game) => ({
-		home: typeof game.home.score === 'number' ? game.home.score : 0,
-		away: typeof game.away.score === 'number' ? game.away.score : 0,
-		total: typeof game.home.score === 'number' && typeof game.away.score === 'number' ? game.home.score + game.away.score : 0
+		home: typeof game.home.score === 'number' ? game.home.score : undefined,
+		away: typeof game.away.score === 'number' ? game.away.score : undefined,
+		total: typeof game.home.score === 'number' && typeof game.away.score === 'number' && game.home.score !== undefined && game.away.score !== undefined ? game.home.score + game.away.score : undefined
 	});
 
-	// Determine game status
-	const checkGameStatus = (game: Game): 'completed' | 'in_progress' | 'pending' => (typeof game.home.score === 'number' && typeof game.away.score === 'number' ? 'completed' : 'pending');
+	// Determine game status - only 'completed' if game has actually finished
+	const checkGameStatus = (game: Game): 'completed' | 'in_progress' | 'pending' => {
+		return hasGameFinished(game) ? 'completed' : 'pending';
+	};
 
-	// Check if a pick is correct
-	const checkPickCorrect = (pick: WeeklyPicks['picks'][0], game: Game) => {
-		const scores = getGameScore(game);
-		const gameStatus = checkGameStatus(game);
-
-		if (gameStatus === 'completed') {
-			const homeWon = scores.home > scores.away;
-			const pickedHome = pick.team === game.home.team;
-			return (pickedHome && homeWon) || (!pickedHome && !homeWon);
+	// Check if a pick is correct - only returns true/false if game is finished
+	const checkPickCorrect = (pick: WeeklyPicks['picks'][0], game: Game): boolean | null => {
+		if (!hasGameFinished(game)) {
+			return null;
 		}
-		return null;
+
+		const homeScore = game.home.score;
+		const awayScore = game.away.score;
+
+		if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || homeScore === undefined || awayScore === undefined) {
+			return null;
+		}
+
+		const homeWon = homeScore > awayScore;
+		const pickedHome = pick.team === game.home.team;
+		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
 	};
 
 	// Calculate TFS (Total Final Score) points
@@ -156,9 +164,10 @@ export function Results() {
 			const scores = getGameScore(game);
 			const gameStatus = checkGameStatus(game);
 			const isCorrect = checkPickCorrect(pick, game);
+			const gameFinished = hasGameFinished(game);
 
-			// Add points for correct picks
-			if (isCorrect) {
+			// Add points for correct picks (only if game is finished)
+			if (gameFinished && isCorrect === true) {
 				totalPoints += 2;
 				correctPicks += 1;
 			}
@@ -168,21 +177,28 @@ export function Results() {
 			return (
 				<div key={pick.gameId} className='relative rounded-lg overflow-hidden border-2 bg-card border-primary/20 pointer-events-none'>
 					{/* Badges moved outside GameCard */}
-					<div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(isCorrect ? 2 : 0)}`}>{isCorrect ? '+2 pts' : '0 pts'}</div>
+					{gameFinished ? <div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(isCorrect === true ? 2 : 0)}`}>{isCorrect === true ? '+2 pts' : '0 pts'}</div> : <div className={`${badgeStyle} top-2 right-2 z-10 bg-muted text-muted-foreground`}>Pending</div>}
 					<div className='absolute top-2 left-1/2 transform -translate-x-1/2 px-2 py-1 rounded-full bg-primary text-black text-xs font-medium shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>
 					<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>Pick {index + 1}</div>
 					<div className='mt-8'>
 						<GameCard
 							game={{
 								...game,
-								away: { ...game.away, score: scores.away },
-								home: { ...game.home, score: scores.home },
+								// Only pass scores if game is finished
+								away: {
+									...game.away,
+									score: gameFinished && scores.away !== undefined ? scores.away : undefined
+								},
+								home: {
+									...game.home,
+									score: gameFinished && scores.home !== undefined ? scores.home : undefined
+								},
 								status: gameStatus
 							}}
 							selected={pick.team}
-							showScores={true}
+							showScores={gameFinished}
 							disabled={true}
-							isCorrect={isCorrect}
+							isCorrect={gameFinished ? isCorrect : null}
 							noHover={true}
 						/>
 					</div>
@@ -190,14 +206,16 @@ export function Results() {
 			);
 		});
 
-		// Calculate TFS points
+		// Calculate TFS points (only if game is finished)
 		if (picks.tfsGame) {
 			const tfsGame = games.find(g => g.id === picks.tfsGame);
-			if (tfsGame && checkGameStatus(tfsGame) === 'completed') {
+			if (tfsGame && hasGameFinished(tfsGame)) {
 				const scores = getGameScore(tfsGame);
-				const predictedScore = parseInt(picks.tfsScore);
-				tfsPoints = getTFSPoints(predictedScore, scores.total);
-				totalPoints += tfsPoints;
+				if (scores.total !== undefined) {
+					const predictedScore = parseInt(picks.tfsScore);
+					tfsPoints = getTFSPoints(predictedScore, scores.total);
+					totalPoints += tfsPoints;
+				}
 			}
 		}
 
@@ -300,27 +318,36 @@ export function Results() {
 						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>Total Final Score</h3>
 						<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
 							<div className='space-y-2 text-foreground'>
-								{picks?.tfsGame && games.find(g => g.id === picks.tfsGame) && (
-									<>
-										<div className='font-oswald uppercase text-lg text-primary mb-2'>
-											{games.find(g => g.id === picks.tfsGame)?.away.team} vs {games.find(g => g.id === picks.tfsGame)?.home.team}
-										</div>
-										<div className='flex justify-between items-center bg-primary/10 p-3 rounded-lg'>
-											<div>
-												<span className='text-primary font-medium'>Your Guess: </span>
-												<span className='text-lg font-bold'>{picks.tfsScore}</span>
-											</div>
-											<div>
-												<span className='text-primary font-medium'>Actual: </span>
-												<span className='text-lg font-bold'>{getGameScore(games.find(g => g.id === picks.tfsGame)!).total}</span>
-											</div>
-											<div>
-												<span className='text-primary font-medium'>Bonus: </span>
-												<span className={`text-lg font-bold ${getTextColor(results.tfsPoints)}`}>+{results.tfsPoints}</span>
-											</div>
-										</div>
-									</>
-								)}
+								{picks?.tfsGame &&
+									(() => {
+										const tfsGame = games.find(g => g.id === picks.tfsGame);
+										if (!tfsGame) return null;
+
+										const tfsGameFinished = hasGameFinished(tfsGame);
+										const scores = getGameScore(tfsGame);
+
+										return (
+											<>
+												<div className='font-oswald uppercase text-lg text-primary mb-2'>
+													{tfsGame.away.team} vs {tfsGame.home.team}
+												</div>
+												<div className='flex justify-between items-center bg-primary/10 p-3 rounded-lg'>
+													<div>
+														<span className='text-primary font-medium'>Your Guess: </span>
+														<span className='text-lg font-bold'>{picks.tfsScore}</span>
+													</div>
+													<div>
+														<span className='text-primary font-medium'>Actual: </span>
+														<span className='text-lg font-bold'>{tfsGameFinished && scores.total !== undefined ? scores.total : 'TBD'}</span>
+													</div>
+													<div>
+														<span className='text-primary font-medium'>Bonus: </span>
+														<span className={`text-lg font-bold ${getTextColor(results.tfsPoints)}`}>{tfsGameFinished ? `+${results.tfsPoints}` : 'TBD'}</span>
+													</div>
+												</div>
+											</>
+										);
+									})()}
 							</div>
 						</div>
 					</div>
