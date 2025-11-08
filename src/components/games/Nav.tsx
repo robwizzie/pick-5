@@ -37,8 +37,12 @@ export function Nav() {
 				const response = await fetch(`/api/picks/user?leagueId=${leagueId}`);
 				if (response.ok) {
 					const data = await response.json();
-					const weeks = data.map((pick: any) => pick.week);
-					setWeeksWithPicks(weeks);
+					console.log('[Nav] Fetched picks data:', data);
+					if (Array.isArray(data)) {
+						const weeks = data.map((pick: any) => pick.week);
+						console.log('[Nav] Weeks with picks:', weeks);
+						setWeeksWithPicks(weeks);
+					}
 				}
 			} catch (error) {
 				console.error('Error fetching weeks with picks:', error);
