@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
+import { League } from '@/models/League';
 import { authOptions } from '@/lib/auth';
 import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
@@ -24,8 +25,21 @@ export async function POST(req: Request) {
 
 		await connectDB();
 
-		if (!week || !picks || picks.length !== 5 || !tfsGame || typeof tfsScore !== 'number' || !leagueId) {
+		// Basic validation
+		if (!week || !picks || picks.length !== 5 || !leagueId) {
 			return NextResponse.json({ error: 'Invalid request data' }, { status: 400 });
+		}
+
+		// Fetch league to check mode
+		const league = await League.findById(leagueId);
+		if (!league) {
+			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+		}
+
+		// TFS is only required for Steve mode
+		const isSteveMode = league.mode === 'steve';
+		if (isSteveMode && (!tfsGame || typeof tfsScore !== 'number')) {
+			return NextResponse.json({ error: 'TFS game and score required for Steve mode' }, { status: 400 });
 		}
 
 		// Get game results for validation and scoring
@@ -62,7 +76,8 @@ export async function POST(req: Request) {
 			})
 			.filter(Boolean) as Game[];
 
-		const tfsGameObj = games.find(g => g.id === tfsGame);
+		// Only check TFS game for Steve mode
+		const tfsGameObj = isSteveMode && tfsGame ? games.find(g => g.id === tfsGame) : null;
 		const allNewGames = tfsGameObj ? [...newPickedGames, tfsGameObj] : newPickedGames;
 
 		const anyNewGameStarted = allNewGames.some(game => hasGameStarted(game));
@@ -116,18 +131,25 @@ export async function POST(req: Request) {
 		console.log('Game results for scoring:', gameResults);
 
 		// Calculate scores (only for finished games)
-		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(picks, gameResults, tfsGame, tfsScore);
+		// For Standard mode, pass null for TFS fields
+		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(
+			picks,
+			gameResults,
+			isSteveMode ? tfsGame : null,
+			isSteveMode ? tfsScore : null
+		);
 
 		console.log('Calculated scores:', { scoredPicks, weeklyPoints, correctPicks, tfsPoints });
 
 		// Create new picks with scores (will be 0 for games that haven't finished yet)
+		// For Standard mode, tfsGame and tfsScore will be null/undefined
 		const newPicks = await Pick.create({
 			userId: session.user.id,
 			leagueId,
 			week,
 			picks: scoredPicks,
-			tfsGame,
-			tfsScore,
+			tfsGame: isSteveMode ? tfsGame : null,
+			tfsScore: isSteveMode ? tfsScore : null,
 			weeklyPoints,
 			correctPicks,
 			tfsPoints,
