@@ -29,8 +29,8 @@ export async function GET(req: Request) {
 		}
 
 		// Fetch only users who are members of this league
-		const allUsers = await User.find({ _id: { $in: league.members } }, 'name');
-		console.log('[API Debug] League Members:', allUsers.map(u => ({ id: u._id.toString(), name: u.name })));
+		const allUsers = await User.find({ _id: { $in: league.members } }, 'name image');
+		console.log('[API Debug] League Members:', allUsers.map(u => ({ id: u._id.toString(), name: u.name, image: u.image })));
 
 		// Get all picks for this week and league
 		const allPicksForWeek = await Pick.find({ week, leagueId }).lean();
@@ -81,6 +81,7 @@ export async function GET(req: Request) {
 			return {
 				userId: user._id.toString(),
 				player: user.name || 'Unknown Player',
+				image: user.image || null,
 				points: result?.points || 0,
 				correct: result?.correct || 0,
 				tfsPoints: result?.tfsPoints || 0,
@@ -153,6 +154,7 @@ export async function GET(req: Request) {
 			const stat = seasonStatsMap.get(user._id.toString());
 			return {
 				player: user.name || 'Unknown Player',
+				image: user.image || null,
 				totalPoints: stat?.totalPoints || 0,
 				totalTFSPoints: stat?.totalTFSPoints || 0,
 				totalPicks: stat?.totalPicks || 0,
