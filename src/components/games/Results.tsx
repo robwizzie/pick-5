@@ -80,11 +80,15 @@ export function Results() {
 
 		loadData(false); // Initial load
 
-		// Poll for updates every 30 seconds for live score updates
+		// Use smart polling interval based on game schedule
+		// 2 minutes during games, 5 minutes outside game windows
+		const pollingInterval = NFLService.getPollingInterval();
+		console.log(`[Results] Using ${pollingInterval / 1000 / 60} minute polling interval`);
+
 		const pollInterval = setInterval(() => {
 			console.log('[Results] 🔄 Auto-refreshing scores...');
 			loadData(true); // Polling update
-		}, 30 * 1000); // 30 seconds
+		}, pollingInterval);
 
 		return () => clearInterval(pollInterval);
 	}, [currentWeek, sessionStatus, leagueId]);

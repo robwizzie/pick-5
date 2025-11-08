@@ -33,7 +33,7 @@ export async function GET(req: Request) {
 
 		// Aggregate weekly results specific to the league
 		const weeklyResults = await Pick.aggregate([
-			{ $match: { week, leagueId: new ObjectId(leagueId) } },
+			{ $match: { week, leagueId } },
 			{
 				$group: {
 					_id: '$userId',
@@ -69,7 +69,7 @@ export async function GET(req: Request) {
 
 		// Aggregate season stats specific to the league
 		const seasonStats = await Pick.aggregate([
-			{ $match: { leagueId: new ObjectId(leagueId) } },
+			{ $match: { leagueId } },
 			{
 				$group: {
 					_id: '$userId',
