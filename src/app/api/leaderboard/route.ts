@@ -21,15 +21,15 @@ export async function GET(req: Request) {
 
 		console.log(`[API Debug] Fetching leaderboard for week ${week} in league ${leagueId}`);
 
-		// Fetch the league to get members
+		// Fetch the league to get member list
 		const league = await League.findById(leagueId);
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
 
-		// Fetch all users in the league
-		const allUsers = await User.find({ _id: { $in: league.members } }, 'name _id totalPoints totalTFSPoints correctPicks totalPicks');
-		console.log('[API Debug] All Users:', allUsers);
+		// Fetch only users who are members of this league
+		const allUsers = await User.find({ _id: { $in: league.members } }, 'name');
+		console.log('[API Debug] League Members:', allUsers);
 
 		// Aggregate weekly results specific to the league
 		const weeklyResults = await Pick.aggregate([
