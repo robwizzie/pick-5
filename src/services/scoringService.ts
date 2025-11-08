@@ -39,11 +39,13 @@ export class ScoringService {
 
 	/**
 	 * Calculate week score - only scores games that have finished (have both scores)
+	 * Returns completedGames count for accurate win percentage calculation
 	 */
 	static calculateWeekScore(picks: { gameId: string; team: string; isHome: boolean }[], gameResults: GameResult[], tfsGame: string, tfsScore: number) {
 		let weeklyPoints = 0;
 		let correctPicks = 0;
 		let tfsPoints = 0;
+		let completedGames = 0; // Track how many games have actually finished
 
 		// Score regular picks - only score games that have finished
 		const scoredPicks = picks.map(pick => {
@@ -59,6 +61,8 @@ export class ScoringService {
 			if (!gameFinished) {
 				return { ...pick, isCorrect: null };
 			}
+
+			completedGames++; // Count this as a completed game
 
 			const isCorrect = this.calculatePickResult(pick, gameResult);
 			if (isCorrect) {
@@ -86,7 +90,8 @@ export class ScoringService {
 			scoredPicks,
 			weeklyPoints,
 			correctPicks,
-			tfsPoints
+			tfsPoints,
+			completedGames // Return count of games that were actually scored
 		};
 	}
 }
