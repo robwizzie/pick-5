@@ -49,7 +49,7 @@ export function WeeklyPicks() {
 	const initialLoadRef = useRef(true);
 	const lastSavedRef = useRef<{ picks: typeof picks; tfsGame: string; tfsScore: string } | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
-	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [leagueMode, setLeagueMode] = useState<string>('');
 	const [tfsError, setTfsError] = useState<string | null>(null);
 
 	// Fetch league details to get the mode
@@ -70,12 +70,15 @@ export function WeeklyPicks() {
 	}, [leagueId]);
 
 	useEffect(() => {
-		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
+		console.log('[WeeklyPicks] currentWeek or leagueMode changed:', currentWeek, leagueMode);
+		// Only load games if we know the league mode
+		if (!leagueMode) return;
+
 		initialLoadRef.current = true; // Reset for new week
 		lastSavedRef.current = null; // Reset last saved for new week
 		loadWeeklyGames();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentWeek, session?.user]);
+	}, [currentWeek, session?.user, leagueMode]);
 
 	// Load picks after games are loaded so we can check game status
 	useEffect(() => {
