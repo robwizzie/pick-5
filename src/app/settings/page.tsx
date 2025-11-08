@@ -90,7 +90,7 @@ export default function SettingsPage() {
 	return (
 		<div className='container mx-auto px-4 py-8 max-w-2xl'>
 			<div className='mb-6'>
-				<Button variant='ghost' onClick={() => router.push('/dashboard')} className='flex items-center gap-2 text-muted-foreground hover:text-primary'>
+				<Button variant='ghost' onClick={() => router.push('/dashboard')} className='flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors'>
 					<ArrowLeft className='h-4 w-4' />
 					Back to Dashboard
 				</Button>
