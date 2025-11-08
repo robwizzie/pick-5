@@ -17,32 +17,49 @@ export async function GET(req: Request) {
 		const { searchParams } = new URL(req.url);
 		const week = searchParams.get('week');
 		const leagueId = searchParams.get('leagueId');
-		const userId = searchParams.get('userId');
-
-		if (!week || !leagueId || !userId) {
-			return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
-		}
+		const userId = searchParams.get('userId') || (session.user as any).id;
 
 		await connectDB();
 
-		const picks = await Pick.findOne({
-			userId,
-			week: parseInt(week, 10),
-			leagueId
-		});
+		// If week is provided, return picks for that specific week
+		if (week) {
+			if (!leagueId) {
+				return NextResponse.json({ error: 'Missing leagueId' }, { status: 400 });
+			}
 
-		if (!picks) {
-			return NextResponse.json(null);
+			const picks = await Pick.findOne({
+				userId,
+				week: parseInt(week, 10),
+				leagueId
+			});
+
+			if (!picks) {
+				return NextResponse.json(null);
+			}
+
+			return NextResponse.json({
+				picks: picks.picks,
+				tfsGame: picks.tfsGame,
+				tfsScore: picks.tfsScore,
+				weeklyPoints: picks.weeklyPoints,
+				correctPicks: picks.correctPicks,
+				tfsPoints: picks.tfsPoints
+			});
 		}
 
-		return NextResponse.json({
-			picks: picks.picks,
-			tfsGame: picks.tfsGame,
-			tfsScore: picks.tfsScore,
-			weeklyPoints: picks.weeklyPoints,
-			correctPicks: picks.correctPicks,
-			tfsPoints: picks.tfsPoints
-		});
+		// If only leagueId is provided, return all picks for the user in that league
+		if (leagueId) {
+			const picks = await Pick.find({
+				userId,
+				leagueId
+			}).sort({ week: 1 });
+
+			return NextResponse.json(picks);
+		}
+
+		// If no params provided, return all picks for the user
+		const picks = await Pick.find({ userId }).sort({ week: 1 });
+		return NextResponse.json(picks);
 	} catch (error) {
 		console.error('Error fetching user picks:', error);
 		return NextResponse.json({ error: 'Error fetching user picks' }, { status: 500 });

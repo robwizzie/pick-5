@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { Trophy, Target, TrendingUp, Flame, Star, Award, Zap, Crown, Medal } from 'lucide-react';
+import { Trophy, Target, TrendingUp, Flame, Star, Award, Zap, Crown, Medal, Shield, Rocket, Crosshair, Calendar, Sparkles, Users } from 'lucide-react';
 
 interface LeagueStats {
 	leagueId: string;
@@ -83,54 +83,147 @@ const StatsPage = () => {
 				totalLosses: 0
 			};
 
+			// Track all weeks across all leagues for proper streak and perfect week calculation
+			interface WeekData {
+				week: number;
+				leagueId: string;
+				correctPicks: number;
+				totalPicks: number;
+				weeklyPoints: number;
+				isPerfectWeek: boolean;
+				allGamesFinished: boolean;
+			}
+			const allWeeks: WeekData[] = [];
+			const perfectWeeksSet = new Set<string>(); // Track unique perfect weeks to avoid double-counting
+
 			for (const league of leagues) {
 				try {
-					// Fetch season stats for this league
-					const seasonResponse = await fetch(`/api/leaderboard?week=1&leagueId=${league._id}`);
-					if (seasonResponse.ok) {
-						const data = await seasonResponse.json();
-						const userStats = data.seasonStats.find((s: any) => s.player === session?.user?.name);
+					// Fetch all picks for this league
+					const picksResponse = await fetch(`/api/picks/user?leagueId=${league._id}`);
+					if (picksResponse.ok) {
+						const picks = await picksResponse.json();
 
-						if (userStats) {
-							const weeksPlayed = Math.ceil(userStats.totalPicks / 5);
+						let leagueTotalPoints = 0;
+						let leagueCorrectPicks = 0;
+						let leagueTotalPicks = 0;
+						let leagueTotalTFSPoints = 0;
+						let leagueBestWeekPoints = 0;
 
-							leagueStatsData.push({
-								leagueId: league._id,
-								leagueName: league.name,
-								totalPoints: userStats.totalPoints,
-								correctPicks: userStats.correctPicks,
-								totalPicks: userStats.totalPicks,
-								totalTFSPoints: userStats.totalTFSPoints,
-								winPercentage: userStats.winPercentage,
-								weeksPlayed,
-								bestWeekPoints: 0, // Will calculate below
-								currentStreak: 0,
-								bestStreak: 0
-							});
+						picks.forEach((pick: any) => {
+							// Check if all games in this week are finished (all picks have isCorrect defined)
+							const allGamesFinished = pick.picks.every((p: any) => p.isCorrect !== undefined && p.isCorrect !== null);
+							const totalPicksInWeek = pick.picks.length;
+							const correctInWeek = pick.correctPicks || 0;
 
-							allTimeData.totalPoints += userStats.totalPoints;
-							allTimeData.correctPicks += userStats.correctPicks;
-							allTimeData.totalPicks += userStats.totalPicks;
-							allTimeData.totalTFSPoints += userStats.totalTFSPoints;
-							allTimeData.totalWeeksPlayed += weeksPlayed;
-							allTimeData.totalWins += userStats.correctPicks;
-							allTimeData.totalLosses += userStats.totalPicks - userStats.correctPicks;
+							// Only count this week if games are finished
+							if (allGamesFinished && totalPicksInWeek > 0) {
+								leagueTotalPoints += pick.weeklyPoints || 0;
+								leagueCorrectPicks += correctInWeek;
+								leagueTotalPicks += totalPicksInWeek;
+								leagueTotalTFSPoints += pick.tfsPoints || 0;
+								leagueBestWeekPoints = Math.max(leagueBestWeekPoints, pick.weeklyPoints || 0);
 
-							// Check for perfect weeks (5/5 correct)
-							if (userStats.correctPicks === userStats.totalPicks && userStats.totalPicks > 0) {
-								allTimeData.perfectWeeks++;
+								// Check for perfect week (all 5 picks correct and all games finished)
+								const isPerfectWeek = totalPicksInWeek === 5 && correctInWeek === 5 && allGamesFinished;
+
+								// Add to allWeeks for streak calculation
+								allWeeks.push({
+									week: pick.week,
+									leagueId: league._id,
+									correctPicks: correctInWeek,
+									totalPicks: totalPicksInWeek,
+									weeklyPoints: pick.weeklyPoints || 0,
+									isPerfectWeek,
+									allGamesFinished
+								});
+
+								// Track unique perfect weeks (same week across multiple leagues counts as one)
+								if (isPerfectWeek) {
+									perfectWeeksSet.add(`week-${pick.week}`);
+								}
+
+								if (pick.weeklyPoints === leagueBestWeekPoints && pick.weeklyPoints > allTimeData.bestWeekPoints) {
+									allTimeData.bestWeekPoints = pick.weeklyPoints;
+									allTimeData.bestWeekNumber = pick.week;
+								}
 							}
-						}
+						});
+
+						const weeksPlayed = picks.filter((p: any) => p.picks.every((pick: any) => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
+
+						leagueStatsData.push({
+							leagueId: league._id,
+							leagueName: league.name,
+							totalPoints: leagueTotalPoints,
+							correctPicks: leagueCorrectPicks,
+							totalPicks: leagueTotalPicks,
+							totalTFSPoints: leagueTotalTFSPoints,
+							winPercentage: leagueTotalPicks > 0 ? (leagueCorrectPicks / leagueTotalPicks) * 100 : 0,
+							weeksPlayed,
+							bestWeekPoints: leagueBestWeekPoints,
+							currentStreak: 0,
+							bestStreak: 0
+						});
+
+						allTimeData.totalPoints += leagueTotalPoints;
+						allTimeData.correctPicks += leagueCorrectPicks;
+						allTimeData.totalPicks += leagueTotalPicks;
+						allTimeData.totalTFSPoints += leagueTotalTFSPoints;
+						allTimeData.totalWeeksPlayed += weeksPlayed;
+						allTimeData.totalWins += leagueCorrectPicks;
+						allTimeData.totalLosses += leagueTotalPicks - leagueCorrectPicks;
 					}
 				} catch (error) {
 					console.error('Error fetching stats for league:', league._id, error);
 				}
 			}
 
-			// Calculate streaks (simplified)
-			const avgCorrectPerWeek = allTimeData.totalWeeksPlayed > 0 ? allTimeData.correctPicks / allTimeData.totalWeeksPlayed : 0;
-			allTimeData.currentStreak = avgCorrectPerWeek >= 3 ? Math.floor(avgCorrectPerWeek) : 0;
-			allTimeData.bestStreak = Math.floor(avgCorrectPerWeek * 1.5);
+			// Calculate perfect weeks (unique weeks only)
+			allTimeData.perfectWeeks = perfectWeeksSet.size;
+
+			// Calculate streaks based on consecutive weeks
+			// Group by week number and sum correct picks across all leagues for that week
+			const weekMap = new Map<number, { correct: number; total: number }>();
+			allWeeks.forEach(w => {
+				const existing = weekMap.get(w.week) || { correct: 0, total: 0 };
+				weekMap.set(w.week, {
+					correct: existing.correct + w.correctPicks,
+					total: existing.total + w.totalPicks
+				});
+			});
+
+			// Sort weeks and calculate streaks
+			const sortedWeeks = Array.from(weekMap.entries())
+				.sort((a, b) => a[0] - b[0])
+				.map(([week, data]) => ({ week, ...data }));
+
+			let currentStreak = 0;
+			let bestStreak = 0;
+			let tempStreak = 0;
+
+			// Calculate best streak (any consecutive weeks with 60%+ win rate)
+			for (let i = 0; i < sortedWeeks.length; i++) {
+				const winRate = sortedWeeks[i].total > 0 ? sortedWeeks[i].correct / sortedWeeks[i].total : 0;
+				if (winRate >= 0.6) {
+					tempStreak++;
+					bestStreak = Math.max(bestStreak, tempStreak);
+				} else {
+					tempStreak = 0;
+				}
+			}
+
+			// Calculate current streak (from most recent week backwards)
+			for (let i = sortedWeeks.length - 1; i >= 0; i--) {
+				const winRate = sortedWeeks[i].total > 0 ? sortedWeeks[i].correct / sortedWeeks[i].total : 0;
+				if (winRate >= 0.6) {
+					currentStreak++;
+				} else {
+					break;
+				}
+			}
+
+			allTimeData.currentStreak = currentStreak;
+			allTimeData.bestStreak = bestStreak;
 
 			setLeagueStats(leagueStatsData);
 			setAllTimeStats({
@@ -159,23 +252,74 @@ const StatsPage = () => {
 		if (!allTimeStats) return [];
 		const achievements = [];
 
+		// Perfect Week - Get 5/5 picks correct in a week
 		if (allTimeStats.perfectWeeks > 0) {
 			achievements.push({ icon: Crown, label: 'Perfect Week', value: `${allTimeStats.perfectWeeks}x`, color: 'text-yellow-400' });
 		}
+
+		// Century Club - Reach 100 total points
 		if (allTimeStats.totalPoints >= 100) {
 			achievements.push({ icon: Trophy, label: 'Century Club', value: '100+ pts', color: 'text-primary' });
 		}
+
+		// Points Machine - Reach 200 total points
+		if (allTimeStats.totalPoints >= 200) {
+			achievements.push({ icon: Rocket, label: 'Points Machine', value: '200+ pts', color: 'text-pink-400' });
+		}
+
+		// Elite Picker - 60%+ win rate
 		if (allTimeStats.winPercentage >= 60) {
 			achievements.push({ icon: Star, label: 'Elite Picker', value: `${Math.round(allTimeStats.winPercentage)}%`, color: 'text-accent' });
 		}
+
+		// Sharpshooter - 80%+ win rate
+		if (allTimeStats.winPercentage >= 80) {
+			achievements.push({ icon: Crosshair, label: 'Sharpshooter', value: `${Math.round(allTimeStats.winPercentage)}%`, color: 'text-red-400' });
+		}
+
+		// Hot Streak - 5+ week winning streak
 		if (allTimeStats.bestStreak >= 5) {
 			achievements.push({ icon: Flame, label: 'Hot Streak', value: `${allTimeStats.bestStreak}`, color: 'text-orange-400' });
 		}
+
+		// Unstoppable - 10+ week winning streak
+		if (allTimeStats.bestStreak >= 10) {
+			achievements.push({ icon: Sparkles, label: 'Unstoppable', value: `${allTimeStats.bestStreak}`, color: 'text-yellow-300' });
+		}
+
+		// TFS Master - 20+ TFS bonus points
 		if (allTimeStats.totalTFSPoints >= 20) {
 			achievements.push({ icon: Zap, label: 'TFS Master', value: `${allTimeStats.totalTFSPoints}`, color: 'text-purple-400' });
 		}
+
+		// TFS Expert - 50+ TFS bonus points
+		if (allTimeStats.totalTFSPoints >= 50) {
+			achievements.push({ icon: Zap, label: 'TFS Expert', value: `${allTimeStats.totalTFSPoints}`, color: 'text-purple-300' });
+		}
+
+		// League Warrior - Join 3+ leagues
 		if (allTimeStats.totalLeagues >= 3) {
-			achievements.push({ icon: Medal, label: 'League Warrior', value: `${allTimeStats.totalLeagues}`, color: 'text-blue-400' });
+			achievements.push({ icon: Users, label: 'League Warrior', value: `${allTimeStats.totalLeagues}`, color: 'text-blue-400' });
+		}
+
+		// Consistency King - Play 10+ weeks
+		if (allTimeStats.totalWeeksPlayed >= 10) {
+			achievements.push({ icon: Calendar, label: 'Consistency King', value: `${allTimeStats.totalWeeksPlayed} wks`, color: 'text-green-400' });
+		}
+
+		// Marathon Runner - Play 15+ weeks
+		if (allTimeStats.totalWeeksPlayed >= 15) {
+			achievements.push({ icon: Medal, label: 'Marathon Runner', value: `${allTimeStats.totalWeeksPlayed} wks`, color: 'text-teal-400' });
+		}
+
+		// Champion - 100+ correct picks
+		if (allTimeStats.correctPicks >= 100) {
+			achievements.push({ icon: Shield, label: 'Champion', value: `${allTimeStats.correctPicks}`, color: 'text-amber-400' });
+		}
+
+		// On Fire - Current streak of 3+ weeks
+		if (allTimeStats.currentStreak >= 3) {
+			achievements.push({ icon: Flame, label: 'On Fire', value: `${allTimeStats.currentStreak} now`, color: 'text-orange-500' });
 		}
 
 		return achievements;
