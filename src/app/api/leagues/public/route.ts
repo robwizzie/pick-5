@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +14,10 @@ export async function GET(req: Request) {
 		const limit = 25; // Fixed at 25 per page
 		const search = searchParams.get('search') || '';
 		const skip = (page - 1) * limit;
+
+		// Get session to check if user is logged in
+		const session = await getServerSession(authOptions);
+		const userId = session?.user?.id;
 
 		await connectDB();
 
@@ -36,13 +42,19 @@ export async function GET(req: Request) {
 			.limit(limit)
 			.lean();
 
-		// Transform the data to include member count
-		const leaguesWithCount = leagues.map(league => ({
-			id: (league._id as string).toString(),
-			name: league.name as string,
-			memberCount: (league.members as string[] | undefined)?.length || 0,
-			createdAt: league.createdAt as Date
-		}));
+		// Transform the data to include member count and membership status
+		const leaguesWithCount = leagues.map(league => {
+			const members = (league.members as string[] | undefined) || [];
+			const isMember = userId ? members.some(memberId => memberId.toString() === userId) : false;
+
+			return {
+				id: (league._id as string).toString(),
+				name: league.name as string,
+				memberCount: members.length,
+				createdAt: league.createdAt as Date,
+				isMember
+			};
+		});
 
 		return NextResponse.json({
 			leagues: leaguesWithCount,
