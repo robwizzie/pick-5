@@ -14,6 +14,7 @@ import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { hasGameStarted, haveAllPickedGamesStarted } from '@/services/gameUtils';
 import { Toast } from '@/components/ui/toast';
+import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
 import type { Game } from './GameCard';
 
 interface UserPick {
@@ -48,6 +49,25 @@ export function WeeklyPicks() {
 	const initialLoadRef = useRef(true);
 	const lastSavedRef = useRef<{ picks: typeof picks; tfsGame: string; tfsScore: string } | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
+	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [tfsError, setTfsError] = useState<string | null>(null);
+
+	// Fetch league details to get the mode
+	useEffect(() => {
+		const fetchLeagueDetails = async () => {
+			if (!leagueId) return;
+			try {
+				const response = await fetch(`/api/league/${leagueId}`);
+				if (response.ok) {
+					const data = await response.json();
+					setLeagueMode(data.mode || 'standard');
+				}
+			} catch (error) {
+				console.error('[WeeklyPicks] Error fetching league details:', error);
+			}
+		};
+		fetchLeagueDetails();
+	}, [leagueId]);
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
@@ -74,7 +94,42 @@ export function WeeklyPicks() {
 			console.log('[WeeklyPicks] Fetching games for week:', currentWeek);
 			const weeklyGames = await NFLService.getWeeklyGames(currentWeek);
 			console.log('[WeeklyPicks] Games fetched:', weeklyGames);
-			setGames(weeklyGames);
+
+			// Fetch odds for Standard mode leagues
+			if (leagueMode === 'standard') {
+				try {
+					const oddsResponse = await fetch('/api/odds/nfl');
+					if (oddsResponse.ok) {
+						const oddsData = await oddsResponse.json();
+
+						// Match odds to games and attach them
+						const gamesWithOdds = weeklyGames.map(game => {
+							const gameOdds = oddsData.find((o: any) =>
+								o.home_team === game.home.team || o.away_team === game.away.team
+							);
+
+							if (gameOdds) {
+								return {
+									...game,
+									home: { ...game.home, odds: gameOdds.home?.odds },
+									away: { ...game.away, odds: gameOdds.away?.odds }
+								};
+							}
+							return game;
+						});
+
+						setGames(gamesWithOdds);
+					} else {
+						console.error('[WeeklyPicks] Failed to fetch odds');
+						setGames(weeklyGames);
+					}
+				} catch (oddsError) {
+					console.error('[WeeklyPicks] Error fetching odds:', oddsError);
+					setGames(weeklyGames);
+				}
+			} else {
+				setGames(weeklyGames);
+			}
 		} catch (error) {
 			console.error('[WeeklyPicks] Error loading weekly games:', error);
 			setGames([]);
@@ -144,6 +199,42 @@ export function WeeklyPicks() {
 		}
 	};
 
+	const validateTfsScore = (value: string): string | null => {
+		if (!value || value.trim() === '') {
+			return 'Total Final Score is required';
+		}
+
+		const numValue = parseInt(value);
+
+		if (isNaN(numValue)) {
+			return 'Please enter a valid number';
+		}
+
+		if (numValue < 0) {
+			return 'Score cannot be negative';
+		}
+
+		if (numValue > 200) {
+			return 'Score seems unrealistically high (max 200)';
+		}
+
+		if (!Number.isInteger(parseFloat(value))) {
+			return 'Score must be a whole number';
+		}
+
+		return null;
+	};
+
+	const handleTfsScoreChange = (value: string) => {
+		setTfsScore(value);
+		if (value) {
+			const error = validateTfsScore(value);
+			setTfsError(error);
+		} else {
+			setTfsError(null);
+		}
+	};
+
 	// Helper to check if a pick is correct (for display purposes)
 	const isPickCorrect = (pick: { gameId: string; team: string }, game: Game | undefined): boolean | null => {
 		if (!game) return null;
@@ -157,7 +248,13 @@ export function WeeklyPicks() {
 	};
 
 	const autoSave = async (isUpdate: boolean = false) => {
-		if (!session || !leagueId || picks.length !== 5 || !tfsGame || isNaN(parseInt(tfsScore))) {
+		// For Steve mode, require TFS. For Standard mode, don't require it
+		const isSteveMode = leagueMode === 'steve';
+		const hasRequiredFields = isSteveMode
+			? picks.length === 5 && tfsGame && !isNaN(parseInt(tfsScore))
+			: picks.length === 5;
+
+		if (!session || !leagueId || !hasRequiredFields) {
 			return; // Don't save if incomplete
 		}
 
@@ -172,10 +269,22 @@ export function WeeklyPicks() {
 
 		try {
 			setIsSaving(true);
+			const requestBody: any = {
+				week: currentWeek,
+				picks,
+				leagueId
+			};
+
+			// Only include TFS for Steve mode
+			if (leagueMode === 'steve') {
+				requestBody.tfsGame = tfsGame;
+				requestBody.tfsScore = parseInt(tfsScore);
+			}
+
 			const response = await fetch('/api/picks', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ week: currentWeek, picks, tfsGame, tfsScore: parseInt(tfsScore), leagueId })
+				body: JSON.stringify(requestBody)
 			});
 
 			if (response.ok) {
@@ -230,8 +339,14 @@ export function WeeklyPicks() {
 
 	// Auto-save when picks, TFS game, or score changes (only if we have existing picks)
 	useEffect(() => {
+		// For Steve mode, require TFS. For Standard mode, don't require it
+		const isSteveMode = leagueMode === 'steve';
+		const hasRequiredFields = isSteveMode
+			? picks.length === 5 && tfsGame && tfsScore && !isNaN(parseInt(tfsScore))
+			: picks.length === 5;
+
 		// Don't auto-save on initial load or if incomplete
-		if (initialLoadRef.current || !hasExistingPicks || picks.length !== 5 || !tfsGame || !tfsScore || isNaN(parseInt(tfsScore)) || isSaving) {
+		if (initialLoadRef.current || !hasExistingPicks || !hasRequiredFields || isSaving) {
 			return;
 		}
 
@@ -264,9 +379,19 @@ export function WeeklyPicks() {
 			return;
 		}
 
-		if (!tfsGame || isNaN(parseInt(tfsScore))) {
-			setError('Please select a TFS game and enter a valid predicted score');
-			return;
+		// TFS validation only for Steve mode
+		if (leagueMode === 'steve') {
+			if (!tfsGame) {
+				setError('Please select a TFS game');
+				return;
+			}
+
+			const tfsValidationError = validateTfsScore(tfsScore);
+			if (tfsValidationError) {
+				setError(tfsValidationError);
+				setTfsError(tfsValidationError);
+				return;
+			}
 		}
 
 		if (!leagueId) {
@@ -281,10 +406,22 @@ export function WeeklyPicks() {
 
 		try {
 			setIsSaving(true);
+			const requestBody: any = {
+				week: currentWeek,
+				picks,
+				leagueId
+			};
+
+			// Only include TFS for Steve mode
+			if (leagueMode === 'steve') {
+				requestBody.tfsGame = tfsGame;
+				requestBody.tfsScore = parseInt(tfsScore);
+			}
+
 			const response = await fetch('/api/picks', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ week: currentWeek, picks, tfsGame, tfsScore: parseInt(tfsScore), leagueId })
+				body: JSON.stringify(requestBody)
 			});
 
 			if (response.ok) {
@@ -367,7 +504,7 @@ export function WeeklyPicks() {
 											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
 											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
 											<div className='mt-8'>
-												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} isCorrect={isCorrect} leaguePicks={gameCompleted ? leaguePicks[pick.gameId] : undefined} />
+												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} isCorrect={isCorrect} leaguePicks={gameCompleted ? leaguePicks[pick.gameId] : undefined} leagueMode={leagueMode} />
 											</div>
 										</div>
 									);
@@ -404,16 +541,17 @@ export function WeeklyPicks() {
 
 									return (
 										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
-											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} leaguePicks={gameCompleted ? leaguePicks[game.id] : undefined} />
+											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} leaguePicks={gameCompleted ? leaguePicks[game.id] : undefined} leagueMode={leagueMode} />
 										</div>
 									);
 								})}
 							</div>
 
-							{picks.length === 5 && (
+							{picks.length === 5 && leagueMode === 'steve' && (
 								<div className='mt-6 space-y-4'>
 									<div>
 										<h3 className='text-lg font-medium mb-2'>Total Final Score Prediction</h3>
+										<p className='text-sm text-muted-foreground mb-3'>Select one of your picked games and predict the combined final score of both teams</p>
 										<select className='w-full p-2 rounded mb-2 bg-card border-2 border-primary/20 text-foreground' value={tfsGame} onChange={e => setTfsGame(e.target.value)}>
 											<option value=''>Select Game</option>
 											{picks.map(pick => {
@@ -425,7 +563,43 @@ export function WeeklyPicks() {
 												);
 											})}
 										</select>
-										<Input type='number' placeholder='Predicted Total Score' value={tfsScore} onChange={e => setTfsScore(e.target.value)} className='bg-card border-2 border-primary/20' />
+										<div className='space-y-1'>
+											<Input type='number' placeholder='Predicted Total Score (e.g., 45)' value={tfsScore} onChange={e => handleTfsScoreChange(e.target.value)} className={`bg-card border-2 ${tfsError ? 'border-red-500' : 'border-primary/20'}`} />
+											{tfsError && <p className='text-sm text-red-500'>{tfsError}</p>}
+											{tfsScore && !tfsError && (
+												<div className='p-3 rounded-lg bg-primary/10 border border-primary/20 mt-2'>
+													<p className='text-sm text-foreground'>
+														<strong>Potential TFS Points:</strong>
+													</p>
+													<ul className='text-xs text-muted-foreground mt-1 space-y-1'>
+														<li>• Exact score: <span className='text-primary font-semibold'>5 points</span></li>
+														<li>• Within 1-3: <span className='text-primary font-semibold'>4 points</span></li>
+														<li>• Within 4-5: <span className='text-primary font-semibold'>3 points</span></li>
+														<li>• Within 6-7: <span className='text-primary font-semibold'>2 points</span></li>
+														<li>• Within 8-10: <span className='text-primary font-semibold'>1 point</span></li>
+													</ul>
+												</div>
+											)}
+										</div>
+									</div>
+
+									{/* Point Summary */}
+									<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
+										<h4 className='text-sm font-semibold text-foreground mb-2'>Potential Weekly Score</h4>
+										<div className='space-y-2 text-sm'>
+											<div className='flex justify-between'>
+												<span className='text-muted-foreground'>5 Game Picks (2 pts each):</span>
+												<span className='font-semibold text-primary'>Up to 10 points</span>
+											</div>
+											<div className='flex justify-between'>
+												<span className='text-muted-foreground'>TFS Bonus:</span>
+												<span className='font-semibold text-primary'>Up to 5 points</span>
+											</div>
+											<div className='border-t border-primary/20 pt-2 flex justify-between'>
+												<span className='font-semibold text-foreground'>Maximum Total:</span>
+												<span className='font-bold text-primary text-lg'>15 points</span>
+											</div>
+										</div>
 									</div>
 
 									<Button
@@ -437,7 +611,56 @@ export function WeeklyPicks() {
 											window.dispatchEvent(leaderboardEvent);
 											await refreshStats();
 										}}
-										disabled={!tfsGame || !tfsScore || isSaving}>
+										disabled={!tfsGame || !tfsScore || !!tfsError || isSaving}>
+										{isSaving ? 'Saving...' : hasExistingPicks ? 'Update Picks' : 'Submit Picks'}
+									</Button>
+								</div>
+							)}
+
+							{/* Standard Mode Submit Button */}
+							{picks.length === 5 && leagueMode === 'standard' && (
+								<div className='mt-6 space-y-4'>
+									{/* Point Preview for Standard Mode */}
+									<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
+										<h4 className='text-sm font-semibold text-foreground mb-3'>Your Potential Score</h4>
+										<div className='space-y-2 text-sm mb-3'>
+											{picks.map((pick, index) => {
+												const game = games.find(g => g.id === pick.gameId);
+												const team = pick.isHome ? game?.home : game?.away;
+												const points = team?.odds ? calculatePointsFromOdds(team.odds) : 0;
+												return (
+													<div key={pick.gameId} className='flex justify-between items-center'>
+														<span className='text-muted-foreground'>
+															Pick {index + 1}: {pick.team}
+															{team?.odds && <span className={`ml-2 ${getOddsColorClass(team.odds)}`}>({formatOdds(team.odds)})</span>}
+														</span>
+														<span className='font-semibold text-primary'>{points} pts</span>
+													</div>
+												);
+											})}
+										</div>
+										<div className='border-t border-primary/20 pt-2 flex justify-between'>
+											<span className='font-semibold text-foreground'>Total if all win:</span>
+											<span className='font-bold text-primary text-lg'>
+												{picks.reduce((total, pick) => {
+													const game = games.find(g => g.id === pick.gameId);
+													const team = pick.isHome ? game?.home : game?.away;
+													return total + (team?.odds ? calculatePointsFromOdds(team.odds) : 0);
+												}, 0)} pts
+											</span>
+										</div>
+									</div>
+
+									<Button
+										className='w-full bg-primary text-black hover:bg-primary/90 font-medium'
+										onClick={async () => {
+											await handleSubmit();
+											// Trigger Leaderboard and Stats refresh
+											const leaderboardEvent = new CustomEvent('refreshLeaderboard');
+											window.dispatchEvent(leaderboardEvent);
+											await refreshStats();
+										}}
+										disabled={isSaving}>
 										{isSaving ? 'Saving...' : hasExistingPicks ? 'Update Picks' : 'Submit Picks'}
 									</Button>
 								</div>
