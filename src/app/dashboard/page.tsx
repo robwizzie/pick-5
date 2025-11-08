@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, LogIn, Trophy, Users, Calendar } from 'lucide-react';
+import { Plus, LogIn, BarChart3, Users, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
 
@@ -70,16 +70,20 @@ const Dashboard = () => {
 						const response = await fetch(`/api/picks/user?leagueId=${(league as any).id}`);
 						if (response.ok) {
 							const picks = await response.json();
-							// Get the most recent 5 picks
-							picks.slice(0, 5).forEach((pick: any) => {
-								activities.push({
-									type: 'pick',
-									message: `Made picks for Week ${pick.week}`,
-									timestamp: new Date(pick.createdAt || pick.updatedAt),
-									leagueId: (league as any).id,
-									leagueName: (league as any).name
+							// Get all picks and add them to activities
+							if (Array.isArray(picks) && picks.length > 0) {
+								picks.forEach((pick: any) => {
+									// Use updatedAt, createdAt, or ObjectID timestamp as fallback
+									const timestamp = pick.updatedAt || pick.createdAt || new Date(parseInt(pick._id.toString().substring(0, 8), 16) * 1000);
+									activities.push({
+										type: 'pick',
+										message: `Made picks for Week ${pick.week}`,
+										timestamp: new Date(timestamp),
+										leagueId: (league as any).id,
+										leagueName: (league as any).name
+									});
 								});
-							});
+							}
 						}
 					} catch (error) {
 						console.error('Error fetching picks for league:', error);
@@ -87,8 +91,10 @@ const Dashboard = () => {
 				}
 
 				// Sort by timestamp and take the 10 most recent
-				activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-				setRecentActivity(activities.slice(0, 10));
+				if (activities.length > 0) {
+					activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+					setRecentActivity(activities.slice(0, 10));
+				}
 			} catch (error) {
 				console.error('Error fetching recent activity:', error);
 			}
@@ -199,9 +205,9 @@ const Dashboard = () => {
 									<LogIn className='h-4 w-4 mr-3' />
 									Join League
 								</Button>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10' onClick={() => router.push('/dashboard')}>
-									<Trophy className='h-4 w-4 mr-3' />
-									View Leaderboard
+								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10' onClick={() => router.push('/stats')}>
+									<BarChart3 className='h-4 w-4 mr-3' />
+									My Stats
 								</Button>
 							</CardContent>
 						</Card>
