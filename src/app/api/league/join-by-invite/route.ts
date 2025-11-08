@@ -1,8 +1,9 @@
+// src/app/api/league/join-by-invite/route.ts
 import { NextResponse } from 'next/server';
-import { connectDB } from '@/lib/db';
-import { League } from '@/models/League';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { connectDB } from '@/lib/db';
+import { League } from '@/models/League';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,51 +14,43 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const body = await req.json();
-		const { leagueId, password } = body;
-
-		if (!leagueId || !password) {
-			return NextResponse.json({ error: 'Please provide league ID and password' }, { status: 400 });
+		const { inviteCode } = await req.json();
+		if (!inviteCode) {
+			return NextResponse.json({ error: 'Invite code is required' }, { status: 400 });
 		}
 
 		await connectDB();
 
-		// Find the league by ID and verify password
-		const league = await League.findById(leagueId);
-
+		// Find the league by invite code
+		const league = await League.findOne({ inviteCode });
 		if (!league) {
-			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+			return NextResponse.json({ error: 'Invalid invite code' }, { status: 404 });
 		}
 
-		// Verify the password matches
-		if (league.password !== password) {
-			return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
-		}
-
-		// Check if the user is already a member
+		// Check if user is already a member
 		if (league.members.includes(session.user.id)) {
 			return NextResponse.json({
-				error: 'You are already a member of this league',
+				message: 'Already a member',
 				league: {
 					id: league._id.toString(),
 					name: league.name
 				}
-			}, { status: 400 });
+			});
 		}
 
-		// Add the user to the league
+		// Add user to the league
 		league.members.push(session.user.id);
 		await league.save();
 
 		return NextResponse.json({
-			success: true,
+			message: 'Successfully joined league',
 			league: {
 				id: league._id.toString(),
 				name: league.name
 			}
 		});
 	} catch (error) {
-		console.error('Error joining league:', error);
+		console.error('Error joining league by invite:', error);
 		return NextResponse.json({ error: 'Failed to join league' }, { status: 500 });
 	}
 }
