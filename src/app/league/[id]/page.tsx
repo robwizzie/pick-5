@@ -189,90 +189,13 @@ export default function LeagueDetails() {
 					<DialogHeader>
 						<DialogTitle className='text-2xl font-bold text-primary'>League Rules & Scoring</DialogTitle>
 						<DialogDescription className='text-muted-foreground'>
-							{league.mode === 'steve' ? 'Steve Mode - Confidence-Based Scoring' : 'Standard Pick 5 Mode'}
+							{league.mode === 'steve' ? 'Steve Mode - Pick 5 with TFS Bonus' : 'Standard Mode - Moneyline-Based Scoring'}
 						</DialogDescription>
 					</DialogHeader>
 
 					<div className='space-y-6 py-4'>
 						{league.mode === 'steve' ? (
-							// Steve Mode Rules
-							<>
-								<div className='space-y-3'>
-									<h3 className='text-lg font-semibold text-primary'>How to Play</h3>
-									<ul className='space-y-2 text-sm text-muted-foreground'>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>Each week, select up to 5 games from the available matchups</span>
-										</li>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>Pick which team you think will win each game</span>
-										</li>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>Assign a confidence level (1-5) to each pick, with 5 being most confident</span>
-										</li>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>Each confidence level can only be used once per week</span>
-										</li>
-									</ul>
-								</div>
-
-								<div className='space-y-3'>
-									<h3 className='text-lg font-semibold text-primary'>Scoring System</h3>
-									<div className='p-4 rounded-lg bg-card border border-primary/20'>
-										<p className='text-sm text-muted-foreground mb-3'>Points are awarded based on your confidence level when you pick correctly:</p>
-										<ul className='space-y-2 text-sm'>
-											<li className='flex items-center justify-between'>
-												<span className='text-foreground'>Confidence 5 (Highest) - Correct Pick:</span>
-												<span className='font-bold text-primary'>5 points</span>
-											</li>
-											<li className='flex items-center justify-between'>
-												<span className='text-foreground'>Confidence 4 - Correct Pick:</span>
-												<span className='font-bold text-primary'>4 points</span>
-											</li>
-											<li className='flex items-center justify-between'>
-												<span className='text-foreground'>Confidence 3 - Correct Pick:</span>
-												<span className='font-bold text-primary'>3 points</span>
-											</li>
-											<li className='flex items-center justify-between'>
-												<span className='text-foreground'>Confidence 2 - Correct Pick:</span>
-												<span className='font-bold text-primary'>2 points</span>
-											</li>
-											<li className='flex items-center justify-between'>
-												<span className='text-foreground'>Confidence 1 (Lowest) - Correct Pick:</span>
-												<span className='font-bold text-primary'>1 point</span>
-											</li>
-										</ul>
-									</div>
-									<div className='p-3 rounded-lg bg-primary/10 border border-primary/20'>
-										<p className='text-sm text-foreground'>
-											<strong>Maximum Weekly Score:</strong> 15 points (1 + 2 + 3 + 4 + 5 if all picks are correct)
-										</p>
-									</div>
-								</div>
-
-								<div className='space-y-3'>
-									<h3 className='text-lg font-semibold text-primary'>Strategy Tips</h3>
-									<ul className='space-y-2 text-sm text-muted-foreground'>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>Save your highest confidence levels (4-5) for games you feel most certain about</span>
-										</li>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>Use lower confidence levels (1-2) for riskier upset picks</span>
-										</li>
-										<li className='flex gap-2'>
-											<span className='text-primary font-bold'>•</span>
-											<span>You don&apos;t have to pick 5 games - pick only the games you feel confident about</span>
-										</li>
-									</ul>
-								</div>
-							</>
-						) : (
-							// Standard Mode Rules
+							// Steve Mode Rules (Simple picks + TFS)
 							<>
 								<div className='space-y-3'>
 									<h3 className='text-lg font-semibold text-primary'>How to Play</h3>
@@ -352,18 +275,116 @@ export default function LeagueDetails() {
 
 								<div className='space-y-3'>
 									<h3 className='text-lg font-semibold text-primary'>Strategy Tips</h3>
-									<ul className='space-y-2 text-sm text-muted-foreground'>
+									<ul className='space-y-2 text-muted-foreground text-sm'>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
 											<span>Pick games you feel most confident about to maximize your correct picks</span>
 										</li>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
-											<span>The TFS prediction can be a tiebreaker - take time to research both teams&apos; scoring trends</span>
+											<span>The TFS prediction can be a tiebreaker - research both teams&apos; scoring trends</span>
 										</li>
 										<li className='flex gap-2'>
 											<span className='text-primary font-bold'>•</span>
 											<span>Even if you&apos;re off on the exact TFS, you can still earn partial points</span>
+										</li>
+									</ul>
+								</div>
+							</>
+						) : (
+							// Standard Mode Rules (Moneyline-based)
+							<>
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>How to Play</h3>
+									<ul className='space-y-2 text-sm text-muted-foreground'>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Each week, select exactly 5 games from the available matchups</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Pick which team you think will win each game</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Points earned are based on moneyline odds - underdogs earn more points!</span>
+										</li>
+									</ul>
+								</div>
+
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>Scoring System</h3>
+									<div className='p-4 rounded-lg bg-card border border-primary/20 space-y-3'>
+										<p className='text-sm text-muted-foreground'>Points are calculated based on betting odds. Higher risk = Higher reward!</p>
+
+										<div className='space-y-2 text-sm'>
+											<p className='font-semibold text-foreground'>Examples:</p>
+											<ul className='space-y-2'>
+												<li className='flex items-start gap-2'>
+													<span className='text-primary font-bold'>•</span>
+													<div>
+														<span className='text-foreground'>Favorite at <span className='text-primary font-semibold'>-200</span>: Win = <span className='text-primary font-semibold'>1 point</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>Low risk, lower reward</p>
+													</div>
+												</li>
+												<li className='flex items-start gap-2'>
+													<span className='text-primary font-bold'>•</span>
+													<div>
+														<span className='text-foreground'>Even odds <span className='text-primary font-semibold'>+100/-100</span>: Win = <span className='text-primary font-semibold'>2 points</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>Balanced matchup</p>
+													</div>
+												</li>
+												<li className='flex items-start gap-2'>
+													<span className='text-primary font-bold'>•</span>
+													<div>
+														<span className='text-foreground'>Underdog at <span className='text-primary font-semibold'>+200</span>: Win = <span className='text-primary font-semibold'>3 points</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>Higher risk, higher reward</p>
+													</div>
+												</li>
+												<li className='flex items-start gap-2'>
+													<span className='text-primary font-bold'>•</span>
+													<div>
+														<span className='text-foreground'>Big underdog at <span className='text-primary font-semibold'>+400+</span>: Win = <span className='text-primary font-semibold'>5 points</span></span>
+														<p className='text-xs text-muted-foreground mt-0.5'>Maximum risk, maximum reward</p>
+													</div>
+												</li>
+											</ul>
+										</div>
+
+										<div className='border-t border-primary/20 pt-3'>
+											<p className='text-sm font-semibold text-foreground mb-2'>Point Formula:</p>
+											<ul className='space-y-1 text-xs text-muted-foreground'>
+												<li>• <span className='text-foreground'>Favorites</span> (negative odds): Base points scaled down</li>
+												<li>• <span className='text-foreground'>Underdogs</span> (positive odds): Base points scaled up</li>
+												<li>• <span className='text-foreground'>Wrong pick</span>: 0 points</li>
+											</ul>
+										</div>
+									</div>
+									<div className='p-3 rounded-lg bg-primary/10 border border-primary/20'>
+										<p className='text-sm text-foreground'>
+											<strong>Strategy:</strong> Balance safe picks with underdog risks to maximize your weekly score!
+										</p>
+									</div>
+								</div>
+
+								<div className='space-y-3'>
+									<h3 className='text-lg font-semibold text-primary'>Strategy Tips</h3>
+									<ul className='space-y-2 text-sm text-muted-foreground'>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Mix favorites with underdogs to balance risk and reward</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Picking all favorites is safe but yields fewer points than mixing in underdogs</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>One successful underdog pick can outscore multiple favorite picks</span>
+										</li>
+										<li className='flex gap-2'>
+											<span className='text-primary font-bold'>•</span>
+											<span>Check the odds displayed on each game to see potential points before picking</span>
 										</li>
 									</ul>
 								</div>

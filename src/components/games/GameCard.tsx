@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
 
 interface TeamInfo {
 	team: string;
@@ -8,6 +9,7 @@ interface TeamInfo {
 	logo: string;
 	record: string;
 	score?: number;
+	odds?: number;
 }
 
 interface Game {
@@ -38,6 +40,7 @@ interface GameCardProps {
 	isCorrect?: boolean | null;
 	noHover?: boolean;
 	leaguePicks?: GamePicksData;
+	leagueMode?: string;
 }
 
 // Component to render stacked avatars
@@ -69,8 +72,10 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 	);
 }
 
-export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks }: GameCardProps) {
+export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode }: GameCardProps) {
 	if (!game) return null;
+
+	const isStandardMode = leagueMode === 'standard';
 
 	const getTeamButtonStyle = (isTeamSelected: boolean, isTeamCorrect: boolean | null) => {
 		const fontWeight = isTeamSelected ? 'font-bold' : 'font-normal';
@@ -111,6 +116,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.team}</div>
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
+									{isStandardMode && game.away.odds !== undefined && (
+										<div className='flex items-center gap-1.5 mt-1'>
+											<span className={`text-xs font-semibold ${getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
+											<span className='text-xs text-muted-foreground'>•</span>
+											<span className='text-xs font-bold text-primary'>{calculatePointsFromOdds(game.away.odds)} pts</span>
+										</div>
+									)}
 									{showScores && game.away.score !== undefined && <div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 								</div>
@@ -133,6 +145,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.team}</div>
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
+									{isStandardMode && game.home.odds !== undefined && (
+										<div className='flex items-center gap-1.5 mt-1'>
+											<span className={`text-xs font-semibold ${getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
+											<span className='text-xs text-muted-foreground'>•</span>
+											<span className='text-xs font-bold text-primary'>{calculatePointsFromOdds(game.home.odds)} pts</span>
+										</div>
+									)}
 									{showScores && game.home.score !== undefined && <div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 								</div>
