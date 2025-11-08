@@ -40,8 +40,9 @@ export class ScoringService {
 	/**
 	 * Calculate week score - only scores games that have finished (have both scores)
 	 * Returns completedGames count for accurate win percentage calculation
+	 * tfsGame and tfsScore can be null for Standard mode leagues
 	 */
-	static calculateWeekScore(picks: { gameId: string; team: string; isHome: boolean }[], gameResults: GameResult[], tfsGame: string, tfsScore: number) {
+	static calculateWeekScore(picks: { gameId: string; team: string; isHome: boolean }[], gameResults: GameResult[], tfsGame: string | null, tfsScore: number | null) {
 		let weeklyPoints = 0;
 		let correctPicks = 0;
 		let tfsPoints = 0;
@@ -73,16 +74,18 @@ export class ScoringService {
 			return { ...pick, isCorrect };
 		});
 
-		// Score TFS if applicable - only if game has finished
-		const tfsGameResult = gameResults.find(g => g.id === tfsGame);
-		if (tfsGameResult) {
-			// Only score TFS if game has finished (both scores are present, are numbers, and at least one is > 0)
-			const tfsGameFinished = typeof tfsGameResult.homeScore === 'number' && typeof tfsGameResult.awayScore === 'number' && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined && (tfsGameResult.homeScore > 0 || tfsGameResult.awayScore > 0);
+		// Score TFS if applicable - only if game has finished and TFS is provided (Steve mode only)
+		if (tfsGame && tfsScore !== null) {
+			const tfsGameResult = gameResults.find(g => g.id === tfsGame);
+			if (tfsGameResult) {
+				// Only score TFS if game has finished (both scores are present, are numbers, and at least one is > 0)
+				const tfsGameFinished = typeof tfsGameResult.homeScore === 'number' && typeof tfsGameResult.awayScore === 'number' && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined && (tfsGameResult.homeScore > 0 || tfsGameResult.awayScore > 0);
 
-			if (tfsGameFinished && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined) {
-				const actualScore = tfsGameResult.homeScore + tfsGameResult.awayScore;
-				tfsPoints = this.calculateTFSPoints(tfsScore, actualScore);
-				weeklyPoints += tfsPoints;
+				if (tfsGameFinished && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined) {
+					const actualScore = tfsGameResult.homeScore + tfsGameResult.awayScore;
+					tfsPoints = this.calculateTFSPoints(tfsScore, actualScore);
+					weeklyPoints += tfsPoints;
+				}
 			}
 		}
 
