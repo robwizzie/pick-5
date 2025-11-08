@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import { NFLService } from '@/services/nflService';
 import { useStats } from '@/contexts/StatsContext';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
+import { hasGameStarted, haveAllPickedGamesStarted } from '@/services/gameUtils';
+import { Toast } from '@/components/ui/toast';
 import type { Game } from './GameCard';
 
 export function WeeklyPicks() {
@@ -26,13 +28,28 @@ export function WeeklyPicks() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [submitted, setSubmitted] = useState(false);
+	const [hasExistingPicks, setHasExistingPicks] = useState(false);
+	const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+	const [isSaving, setIsSaving] = useState(false);
+	const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+	const initialLoadRef = useRef(true);
+	const lastSavedRef = useRef<{ picks: typeof picks; tfsGame: string; tfsScore: string } | null>(null);
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek changed:', currentWeek);
+		initialLoadRef.current = true; // Reset for new week
+		lastSavedRef.current = null; // Reset last saved for new week
 		loadWeeklyGames();
-		loadExistingPicks();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, session?.user]);
+
+	// Load picks after games are loaded so we can check game status
+	useEffect(() => {
+		if (games.length > 0 && sessionStatus === 'authenticated') {
+			loadExistingPicks();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [games, sessionStatus]);
 
 	const loadWeeklyGames = async () => {
 		if (sessionStatus === 'loading') return;
@@ -63,26 +80,39 @@ export function WeeklyPicks() {
 			console.log('[WeeklyPicks] Picks fetched:', data);
 
 			if (data) {
-				setPicks(data.picks || []);
-				setTfsGame(data.tfsGame || '');
-				setTfsScore(data.tfsScore?.toString() || '');
-				setSubmitted(true);
+				const loadedPicks = data.picks || [];
+				const loadedTfsGame = data.tfsGame || '';
+				const loadedTfsScore = data.tfsScore?.toString() || '';
+
+				setPicks(loadedPicks);
+				setTfsGame(loadedTfsGame);
+				setTfsScore(loadedTfsScore);
+				setHasExistingPicks(true);
+
+				// Update last saved ref to match loaded data
+				lastSavedRef.current = { picks: [...loadedPicks], tfsGame: loadedTfsGame, tfsScore: loadedTfsScore };
+
+				// Only set submitted to true if all picked games have started
+				// This allows editing until games start
+				const allGamesStarted = haveAllPickedGamesStarted(loadedPicks, games);
+				setSubmitted(allGamesStarted);
 			} else {
 				setPicks([]);
 				setTfsGame('');
 				setTfsScore('');
 				setSubmitted(false);
+				setHasExistingPicks(false);
+				lastSavedRef.current = null;
 			}
+
+			// Mark initial load as complete after a short delay
+			setTimeout(() => {
+				initialLoadRef.current = false;
+			}, 500);
 		} catch (error) {
 			console.error('[WeeklyPicks] Error loading picks:', error);
 			setError('Error loading picks');
 		}
-	};
-
-	// Helper to check if a game is not started yet (can be selected)
-	const isGameSelectable = (game: Game): boolean => {
-		// Game is selectable if status is 'pre' (pre-game) or if it has no status
-		return !game.status || game.status === 'pre' || game.status === 'scheduled';
 	};
 
 	// Helper to check if a pick is correct (for display purposes)
@@ -91,10 +121,56 @@ export function WeeklyPicks() {
 		// Only show correct/incorrect if game is completed (has scores)
 		const hasScores = typeof game.home.score === 'number' && typeof game.away.score === 'number';
 		if (!hasScores) return null;
-		
+
 		const homeWon = game.home.score! > game.away.score!;
 		const pickedHome = pick.team === game.home.team;
 		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
+	};
+
+	const autoSave = async (isUpdate: boolean = false) => {
+		if (!session || !leagueId || picks.length !== 5 || !tfsGame || isNaN(parseInt(tfsScore))) {
+			return; // Don't save if incomplete
+		}
+
+		// Check if picks have actually changed
+		const currentState = JSON.stringify({ picks, tfsGame, tfsScore });
+		if (lastSavedRef.current) {
+			const lastSavedState = JSON.stringify({ picks: lastSavedRef.current.picks, tfsGame: lastSavedRef.current.tfsGame, tfsScore: lastSavedRef.current.tfsScore });
+			if (currentState === lastSavedState) {
+				return; // No changes, skip save
+			}
+		}
+
+		try {
+			setIsSaving(true);
+			const response = await fetch('/api/picks', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ week: currentWeek, picks, tfsGame, tfsScore: parseInt(tfsScore), leagueId })
+			});
+
+			if (response.ok) {
+				setHasExistingPicks(true);
+				setToast({ message: isUpdate ? 'Picks updated successfully!' : 'Picks saved!', type: 'success' });
+
+				// Update last saved ref to prevent loop
+				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore };
+
+				// Dispatch refresh events (don't reload picks to avoid triggering loop)
+				const leaderboardEvent = new CustomEvent('refreshLeaderboard');
+				const statsEvent = new CustomEvent('refreshSeasonStats');
+				window.dispatchEvent(leaderboardEvent);
+				window.dispatchEvent(statsEvent);
+			} else {
+				const { error } = await response.json();
+				setToast({ message: error || 'Failed to save picks', type: 'error' });
+			}
+		} catch (err) {
+			console.error('Error auto-saving picks:', err);
+			setToast({ message: 'Error saving picks', type: 'error' });
+		} finally {
+			setIsSaving(false);
+		}
 	};
 
 	const handleTeamSelect = (gameId: string, selectedTeam: string, opponent: string, isHome: boolean) => {
@@ -123,6 +199,31 @@ export function WeeklyPicks() {
 		});
 	};
 
+	// Auto-save when picks, TFS game, or score changes (only if we have existing picks)
+	useEffect(() => {
+		// Don't auto-save on initial load or if incomplete
+		if (initialLoadRef.current || !hasExistingPicks || picks.length !== 5 || !tfsGame || !tfsScore || isNaN(parseInt(tfsScore)) || isSaving) {
+			return;
+		}
+
+		// Clear any pending auto-save
+		if (saveTimeoutRef.current) {
+			clearTimeout(saveTimeoutRef.current);
+		}
+
+		// Debounce auto-save
+		saveTimeoutRef.current = setTimeout(() => {
+			autoSave(true); // Pass true to indicate this is an update
+		}, 1000); // 1 second debounce
+
+		return () => {
+			if (saveTimeoutRef.current) {
+				clearTimeout(saveTimeoutRef.current);
+			}
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [picks, tfsGame, tfsScore, hasExistingPicks]);
+
 	const handleSubmit = async () => {
 		if (!session) {
 			setError('Please sign in to submit picks');
@@ -144,7 +245,13 @@ export function WeeklyPicks() {
 			return;
 		}
 
+		// Clear any pending auto-save
+		if (saveTimeoutRef.current) {
+			clearTimeout(saveTimeoutRef.current);
+		}
+
 		try {
+			setIsSaving(true);
 			const response = await fetch('/api/picks', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -152,22 +259,32 @@ export function WeeklyPicks() {
 			});
 
 			if (response.ok) {
-				setSubmitted(true);
+				setHasExistingPicks(true);
+				setToast({ message: hasExistingPicks ? 'Picks updated successfully!' : 'Picks submitted successfully!', type: 'success' });
+
+				// Update last saved ref to prevent duplicate saves
+				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore };
+
+				// Reload games and picks to check if all games have started
+				await loadWeeklyGames();
+				await loadExistingPicks();
 
 				// Dispatch refresh events
 				const leaderboardEvent = new CustomEvent('refreshLeaderboard');
 				const statsEvent = new CustomEvent('refreshSeasonStats');
 				window.dispatchEvent(leaderboardEvent);
 				window.dispatchEvent(statsEvent);
-
-				await Promise.all([loadWeeklyGames(), loadExistingPicks()]);
 			} else {
 				const { error } = await response.json();
 				setError(error || 'Failed to submit picks');
+				setToast({ message: error || 'Failed to submit picks', type: 'error' });
 			}
 		} catch (err) {
 			console.error('Error submitting picks:', err);
 			setError('An unexpected error occurred');
+			setToast({ message: 'An unexpected error occurred', type: 'error' });
+		} finally {
+			setIsSaving(false);
 		}
 	};
 
@@ -226,16 +343,37 @@ export function WeeklyPicks() {
 									);
 								})}
 							</div>
+							{!haveAllPickedGamesStarted(picks, games) && (
+								<div className='mt-4'>
+									<Alert className='mb-4'>
+										<AlertDescription>Some games haven&apos;t started yet. You can still edit your picks.</AlertDescription>
+									</Alert>
+									<Button
+										className='w-full bg-primary text-black hover:bg-primary/90 font-medium'
+										onClick={() => {
+											setSubmitted(false);
+											setError(null);
+										}}>
+										Edit Picks
+									</Button>
+								</div>
+							)}
 						</div>
 					) : (
 						<div>
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
 							<div className='space-y-3'>
 								{games.map(game => {
-									const isSelectable = isGameSelectable(game);
+									const isPicked = picks.find(p => p.gameId === game.id);
+									const gameStarted = hasGameStarted(game);
+
+									// Allow editing if game has not started, even if already picked
+									// If game has started, do not allow selection (unless it is not picked)
+									const canSelect = !gameStarted;
+
 									return (
-										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${picks.find(p => p.gameId === game.id) ? 'border-primary' : 'border-primary/20'}`}>
-											<GameCard game={game} selected={picks.find(p => p.gameId === game.id)?.team} onSelect={handleTeamSelect} disabled={!isSelectable || (picks.length >= 5 && !picks.find(p => p.gameId === game.id))} showScores={!isSelectable} />
+										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
+											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} />
 										</div>
 									);
 								})}
@@ -268,8 +406,8 @@ export function WeeklyPicks() {
 											window.dispatchEvent(leaderboardEvent);
 											await refreshStats();
 										}}
-										disabled={!tfsGame || !tfsScore}>
-										Submit Picks
+										disabled={!tfsGame || !tfsScore || isSaving}>
+										{isSaving ? 'Saving...' : hasExistingPicks ? 'Update Picks' : 'Submit Picks'}
 									</Button>
 								</div>
 							)}
@@ -277,6 +415,7 @@ export function WeeklyPicks() {
 					)}
 				</div>
 			</CardContent>
+			{toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 		</Card>
 	);
 }
