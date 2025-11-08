@@ -29,7 +29,11 @@ export async function GET(req: Request) {
 
 		// Fetch only users who are members of this league
 		const allUsers = await User.find({ _id: { $in: league.members } }, 'name');
-		console.log('[API Debug] League Members:', allUsers);
+		console.log('[API Debug] League Members:', allUsers.map(u => ({ id: u._id.toString(), name: u.name })));
+
+		// First, let's see ALL picks for this league and week (for debugging)
+		const allPicksForWeek = await Pick.find({ week, leagueId }).lean();
+		console.log('[API Debug] All Picks for Week:', JSON.stringify(allPicksForWeek, null, 2));
 
 		// Aggregate weekly results specific to the league
 		const weeklyResults = await Pick.aggregate([
@@ -44,7 +48,7 @@ export async function GET(req: Request) {
 			}
 		]);
 
-		console.log('[API Debug] Weekly Results:', weeklyResults);
+		console.log('[API Debug] Weekly Results Aggregation:', JSON.stringify(weeklyResults, null, 2));
 
 		// Create a map of user results for quick lookup
 		const weeklyResultsMap = new Map(weeklyResults.map(result => [result._id.toString(), result]));
@@ -67,6 +71,11 @@ export async function GET(req: Request) {
 			};
 		});
 
+		// First, let's see ALL picks for this league (for debugging season stats)
+		const allPicksForSeason = await Pick.find({ leagueId }).lean();
+		console.log('[API Debug] All Picks for Season (count):', allPicksForSeason.length);
+		console.log('[API Debug] Sample Season Pick:', JSON.stringify(allPicksForSeason[0], null, 2));
+
 		// Aggregate season stats specific to the league
 		const seasonStats = await Pick.aggregate([
 			{ $match: { leagueId } },
@@ -81,7 +90,7 @@ export async function GET(req: Request) {
 			}
 		]);
 
-		console.log('[API Debug] Season Stats:', seasonStats);
+		console.log('[API Debug] Season Stats Aggregation:', JSON.stringify(seasonStats, null, 2));
 
 		// Create a map for season stats
 		const seasonStatsMap = new Map(seasonStats.map(stat => [stat._id.toString(), stat]));
@@ -98,6 +107,9 @@ export async function GET(req: Request) {
 				winPercentage: stat?.totalPicks > 0 ? (stat.correctPicks / stat.totalPicks) * 100 : 0
 			};
 		});
+
+		console.log('[API Debug] Final Weekly Results Being Returned:', JSON.stringify(resultsWithUsernames, null, 2));
+		console.log('[API Debug] Final Season Stats Being Returned:', JSON.stringify(seasonStatsFormatted, null, 2));
 
 		return NextResponse.json({
 			weeklyResults: resultsWithUsernames,
