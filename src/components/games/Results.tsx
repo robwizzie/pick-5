@@ -10,7 +10,7 @@ import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
-import { hasGameFinished } from '@/services/gameUtils';
+import { hasGameFinished, hasGameStarted } from '@/services/gameUtils';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -240,6 +240,12 @@ export function Results() {
 			const game = games.find(g => g.id === pick.gameId);
 			if (!game) return null;
 
+			// If viewing another user's picks, hide games that haven't started (to prevent pick stealing)
+			const isViewingOtherUser = selectedUserId !== session?.user?.id;
+			if (isViewingOtherUser && !hasGameStarted(game)) {
+				return null;
+			}
+
 			const scores = getGameScore(game);
 			const gameStatus = checkGameStatus(game);
 			const isCorrect = checkPickCorrect(pick, game);
@@ -292,6 +298,7 @@ export function Results() {
 							isCorrect={gameFinished ? isCorrect : null}
 							noHover={true}
 							leaguePicks={gameFinished ? leaguePicks[pick.gameId] : undefined}
+							leagueMode={leagueMode}
 						/>
 					</div>
 				</div>
@@ -345,7 +352,7 @@ export function Results() {
 			tfsPoints
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [picks, games]);
+	}, [picks, games, selectedUserId, session?.user?.id]);
 
 	if (sessionStatus === 'loading' || loading) {
 		return (
@@ -408,7 +415,7 @@ export function Results() {
 						</SelectTrigger>
 						<SelectContent>
 							{leagueMembers.map(member => (
-								<SelectItem key={member._id} value={member._id}>
+								<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20'>
 									<div className='flex items-center gap-2'>
 										<Avatar className='w-5 h-5'>
 											<AvatarImage src={member.image || undefined} alt={member.name} />
