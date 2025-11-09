@@ -33,6 +33,17 @@ export async function POST() {
 				continue; // Skip non-standard mode leagues
 			}
 
+			// Fetch odds snapshots for this week (fetch once per pick document)
+			const snapshots = await OddsSnapshot.find({
+				week: pickDoc.week,
+				season: new Date().getFullYear()
+			}).lean();
+
+			if (snapshots.length === 0) {
+				details.push(`⚠️ No snapshots for week ${pickDoc.week}, skipping all picks`);
+				continue;
+			}
+
 			// Check each individual pick in the picks array
 			let docUpdated = false;
 			const updatedPicks = [];
@@ -47,30 +58,17 @@ export async function POST() {
 					continue;
 				}
 
-				// Fetch odds snapshot for this week
-				const snapshot = await OddsSnapshot.findOne({
-					week: pickDoc.week,
-					season: new Date().getFullYear()
-				}).lean();
-
-				if (!snapshot) {
-					details.push(`⚠️ No snapshot for week ${pickDoc.week}, skipping pick ${pick.gameId}`);
-					updatedPicks.push(pick);
-					picksSkipped++;
-					continue;
-				}
-
-				// Find the game odds in the snapshot
-				const gameOdds = (snapshot as any).odds.find((o: any) => o.id === pick.gameId);
-				if (!gameOdds) {
-					details.push(`⚠️ No odds in snapshot for game ${pick.gameId}, skipping`);
+				// Find the snapshot for this specific game
+				const gameSnapshot = snapshots.find((s: any) => s.gameId === pick.gameId);
+				if (!gameSnapshot) {
+					details.push(`⚠️ No snapshot for game ${pick.gameId}, skipping`);
 					updatedPicks.push(pick);
 					picksSkipped++;
 					continue;
 				}
 
 				// Determine which team's odds to use based on pick.isHome
-				const odds = pick.isHome ? gameOdds.home?.odds : gameOdds.away?.odds;
+				const odds = pick.isHome ? (gameSnapshot as any).homeOdds : (gameSnapshot as any).awayOdds;
 
 				if (odds === undefined || odds === null) {
 					details.push(`⚠️ No ${pick.isHome ? 'home' : 'away'} odds for game ${pick.gameId}, skipping`);
