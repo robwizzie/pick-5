@@ -14,7 +14,7 @@ import { SeasonStats } from '@/components/games/SeasonStats';
 import { Leaderboard } from '@/components/games/Leaderboard';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
-import { Share2, Copy, Check, Info } from 'lucide-react';
+import { Share2, Copy, Check, Info, LogOut } from 'lucide-react';
 
 interface League {
 	name: string;
@@ -31,9 +31,11 @@ export default function LeagueDetails() {
 	const { data: session } = useSession();
 	const [showInviteModal, setShowInviteModal] = useState(false);
 	const [showRulesModal, setShowRulesModal] = useState(false);
+	const [showLeaveModal, setShowLeaveModal] = useState(false);
 	const [inviteUrl, setInviteUrl] = useState('');
 	const [copied, setCopied] = useState(false);
 	const [loadingInvite, setLoadingInvite] = useState(false);
+	const [loadingLeave, setLoadingLeave] = useState(false);
 
 	// Fetch league details
 	useEffect(() => {
@@ -80,6 +82,30 @@ export default function LeagueDetails() {
 		}
 	};
 
+	const handleLeaveLeague = async () => {
+		try {
+			setLoadingLeave(true);
+			const response = await fetch(`/api/league/${id}/leave`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
+
+			if (response.ok) {
+				// Redirect to dashboard after leaving
+				router.push('/dashboard');
+			} else {
+				const data = await response.json();
+				alert(data.error || 'Failed to leave league');
+			}
+		} catch (error) {
+			console.error('Error leaving league:', error);
+			alert('Failed to leave league');
+		} finally {
+			setLoadingLeave(false);
+			setShowLeaveModal(false);
+		}
+	};
+
 	// Check if current user is the commissioner
 	const isCommissioner = league && session?.user?.id && league.creatorId === session.user.id;
 
@@ -110,6 +136,13 @@ export default function LeagueDetails() {
 							<span className='hidden sm:inline'>Rules</span>
 							<span className='sm:hidden'>Info</span>
 						</Button>
+						{!isCommissioner && (
+							<Button onClick={() => setShowLeaveModal(true)} variant='outline' className='flex items-center gap-1.5 md:gap-2 border-red-500/50 hover:bg-red-500/10 text-red-500 text-sm md:text-base px-3 md:px-4'>
+								<LogOut className='h-3.5 w-3.5 md:h-4 md:w-4' />
+								<span className='hidden sm:inline'>Leave League</span>
+								<span className='sm:hidden'>Leave</span>
+							</Button>
+						)}
 						{isCommissioner && (
 							<Button onClick={handleGetInviteLink} disabled={loadingInvite} variant='outline' className='flex items-center gap-1.5 md:gap-2 border-primary/50 hover:bg-primary/10 text-sm md:text-base px-3 md:px-4'>
 								<Share2 className='h-3.5 w-3.5 md:h-4 md:w-4' />
@@ -436,6 +469,45 @@ export default function LeagueDetails() {
 									<span>Season standings are based on total points accumulated throughout the season</span>
 								</li>
 							</ul>
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			{/* Leave League Confirmation Modal */}
+			<Dialog open={showLeaveModal} onOpenChange={setShowLeaveModal}>
+				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-md'>
+					<DialogHeader>
+						<DialogTitle className='text-2xl font-bold text-red-500'>Leave League?</DialogTitle>
+						<DialogDescription className='text-muted-foreground'>
+							Are you sure you want to leave {league.name}? This action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+					<div className='space-y-4 py-4'>
+						<div className='p-4 rounded-lg bg-red-500/10 border border-red-500/20'>
+							<p className='text-sm text-foreground'>
+								<strong>Warning:</strong> Leaving this league will:
+							</p>
+							<ul className='text-sm text-muted-foreground mt-2 space-y-1'>
+								<li>• Remove you from all league standings</li>
+								<li>• Delete all your picks for this league</li>
+								<li>• You&apos;ll need an invite link to rejoin</li>
+							</ul>
+						</div>
+						<div className='flex gap-3'>
+							<Button
+								onClick={() => setShowLeaveModal(false)}
+								variant='outline'
+								className='flex-1'
+								disabled={loadingLeave}>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleLeaveLeague}
+								className='flex-1 bg-red-500 hover:bg-red-600 text-white'
+								disabled={loadingLeave}>
+								{loadingLeave ? 'Leaving...' : 'Leave League'}
+							</Button>
 						</div>
 					</div>
 				</DialogContent>

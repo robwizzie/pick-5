@@ -14,9 +14,9 @@ interface JoinInvitePageProps {
 }
 
 export default function JoinInvitePage({ params }: JoinInvitePageProps) {
-	// Handle case where params might be undefined
-	const resolvedParams = params ? use(params) : { inviteCode: '' };
-	const inviteCode = resolvedParams.inviteCode;
+	// Always call use() - React hooks can't be conditional
+	const resolvedParams = use(params);
+	const inviteCode = resolvedParams?.inviteCode || '';
 	const router = useRouter();
 	const { status } = useSession();
 	const [joinStatus, setJoinStatus] = useState<'loading' | 'success' | 'error' | 'already_member'>('loading');
