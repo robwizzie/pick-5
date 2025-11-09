@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,12 +42,17 @@ export async function POST(req: Request) {
 		console.log('[Join League] comparePassword method exists:', typeof league.comparePassword === 'function');
 
 		// Verify the password matches using bcrypt comparison
-		if (typeof league.comparePassword !== 'function') {
-			console.error('[Join League] ERROR: comparePassword method not found on league document');
-			throw new Error('comparePassword method not found on league document');
+		let isPasswordValid = false;
+
+		if (typeof league.comparePassword === 'function') {
+			console.log('[Join League] Using comparePassword method');
+			isPasswordValid = await league.comparePassword(password);
+		} else {
+			// Fallback: use bcrypt directly if method not found (Mongoose caching issue)
+			console.log('[Join League] WARNING: comparePassword method not found, using direct bcrypt comparison');
+			isPasswordValid = await bcrypt.compare(password, league.password);
 		}
 
-		const isPasswordValid = await league.comparePassword(password);
 		console.log('[Join League] Password valid:', isPasswordValid);
 
 		if (!isPasswordValid) {
