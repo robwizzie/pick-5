@@ -284,11 +284,15 @@ export function Results() {
 								// Only pass scores if game is finished
 								away: {
 									...game.away,
-									score: gameFinished && scores.away !== undefined ? scores.away : undefined
+									score: gameFinished && scores.away !== undefined ? scores.away : undefined,
+									// Add odds from pick if this was the away team pick
+									odds: !pick.isHome && pick.odds !== undefined ? pick.odds : game.away.odds
 								},
 								home: {
 									...game.home,
-									score: gameFinished && scores.home !== undefined ? scores.home : undefined
+									score: gameFinished && scores.home !== undefined ? scores.home : undefined,
+									// Add odds from pick if this was the home team pick
+									odds: pick.isHome && pick.odds !== undefined ? pick.odds : game.home.odds
 								},
 								status: gameStatus
 							}}
@@ -415,7 +419,7 @@ export function Results() {
 						</SelectTrigger>
 						<SelectContent>
 							{leagueMembers.map(member => (
-								<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20'>
+								<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
 									<div className='flex items-center gap-2'>
 										<Avatar className='w-5 h-5'>
 											<AvatarImage src={member.image || undefined} alt={member.name} />
@@ -504,6 +508,12 @@ export function Results() {
 									(() => {
 										const tfsGame = games.find(g => g.id === picks.tfsGame);
 										if (!tfsGame) return null;
+
+										// If viewing another user's picks and game hasn't started, don't show TFS
+										const isViewingOtherUser = selectedUserId !== session?.user?.id;
+										if (isViewingOtherUser && !hasGameStarted(tfsGame)) {
+											return null;
+										}
 
 										const tfsGameFinished = hasGameFinished(tfsGame);
 										const scores = getGameScore(tfsGame);
