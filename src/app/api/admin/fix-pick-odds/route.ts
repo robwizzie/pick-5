@@ -152,7 +152,7 @@ export async function POST() {
 					$set: {
 						totalPoints,
 						correctPicks: totalCorrectPicks,
-						totalTFSPoints,
+						tfsPoints: totalTFSPoints,
 						totalPicks: totalPicksCount
 					}
 				}
