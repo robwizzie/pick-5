@@ -55,22 +55,19 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 		<div className='flex items-center gap-0.5 mt-2'>
 			<div className='flex -space-x-2'>
 				{visiblePicks.map((pick, index) => (
-					<Avatar
-						key={pick.userId}
-						className='w-6 h-6 border-2 border-card cursor-help'
-						style={{ zIndex: maxVisible - index }}
-						title={pick.name}
-					>
-						<AvatarImage src={pick.image || undefined} alt={pick.name} />
-						<AvatarFallback className='bg-primary/20 text-primary text-[10px] font-semibold'>
-							{pick.name
-								.split(' ')
-								.map(n => n[0])
-								.join('')
-								.toUpperCase()
-								.slice(0, 2)}
-						</AvatarFallback>
-					</Avatar>
+					<div key={pick.userId} title={pick.name} className='cursor-help' style={{ zIndex: maxVisible - index }}>
+						<Avatar className='w-6 h-6 border-2 border-card'>
+							<AvatarImage src={pick.image || undefined} alt={pick.name} />
+							<AvatarFallback className='bg-primary/20 text-primary text-[10px] font-semibold'>
+								{pick.name
+									.split(' ')
+									.map(n => n[0])
+									.join('')
+									.toUpperCase()
+									.slice(0, 2)}
+							</AvatarFallback>
+						</Avatar>
+					</div>
 				))}
 			</div>
 			{remainingCount > 0 && (
@@ -121,22 +118,39 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 	// Helper function to get game status display
 	const getGameStatus = () => {
 		const status = game.status?.toLowerCase() || 'scheduled';
+		const { dayText, timeText, fullDate } = formatGameDateTime(game.date);
 
 		if (status === 'post' || status === 'final') {
-			return { text: 'FINAL', color: 'text-muted-foreground', bgColor: 'bg-muted/30' };
+			return {
+				text: 'FINAL',
+				color: 'text-muted-foreground',
+				bgColor: 'bg-muted/30',
+				dayText,
+				timeText,
+				fullDate
+			};
 		}
 
 		if (status === 'in' || status === 'in_progress') {
-			return { text: 'LIVE', color: 'text-green-400', bgColor: 'bg-green-500/20' };
+			return {
+				text: 'LIVE',
+				color: 'text-green-400',
+				bgColor: 'bg-green-500/20',
+				dayText,
+				timeText,
+				fullDate
+			};
 		}
 
 		// Pre-game
-		const { dayText, timeText } = formatGameDateTime(game.date);
 		return {
 			text: `${dayText} ${timeText}`,
 			color: 'text-primary',
 			bgColor: 'bg-primary/10',
-			isScheduled: true
+			isScheduled: true,
+			dayText,
+			timeText,
+			fullDate
 		};
 	};
 
@@ -200,13 +214,14 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 						<span className='text-sm font-medium text-accent'>@</span>
 						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor}`}>
 							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
-								{statusInfo.text}
+								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
 							</div>
-							{statusInfo.isScheduled && (
-								<div className='text-[10px] text-muted-foreground mt-0.5'>
-									{formatGameDateTime(game.date).fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-								</div>
-							)}
+							<div className='text-[10px] text-muted-foreground mt-0.5'>
+								{statusInfo.isScheduled
+									? statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+									: `${statusInfo.dayText} ${statusInfo.timeText}`
+								}
+							</div>
 						</div>
 					</div>
 
