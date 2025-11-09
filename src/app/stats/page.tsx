@@ -130,7 +130,8 @@ const StatsPage = () => {
 							const finishedGamesCount = pick.picks.filter(p => p.isCorrect !== undefined && p.isCorrect !== null).length;
 							const totalPicksInWeek = pick.picks.length;
 							const allGamesFinished = finishedGamesCount === totalPicksInWeek && totalPicksInWeek === 5;
-							const correctInWeek = pick.correctPicks || 0;
+							// Only count picks that are definitively correct (game finished and won)
+							const correctInWeek = pick.picks.filter(p => p.isCorrect === true).length;
 
 							// Count stats for any week with at least one finished game
 							if (finishedGamesCount > 0) {
