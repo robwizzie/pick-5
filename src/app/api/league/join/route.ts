@@ -29,8 +29,9 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
 
-		// Verify the password matches
-		if (league.password !== password) {
+		// Verify the password matches using bcrypt comparison
+		const isPasswordValid = await league.comparePassword(password);
+		if (!isPasswordValid) {
 			return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
 		}
 
