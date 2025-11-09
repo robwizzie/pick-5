@@ -29,7 +29,7 @@ export async function POST() {
 		for (const pickDoc of allPicks) {
 			// Check if this is a standard mode league
 			const league = await League.findById(pickDoc.leagueId).lean();
-			if (!league || league.mode !== 'standard') {
+			if (!league || (league as any).mode !== 'standard') {
 				continue; // Skip non-standard mode leagues
 			}
 
@@ -61,7 +61,7 @@ export async function POST() {
 				}
 
 				// Find the game odds in the snapshot
-				const gameOdds = snapshot.odds.find((o: any) => o.id === pick.gameId);
+				const gameOdds = (snapshot as any).odds.find((o: any) => o.id === pick.gameId);
 				if (!gameOdds) {
 					details.push(`⚠️ No odds in snapshot for game ${pick.gameId}, skipping`);
 					updatedPicks.push(pick);
