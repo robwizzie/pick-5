@@ -13,7 +13,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 	}
 
 	// Check if user is admin
-	// @ts-expect-error - session.user.id exists but TypeScript doesn't know about it
 	if (session.user.id !== ADMIN_USER_ID) {
 		redirect('/');
 	}
