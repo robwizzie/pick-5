@@ -5,6 +5,7 @@ import { User } from '@/models/User';
 import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
+import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,11 +23,12 @@ export async function GET(req: Request) {
 
 		console.log(`[API Debug] Fetching leaderboard for week ${week} in league ${leagueId}`);
 
-		// Fetch the league to get member list
+		// Fetch the league to get member list and mode
 		const league = await League.findById(leagueId);
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
+		const leagueMode = (league as any).mode || 'standard';
 
 		// Fetch only users who are members of this league
 		const allUsers = await User.find({ _id: { $in: league.members } }, 'name image');
@@ -62,7 +64,9 @@ export async function GET(req: Request) {
 				pick.picks,
 				gameResults,
 				pick.tfsGame,
-				pick.tfsScore
+				pick.tfsScore,
+				leagueMode,
+				calculatePointsFromOdds
 			);
 
 			weeklyResultsMap.set(userId, {
@@ -129,7 +133,9 @@ export async function GET(req: Request) {
 				pick.picks,
 				weekResults,
 				pick.tfsGame,
-				pick.tfsScore
+				pick.tfsScore,
+				leagueMode,
+				calculatePointsFromOdds
 			);
 
 			// Aggregate into user's season stats
