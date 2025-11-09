@@ -40,33 +40,28 @@ export class ScoringService {
 
 	/**
 	 * Check if a game has actually finished (not in progress)
-	 * Only count games with status 'post' as completed
+	 * Only count games with status 'post' or 'final' as completed
 	 */
 	private static isGameFinished(gameResult: GameResult): boolean {
-		// Prefer using status field if available
-		if (gameResult.status) {
-			// Only count games with status 'post' as finished
-			// 'pre' = not started, 'in' = in progress, 'post' = completed
-			return gameResult.status === 'post';
-		}
-
-		// Fallback: check if both scores are present and at least one is > 0
-		// This is less reliable as games in progress will also meet this criteria
-		return (
-			typeof gameResult.homeScore === 'number' &&
-			typeof gameResult.awayScore === 'number' &&
-			gameResult.homeScore !== undefined &&
-			gameResult.awayScore !== undefined &&
-			(gameResult.homeScore > 0 || gameResult.awayScore > 0)
-		);
+		// Game is finished ONLY if status is 'post' or 'final'
+		// Do NOT check scores - in-progress games have scores but aren't finished
+		return gameResult.status === 'post' || gameResult.status === 'final';
 	}
 
 	/**
-	 * Calculate week score - only scores games that have finished (status='post')
+	 * Calculate week score - only scores games that have finished (status='post' or 'final')
 	 * Returns completedGames count for accurate win percentage calculation
 	 * tfsGame and tfsScore can be null for Standard mode leagues
+	 * leagueMode determines scoring: 'steve' = 2 pts per win, 'standard' = odds-based points
 	 */
-	static calculateWeekScore(picks: { gameId: string; team: string; isHome: boolean }[], gameResults: GameResult[], tfsGame: string | null, tfsScore: number | null) {
+	static calculateWeekScore(
+		picks: { gameId: string; team: string; isHome: boolean; odds?: number }[],
+		gameResults: GameResult[],
+		tfsGame: string | null,
+		tfsScore: number | null,
+		leagueMode: string = 'steve',
+		calculatePointsFromOdds?: (odds: number) => number
+	) {
 		let weeklyPoints = 0;
 		let correctPicks = 0;
 		let tfsPoints = 0;
@@ -90,7 +85,13 @@ export class ScoringService {
 
 			const isCorrect = this.calculatePickResult(pick, gameResult);
 			if (isCorrect) {
-				weeklyPoints += 2;
+				// For Standard mode, use odds-based points; for Steve mode, use 2 points
+				if (leagueMode === 'standard' && pick.odds !== undefined && calculatePointsFromOdds) {
+					const points = calculatePointsFromOdds(pick.odds);
+					weeklyPoints += points;
+				} else {
+					weeklyPoints += 2; // Steve mode default
+				}
 				correctPicks++;
 			}
 
