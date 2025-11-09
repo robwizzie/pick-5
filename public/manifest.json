@@ -1,0 +1,39 @@
+{
+	"name": "Pick 5 - NFL Pick'em",
+	"short_name": "Pick 5",
+	"description": "Make your NFL picks and compete with friends",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#0f0f0f",
+	"theme_color": "#e879f9",
+	"orientation": "portrait-primary",
+	"icons": [
+		{
+			"src": "/pick-5-logo.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any maskable"
+		},
+		{
+			"src": "/pick-5-logo.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	],
+	"categories": ["sports", "games", "entertainment"],
+	"shortcuts": [
+		{
+			"name": "Make Picks",
+			"short_name": "Picks",
+			"description": "Make your weekly picks",
+			"url": "/dashboard",
+			"icons": [
+				{
+					"src": "/pick-5-logo.png",
+					"sizes": "192x192"
+				}
+			]
+		}
+	]
+}
