@@ -32,6 +32,13 @@ const adminTools: AdminTool[] = [
 		href: '/admin/fix-odds',
 		icon: '🎯',
 		category: 'odds'
+	},
+	{
+		title: 'Fix Pick Odds',
+		description: 'Retroactively add odds to existing picks and recalculate points',
+		href: '/admin/fix-pick-odds',
+		icon: '🔧',
+		category: 'odds'
 	}
 ];
 
