@@ -391,11 +391,35 @@ export function Results() {
 		return (
 			<Card className='bg-card border-primary/20'>
 				<CardHeader>
-					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
+					<div className='flex items-center justify-between mb-4'>
+						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
+						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
+							<SelectTrigger className='w-[200px]'>
+								<SelectValue placeholder='Select user' />
+							</SelectTrigger>
+							<SelectContent>
+								{leagueMembers.map(member => (
+									<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
+										<div className='flex items-center gap-2'>
+											<Avatar className='w-5 h-5'>
+												<AvatarImage src={member.image || undefined} alt={member.name} />
+												<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
+											</Avatar>
+											<span>{member.name}</span>
+										</div>
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
 				</CardHeader>
 				<CardContent>
 					<Alert variant='destructive' className='mb-4'>
-						<AlertDescription>No picks were made for this week.</AlertDescription>
+						<AlertDescription>
+							{selectedUserId === session?.user?.id
+								? 'No picks were made for this week.'
+								: `${leagueMembers.find(m => m._id === selectedUserId)?.name || 'This user'} has not made picks for this week.`}
+						</AlertDescription>
 					</Alert>
 				</CardContent>
 			</Card>
