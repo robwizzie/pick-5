@@ -2,13 +2,11 @@
 	"crons": [
 		{
 			"path": "/api/cron/send-pick-reminders",
-			"schedule": "0 13 * * 4",
-			"description": "Send Thursday pick reminders at 1pm ET"
+			"schedule": "0 13 * * 4"
 		},
 		{
 			"path": "/api/cron/send-pick-reminders",
-			"schedule": "0 12 * * 6",
-			"description": "Send Saturday pick reminders at 12pm ET"
+			"schedule": "0 12 * * 6"
 		}
 	]
 }
