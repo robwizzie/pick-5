@@ -8,6 +8,7 @@ import { Resend } from 'resend';
 import webPush from 'web-push';
 import { ThursdayReminderEmail } from '@/emails/ThursdayReminderEmail';
 import { SaturdayReminderEmail } from '@/emails/SaturdayReminderEmail';
+import React from 'react';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -157,26 +158,24 @@ export async function GET(req: Request) {
 				// Send email
 				try {
 					if (user.emailPreferences?.pickReminders) {
-						const emailData = isThursday
-							? {
-									userName: user.name || 'Player',
-									thursdayGame: thursdayGame!,
-									leagues: leaguesWithoutPicks,
-									unsubscribeToken: user.unsubscribeToken || ''
-								}
-							: {
-									userName: user.name || 'Player',
-									leagues: leaguesWithoutPicks,
-									unsubscribeToken: user.unsubscribeToken || ''
-								};
-
 						await resend.emails.send({
 							from: 'Pick 5 <noreply@sportspick5.com>',
 							to: user.email,
 							subject: isThursday
 								? `🏈 Thursday Night Football starts soon! Make your picks`
 								: `⏰ Last chance! Get your picks in before Sunday`,
-							react: isThursday ? ThursdayReminderEmail(emailData as any) : SaturdayReminderEmail(emailData as any)
+							react: isThursday
+								? React.createElement(ThursdayReminderEmail, {
+										userName: user.name || 'Player',
+										thursdayGame: thursdayGame!,
+										leagues: leaguesWithoutPicks,
+										unsubscribeToken: user.unsubscribeToken || ''
+									})
+								: React.createElement(SaturdayReminderEmail, {
+										userName: user.name || 'Player',
+										leagues: leaguesWithoutPicks,
+										unsubscribeToken: user.unsubscribeToken || ''
+									})
 						});
 
 						emailsSent++;

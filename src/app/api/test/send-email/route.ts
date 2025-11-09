@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { Resend } from 'resend';
 import { ThursdayReminderEmail } from '@/emails/ThursdayReminderEmail';
 import { SaturdayReminderEmail } from '@/emails/SaturdayReminderEmail';
+import React from 'react';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
 				from: 'Pick 5 <noreply@sportspick5.com>',
 				to: session.user.email,
 				subject: '🏈 [TEST] Thursday Night Football starts soon! Make your picks',
-				react: ThursdayReminderEmail({
+				react: React.createElement(ThursdayReminderEmail, {
 					userName: session.user.name || 'Player',
 					thursdayGame: mockThursdayGame,
 					leagues: mockLeagues,
@@ -57,7 +58,7 @@ export async function GET(req: Request) {
 				from: 'Pick 5 <noreply@sportspick5.com>',
 				to: session.user.email,
 				subject: '⏰ [TEST] Last chance! Get your picks in before Sunday',
-				react: SaturdayReminderEmail({
+				react: React.createElement(SaturdayReminderEmail, {
 					userName: session.user.name || 'Player',
 					leagues: mockLeagues,
 					unsubscribeToken: 'test-token-12345'
