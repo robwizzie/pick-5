@@ -185,37 +185,41 @@ export function Leaderboard() {
 										};
 
 										return (
-											<div key={entry.userId || index} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
-												{/* Left side: Rank, Avatar, Name */}
-												<div className='flex items-center gap-3 flex-1 min-w-0'>
-													{/* Rank with crown for 1st place */}
-													<div className='flex flex-col items-center gap-1'>
-														{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
-														<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{rank}</span>
-													</div>
-
-													{/* Avatar */}
-													<Avatar className='w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0'>
-														<AvatarImage src={entry.image || undefined} alt={entry.player} />
-														<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{entry.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
-													</Avatar>
-
-													{/* Name and Status */}
-													<div className='flex flex-col min-w-0 flex-1'>
-														<span className='text-primary font-semibold truncate'>{entry.player}</span>
-														<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block w-fit ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{entry.hasPicks ? 'Picks In' : 'Needs Pick'}</span>
-													</div>
+											<div key={entry.userId || index} className={`flex items-start p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
+												{/* Rank with crown */}
+												<div className='flex flex-col items-center gap-1 pt-1'>
+													{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
+													<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{rank}</span>
 												</div>
 
-												{/* Right side: Stats */}
-												<div className='flex gap-4 sm:gap-6 ml-auto'>
-													<div className='text-center min-w-[60px]'>
-														<p className='text-xs text-primary/60 uppercase tracking-wide'>Points</p>
-														<p className='text-xl font-bold text-primary'>{entry.points}</p>
+												{/* Main Content */}
+												<div className='flex-1 min-w-0'>
+													{/* Avatar + Name */}
+													<div className='flex items-center gap-3 mb-2'>
+														<Avatar className='w-10 h-10 flex-shrink-0'>
+															<AvatarImage src={entry.image || undefined} alt={entry.player} />
+															<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{entry.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
+														</Avatar>
+														<span className='text-primary font-semibold truncate'>{entry.player}</span>
 													</div>
-													<div className='text-center min-w-[60px]'>
-														<p className='text-xs text-primary/60 uppercase tracking-wide'>TFS</p>
-														<p className='text-xl font-bold text-accent'>{entry.tfsPoints}</p>
+
+													{/* Status Badge */}
+													<div className='mb-2'>
+														<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+															{entry.hasPicks ? 'Picks In' : 'Needs Pick'}
+														</span>
+													</div>
+
+													{/* Points and TFS */}
+													<div className='flex gap-6'>
+														<div>
+															<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Points</p>
+															<p className='text-2xl font-bold text-primary'>{entry.points}</p>
+														</div>
+														<div>
+															<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>TFS</p>
+															<p className='text-2xl font-bold text-accent'>{entry.tfsPoints}</p>
+														</div>
 													</div>
 												</div>
 											</div>
@@ -245,34 +249,38 @@ export function Leaderboard() {
 									};
 
 									return (
-										<div key={index} className='flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 hover:border-primary/40 transition-all'>
-											{/* Left side: Rank, Avatar, Name */}
-											<div className='flex items-center gap-3 flex-1 min-w-0'>
-												{/* Rank with crown for 1st place */}
-												<div className='flex flex-col items-center gap-1'>
-													{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
-													<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{rank}</span>
-												</div>
-
-												{/* Avatar */}
-												<Avatar className='w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0'>
-													<AvatarImage src={entry.image || undefined} alt={entry.player} />
-													<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{entry.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
-												</Avatar>
-
-												{/* Name */}
-												<span className='text-primary font-semibold truncate'>{entry.player}</span>
+										<div key={index} className='flex items-start p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 hover:border-primary/40 transition-all'>
+											{/* Rank with crown */}
+											<div className='flex flex-col items-center gap-1 pt-1'>
+												{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
+												<span className={`text-lg font-bold w-8 h-8 rounded-full flex items-center justify-center ${getRankBadgeStyle()}`}>{rank}</span>
 											</div>
 
-											{/* Right side: Stats */}
-											<div className='flex gap-4 sm:gap-6 ml-auto'>
-												<div className='text-center min-w-[60px]'>
-													<p className='text-xs text-primary/60 uppercase tracking-wide'>Total</p>
-													<p className='text-xl font-bold text-primary'>{entry.totalPoints}</p>
+											{/* Main Content */}
+											<div className='flex-1 min-w-0'>
+												{/* Avatar + Name */}
+												<div className='flex items-center gap-3 mb-3'>
+													<Avatar className='w-10 h-10 flex-shrink-0'>
+														<AvatarImage src={entry.image || undefined} alt={entry.player} />
+														<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{entry.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
+													</Avatar>
+													<span className='text-primary font-semibold truncate'>{entry.player}</span>
 												</div>
-												<div className='text-center min-w-[60px]'>
-													<p className='text-xs text-primary/60 uppercase tracking-wide'>Win %</p>
-													<p className='text-xl font-bold text-accent'>{Math.round(entry.winPercentage)}%</p>
+
+												{/* Season Stats */}
+												<div className='flex gap-6'>
+													<div>
+														<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Total Points</p>
+														<p className='text-2xl font-bold text-primary'>{entry.totalPoints}</p>
+													</div>
+													<div>
+														<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Win %</p>
+														<p className='text-2xl font-bold text-accent'>{Math.round(entry.winPercentage)}%</p>
+													</div>
+													<div>
+														<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Record</p>
+														<p className='text-lg font-bold text-muted-foreground'>{entry.correctPicks}-{entry.totalPicks - entry.correctPicks}</p>
+													</div>
 												</div>
 											</div>
 										</div>
