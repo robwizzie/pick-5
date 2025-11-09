@@ -48,22 +48,7 @@ export default function AdminDashboard() {
 			</div>
 
 			{/* Quick Stats */}
-			<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-				<Card className='glass border-white/10'>
-					<CardContent className='pt-6'>
-						<div className='flex items-center gap-4'>
-							<div className='h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center text-2xl'>
-								⚡
-							</div>
-							<div>
-								<p className='text-sm text-muted-foreground'>API Usage</p>
-								<p className='text-2xl font-bold'>54 / 500</p>
-								<p className='text-xs text-muted-foreground'>10.8% used this month</p>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-
+			<div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
 				<Card className='glass border-white/10'>
 					<CardContent className='pt-6'>
 						<div className='flex items-center gap-4'>
@@ -170,13 +155,13 @@ export default function AdminDashboard() {
 				</CardHeader>
 				<CardContent className='space-y-2 text-sm text-muted-foreground'>
 					<p>
-						• <strong>API Limit:</strong> 500 calls/month to The Odds API. Use manual fetch sparingly.
+						• <strong>API Limit:</strong> The Odds API has a 500 calls/month limit. Use manual fetch sparingly.
 					</p>
 					<p>
-						• <strong>Odds Snapshots:</strong> Create snapshots for games that started before we had the system in place.
+						• <strong>Odds Snapshots:</strong> Snapshots are created automatically and can be manually added for games that need corrections.
 					</p>
 					<p>
-						• <strong>Cron Jobs:</strong> Automatically fetch odds 3x per week (Tue/Fri/Sun).
+						• <strong>Cron Jobs:</strong> Automatically fetch odds and send email reminders via scheduled cron jobs.
 					</p>
 					<p>
 						• <strong>Access:</strong> This admin panel is only accessible to your user ID.
