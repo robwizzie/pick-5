@@ -20,6 +20,7 @@ interface OddsApiGame {
 	id: string;
 	home_team: string;
 	away_team: string;
+	commence_time: string; // ISO 8601 timestamp
 	bookmakers: OddsApiBookmaker[];
 }
 
@@ -42,17 +43,6 @@ export async function GET() {
 			return NextResponse.json({ error: 'Odds API not configured' }, { status: 500 });
 		}
 
-		// Fetch current week's game data to check status
-		const currentWeek = await NFLService.getCurrentWeek();
-		const currentGames = await NFLService.getWeeklyGames(currentWeek);
-
-		// Create a map of game statuses by team names
-		const gameStatusMap = new Map();
-		currentGames.forEach(game => {
-			const key = `${game.away.team}|${game.home.team}`;
-			gameStatusMap.set(key, game.status);
-		});
-
 		const response = await fetch(
 			`https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/?apiKey=${apiKey}&regions=us&markets=h2h&oddsFormat=american`,
 			{ next: { revalidate: 3600 } } // Cache for 1 hour
@@ -65,18 +55,19 @@ export async function GET() {
 
 		const rawData: OddsApiGame[] = await response.json();
 
+		const now = new Date();
+
 		// Transform the data to a simpler format
-		// Only include odds for games that haven't started (status='pre')
+		// Only include odds for games that haven't started yet
 		const transformedData = rawData
 			.map((game: OddsApiGame) => {
-				// Check if game has started
-				const gameKey = `${game.away_team}|${game.home_team}`;
-				const gameStatus = gameStatusMap.get(gameKey);
+				// Check if game has already started using commence_time from Odds API
+				const gameStartTime = new Date(game.commence_time);
+				const gameHasStarted = now >= gameStartTime;
 
-				// If game has started or is completed, don't return odds
-				// Only return odds for games with status 'pre' or unknown status
-				if (gameStatus && gameStatus !== 'pre' && gameStatus !== 'scheduled') {
-					console.log(`[Odds API] Skipping odds for started game: ${game.away_team} @ ${game.home_team} (status: ${gameStatus})`);
+				// If game has started, don't return odds (they may be live/updated)
+				if (gameHasStarted) {
+					console.log(`[Odds API] Skipping odds for started game: ${game.away_team} @ ${game.home_team} (started at ${game.commence_time})`);
 					return null; // Filter out this game
 				}
 
