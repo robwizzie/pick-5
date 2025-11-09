@@ -13,7 +13,7 @@ import { NFLService } from '@/services/nflService';
 import { useStats } from '@/contexts/StatsContext';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
-import { hasGameStarted, haveAllPickedGamesStarted } from '@/services/gameUtils';
+import { hasGameStarted, hasGameFinished, haveAllPickedGamesStarted } from '@/services/gameUtils';
 import { Toast } from '@/components/ui/toast';
 import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
 import type { Game } from './GameCard';
@@ -535,8 +535,19 @@ export function WeeklyPicks() {
 									const game = games.find(g => g.id === pick.gameId);
 									if (!game) return null;
 
+									const gameFinished = hasGameFinished(game);
+									const gameInProgress = game.status?.toLowerCase() === 'in' || game.status?.toLowerCase() === 'in_progress';
 									const isCorrect = isPickCorrect(pick, game);
-									const gameCompleted = typeof game.home.score === 'number' && typeof game.away.score === 'number';
+
+									// Calculate points for finished games
+									let pickPoints = 0;
+									if (gameFinished && isCorrect === true) {
+										if (leagueMode === 'standard' && pick.odds !== undefined) {
+											pickPoints = calculatePointsFromOdds(pick.odds);
+										} else {
+											pickPoints = 2; // Steve mode or no odds
+										}
+									}
 
 									return (
 										<PickGameCard
@@ -544,12 +555,14 @@ export function WeeklyPicks() {
 											game={game}
 											pick={pick}
 											pickIndex={index}
-											gameFinished={gameCompleted}
+											gameFinished={gameFinished}
+											gameInProgress={gameInProgress}
 											showScores={true}
 											isCorrect={isCorrect}
+											pickPoints={pickPoints}
 											leaguePicks={leaguePicks[pick.gameId]}
 											leagueMode={leagueMode}
-											variant="picks"
+											variant="results"
 										/>
 									);
 								})}

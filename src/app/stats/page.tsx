@@ -10,6 +10,7 @@ import { Trophy, Target, TrendingUp, Flame, Star, Award, Zap, Crown, Medal, Shie
 interface LeagueStats {
 	leagueId: string;
 	leagueName: string;
+	leagueMode: string;
 	totalPoints: number;
 	correctPicks: number;
 	totalPicks: number;
@@ -53,6 +54,7 @@ interface PickData {
 interface LeagueData {
 	_id: string;
 	name: string;
+	mode?: string;
 }
 
 const StatsPage = () => {
@@ -175,6 +177,7 @@ const StatsPage = () => {
 						leagueStatsData.push({
 							leagueId: league._id,
 							leagueName: league.name,
+							leagueMode: league.mode || 'standard',
 							totalPoints: leagueTotalPoints,
 							correctPicks: leagueCorrectPicks,
 							totalPicks: leagueTotalPicks,
@@ -625,7 +628,7 @@ const StatsPage = () => {
 											<Award className='h-6 w-6 text-primary group-hover:text-accent transition-colors' />
 										</div>
 
-										<div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
+										<div className={`grid grid-cols-2 ${stat.leagueMode === 'steve' ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4`}>
 											<div className='text-center p-3 rounded-lg bg-card/30'>
 												<p className='text-xs text-muted-foreground mb-1'>Points</p>
 												<p className='text-2xl font-bold text-foreground'>{stat.totalPoints}</p>
@@ -642,10 +645,12 @@ const StatsPage = () => {
 												<p className='text-xs text-muted-foreground mb-1'>Incorrect</p>
 												<p className='text-2xl font-bold text-red-400'>{stat.totalPicks - stat.correctPicks}</p>
 											</div>
-											<div className='text-center p-3 rounded-lg bg-card/30'>
-												<p className='text-xs text-muted-foreground mb-1'>TFS</p>
-												<p className='text-2xl font-bold text-accent'>{stat.totalTFSPoints}</p>
-											</div>
+											{stat.leagueMode === 'steve' && (
+												<div className='text-center p-3 rounded-lg bg-card/30'>
+													<p className='text-xs text-muted-foreground mb-1'>TFS</p>
+													<p className='text-2xl font-bold text-accent'>{stat.totalTFSPoints}</p>
+												</div>
+											)}
 										</div>
 
 										{/* Win rate bar */}
