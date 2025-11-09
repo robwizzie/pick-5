@@ -48,7 +48,7 @@ export const ThursdayReminderEmail = ({
 				<Container style={container}>
 					{/* Logo */}
 					<Section style={logoSection}>
-						<Img src={`${baseUrl}/pick-5-logo.png`} width='100' height='100' alt='Pick 5 Logo' style={logo} />
+						<Img src={`${baseUrl}/pick-5-logo.png`} width='auto' height='100' alt='Pick 5 Logo' style={logo} />
 					</Section>
 
 					{/* Heading */}
@@ -137,7 +137,7 @@ const logo = {
 };
 
 const h1 = {
-	color: '#e879f9',
+	color: '#5ec4ff',
 	fontSize: '28px',
 	fontWeight: 'bold',
 	textAlign: 'center' as const,
@@ -153,8 +153,8 @@ const text = {
 };
 
 const leaguesBox = {
-	backgroundColor: 'rgba(232, 121, 249, 0.1)',
-	border: '1px solid rgba(232, 121, 249, 0.2)',
+	backgroundColor: 'rgba(94, 196, 255, 0.1)',
+	border: '1px solid rgba(94, 196, 255, 0.3)',
 	borderRadius: '12px',
 	padding: '20px',
 	margin: '24px 0'
@@ -172,7 +172,7 @@ const leagueName = {
 };
 
 const bullet = {
-	color: '#e879f9',
+	color: '#5ec4ff',
 	marginRight: '8px'
 };
 
@@ -187,7 +187,7 @@ const buttonContainer = {
 };
 
 const button = {
-	backgroundColor: '#e879f9',
+	backgroundColor: '#5ec4ff',
 	borderRadius: '8px',
 	color: '#0f0f0f',
 	fontSize: '16px',
@@ -214,6 +214,6 @@ const footerText = {
 };
 
 const link = {
-	color: '#e879f9',
+	color: '#5ec4ff',
 	textDecoration: 'underline'
 };
