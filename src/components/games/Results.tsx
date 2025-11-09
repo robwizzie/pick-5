@@ -11,6 +11,8 @@ import { NFLService } from '@/services/nflService';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { hasGameFinished } from '@/services/gameUtils';
+import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface WeeklyPicks {
 	picks: Array<{
@@ -18,6 +20,7 @@ interface WeeklyPicks {
 		team: string;
 		opponent: string;
 		isHome: boolean;
+		odds?: number;
 	}>;
 	tfsGame: string;
 	tfsScore: string;
@@ -235,9 +238,15 @@ export function Results() {
 			const isCorrect = checkPickCorrect(pick, game);
 			const gameFinished = hasGameFinished(game);
 
-			// Add points for correct picks (only if game is finished)
+			//  Calculate points based on league mode
+			let pickPoints = 0;
 			if (gameFinished && isCorrect === true) {
-				totalPoints += 2;
+				if (leagueMode === 'standard' && pick.odds !== undefined) {
+					pickPoints = calculatePointsFromOdds(pick.odds);
+				} else {
+					pickPoints = 2; // Steve mode default
+				}
+				totalPoints += pickPoints;
 				correctPicks += 1;
 			}
 
@@ -246,7 +255,13 @@ export function Results() {
 			return (
 				<div key={pick.gameId} className='relative rounded-lg overflow-hidden border-2 bg-card border-primary/20 pointer-events-none'>
 					{/* Badges moved outside GameCard */}
-					{gameFinished ? <div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(isCorrect === true ? 2 : 0)}`}>{isCorrect === true ? '+2 pts' : '0 pts'}</div> : <div className={`${badgeStyle} top-2 right-2 z-10 bg-muted text-muted-foreground`}>Pending</div>}
+					{gameFinished ? (
+						<div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(pickPoints)}`}>
+							{pickPoints > 0 ? `+${pickPoints} pts` : '0 pts'}
+						</div>
+					) : (
+						<div className={`${badgeStyle} top-2 right-2 z-10 bg-muted text-muted-foreground`}>Pending</div>
+					)}
 					<div className='absolute top-2 left-1/2 transform -translate-x-1/2 px-2 py-1 rounded-full bg-primary text-black text-xs font-medium shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>
 					<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>Pick {index + 1}</div>
 					<div className='mt-8'>
@@ -383,7 +398,8 @@ export function Results() {
 						<div className='space-y-3'>{results.gameElements}</div>
 					</div>
 
-					{/* TFS Prediction */}
+					{/* TFS Prediction - Only for Steve mode */}
+					{leagueMode === 'steve' && (
 					<div>
 						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>Total Final Score</h3>
 						<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
@@ -421,10 +437,11 @@ export function Results() {
 							</div>
 						</div>
 					</div>
+					)}
 
 					{/* Weekly Summary */}
 					<div className='border-t border-primary/20 pt-6 mt-8'>
-						<div className='grid grid-cols-3 gap-4'>
+						<div className={`grid gap-4 ${leagueMode === 'steve' ? 'grid-cols-3' : 'grid-cols-2'}`}>
 							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
 								<p className='text-primary/80 text-sm font-medium'>Total Points</p>
 								<p className={`text-2xl font-bold ${getTextColor(results.totalPoints)}`}>{results.totalPoints}</p>
@@ -433,10 +450,12 @@ export function Results() {
 								<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
 								<p className={`text-2xl font-bold text-primary`}>{results.correctPicks}/5</p>
 							</div>
-							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
-								<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
-								<p className={`text-2xl font-bold ${getTextColor(results.tfsPoints)}`}>{results.tfsPoints}</p>
-							</div>
+							{leagueMode === 'steve' && (
+								<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+									<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
+									<p className={`text-2xl font-bold ${getTextColor(results.tfsPoints)}`}>{results.tfsPoints}</p>
+								</div>
+							)}
 						</div>
 					</div>
 				</div>
