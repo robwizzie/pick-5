@@ -8,7 +8,7 @@ interface AdminTool {
 	description: string;
 	href: string;
 	icon: string;
-	category: 'odds' | 'data' | 'users';
+	category: 'odds' | 'picks';
 }
 
 const adminTools: AdminTool[] = [
@@ -39,11 +39,19 @@ const adminTools: AdminTool[] = [
 		href: '/admin/fix-pick-odds',
 		icon: '🔧',
 		category: 'odds'
+	},
+	{
+		title: 'Manual Picks Entry',
+		description: 'Enter picks for any user in any league, even after games have started',
+		href: '/admin/manual-picks',
+		icon: '✍️',
+		category: 'picks'
 	}
 ];
 
 export default function AdminDashboard() {
 	const oddsList = adminTools.filter(t => t.category === 'odds');
+	const picksList = adminTools.filter(t => t.category === 'picks');
 
 	return (
 		<div className='space-y-8'>
@@ -127,6 +135,46 @@ export default function AdminDashboard() {
 				</div>
 			</div>
 
+			{/* Picks Management Tools */}
+			<div>
+				<h2 className='text-2xl font-bold mb-4 flex items-center gap-2'>
+					<span className='text-2xl'>🏈</span>
+					Picks Management
+				</h2>
+				<div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
+					{picksList.map(tool => (
+						<Link key={tool.href} href={tool.href}>
+							<Card className='glass border-white/10 hover:border-primary/50 transition-all cursor-pointer h-full group'>
+								<CardHeader>
+									<div className='flex items-start justify-between'>
+										<div className='h-12 w-12 rounded-lg bg-primary/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform'>
+											{tool.icon}
+										</div>
+										<svg
+											className='w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors'
+											fill='none'
+											stroke='currentColor'
+											viewBox='0 0 24 24'
+										>
+											<path
+												strokeLinecap='round'
+												strokeLinejoin='round'
+												strokeWidth={2}
+												d='M9 5l7 7-7 7'
+											/>
+										</svg>
+									</div>
+									<CardTitle className='mt-4 group-hover:text-primary transition-colors'>
+										{tool.title}
+									</CardTitle>
+									<CardDescription>{tool.description}</CardDescription>
+								</CardHeader>
+							</Card>
+						</Link>
+					))}
+				</div>
+			</div>
+
 			{/* System Info */}
 			<Card className='glass border-white/10'>
 				<CardHeader>
@@ -169,6 +217,9 @@ export default function AdminDashboard() {
 					</p>
 					<p>
 						• <strong>Cron Jobs:</strong> Automatically fetch odds and send email reminders via scheduled cron jobs.
+					</p>
+					<p>
+						• <strong>Manual Picks:</strong> Use the Manual Picks Entry tool to add picks for users who couldn&apos;t submit in time.
 					</p>
 					<p>
 						• <strong>Access:</strong> This admin panel is only accessible to your user ID.
