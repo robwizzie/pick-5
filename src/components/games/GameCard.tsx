@@ -34,7 +34,7 @@ interface GamePicksData {
 interface GameCardProps {
 	game?: Game;
 	selected?: string;
-	onSelect?: (gameId: string, team: string, opponent: string, isHome: boolean) => void;
+	onSelect?: (gameId: string, team: string, opponent: string, isHome: boolean, odds?: number) => void;
 	showScores?: boolean;
 	disabled?: boolean;
 	isCorrect?: boolean | null;
@@ -181,7 +181,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		: {
 				variant: 'outline' as const,
 				className: 'w-full h-auto py-2 px-4',
-				onClick: () => onSelect?.(game.id, game.away.team, game.home.team, false),
+				onClick: () => onSelect?.(game.id, game.away.team, game.home.team, false, game.away.odds),
 				disabled
 		  };
 
@@ -232,7 +232,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 					{/* Home Team */}
 					<div className='flex-1 xl:ml-4'>
-						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null)}`}>
+						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null)}`}>
 							<div className='flex items-center space-x-3 w-full'>
 								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
 									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
