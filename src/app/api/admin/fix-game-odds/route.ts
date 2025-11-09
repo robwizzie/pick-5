@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { checkAdminAuth } from '@/lib/adminAuth';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 
@@ -12,11 +11,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: Request) {
 	try {
-		const session = await getServerSession(authOptions);
+		const session = await checkAdminAuth();
 
-		// You can add admin check here if needed
-		if (!session?.user?.email) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		if (!session) {
+			return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
 		}
 
 		const body = await req.json();
