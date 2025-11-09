@@ -37,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 				<link rel='manifest' href='/manifest.json' />
 				<meta name='apple-mobile-web-app-capable' content='yes' />
 				<meta name='apple-mobile-web-app-status-bar-style' content='black-translucent' />
-				<link rel='apple-touch-icon' href='/pick-5-logo.png' />
+				<link rel='apple-touch-icon' href='/icon-512.png' />
 			</head>
 			<body className='font-sans antialiased' style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', backgroundColor: '#141414' }}>
 				<SessionProviderWrapper>
