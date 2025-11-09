@@ -2,21 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { use } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle } from 'lucide-react';
 
-interface JoinInvitePageProps {
-	params: Promise<{ inviteCode: string }>;
-}
-
-export default function JoinInvitePage({ params }: JoinInvitePageProps) {
-	// Always call use() - React hooks can't be conditional
-	const resolvedParams = use(params);
-	const inviteCode = resolvedParams?.inviteCode || '';
+export default function JoinInvitePage() {
+	// Use useParams() hook for client components instead of params prop
+	const params = useParams();
+	const inviteCode = (params?.inviteCode as string) || '';
 	const router = useRouter();
 	const { status } = useSession();
 	const [joinStatus, setJoinStatus] = useState<'loading' | 'success' | 'error' | 'already_member'>('loading');
