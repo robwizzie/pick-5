@@ -204,6 +204,7 @@ export async function GET(req: Request) {
 		const { searchParams } = new URL(req.url);
 		const week = searchParams.get('week');
 		const leagueId = searchParams.get('leagueId');
+		const requestedUserId = searchParams.get('userId'); // Optional: fetch another user's picks
 
 		if (!week || !leagueId) {
 			return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
@@ -211,8 +212,26 @@ export async function GET(req: Request) {
 
 		await connectDB();
 
+		// If userId is provided, verify the requesting user is in the same league
+		const targetUserId = requestedUserId || session.user.id;
+
+		if (requestedUserId && requestedUserId !== session.user.id) {
+			// Verify both users are in the same league
+			const league = await League.findById(leagueId);
+			if (!league) {
+				return NextResponse.json({ error: 'League not found' }, { status: 404 });
+			}
+
+			const isRequesterMember = league.members.some((m: any) => m.userId.toString() === session.user.id);
+			const isTargetMember = league.members.some((m: any) => m.userId.toString() === requestedUserId);
+
+			if (!isRequesterMember || !isTargetMember) {
+				return NextResponse.json({ error: 'Unauthorized to view these picks' }, { status: 403 });
+			}
+		}
+
 		const picks = await Pick.findOne({
-			userId: session.user.id,
+			userId: targetUserId,
 			week: parseInt(week, 10),
 			leagueId
 		});
@@ -258,17 +277,19 @@ export async function GET(req: Request) {
 			picks.tfsPoints = tfsPoints;
 			await picks.save();
 
-			// Update user's total stats
-			await User.findOneAndUpdate(
-				{ _id: session.user.id },
-				{
-					$set: {
-						totalPoints: await Pick.aggregate([{ $match: { userId: session.user.id } }, { $group: { _id: null, total: { $sum: '$weeklyPoints' } } }]).then(result => result[0]?.total || 0),
-						correctPicks: await Pick.aggregate([{ $match: { userId: session.user.id } }, { $group: { _id: null, total: { $sum: '$correctPicks' } } }]).then(result => result[0]?.total || 0),
-						totalTFSPoints: await Pick.aggregate([{ $match: { userId: session.user.id } }, { $group: { _id: null, total: { $sum: '$tfsPoints' } } }]).then(result => result[0]?.total || 0)
+			// Update user's total stats (only update if it's the current user's picks being fetched)
+			if (targetUserId === session.user.id) {
+				await User.findOneAndUpdate(
+					{ _id: targetUserId },
+					{
+						$set: {
+							totalPoints: await Pick.aggregate([{ $match: { userId: targetUserId } }, { $group: { _id: null, total: { $sum: '$weeklyPoints' } } }]).then(result => result[0]?.total || 0),
+							correctPicks: await Pick.aggregate([{ $match: { userId: targetUserId } }, { $group: { _id: null, total: { $sum: '$correctPicks' } } }]).then(result => result[0]?.total || 0),
+							totalTFSPoints: await Pick.aggregate([{ $match: { userId: targetUserId } }, { $group: { _id: null, total: { $sum: '$tfsPoints' } } }]).then(result => result[0]?.total || 0)
+						}
 					}
-				}
-			);
+				);
+			}
 		}
 
 		return NextResponse.json(picks);
