@@ -42,7 +42,8 @@ export async function GET(req: Request) {
 				homeScore: game.home.score || 0,
 				awayScore: game.away.score || 0,
 				homeTeam: game.home.team,
-				awayTeam: game.away.team
+				awayTeam: game.away.team,
+				status: game.status // Include game status for accurate scoring
 			}));
 			gameResultsByWeek.set(weekNum, results);
 		}
