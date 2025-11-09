@@ -9,14 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ArrowLeft, Save, User, Image as ImageIcon, Loader2, Bell, BellOff, Mail, Smartphone, Clock } from 'lucide-react';
+import { Save, User, Image as ImageIcon, Loader2, Bell, BellOff, Mail, Smartphone } from 'lucide-react';
 
 interface EmailPreferences {
 	pickReminders: boolean;
 	thursdayReminder: boolean;
 	saturdayReminder: boolean;
-	thursdayReminderTime: string;
-	saturdayReminderTime: string;
 }
 
 export default function SettingsPage() {
@@ -35,9 +33,7 @@ export default function SettingsPage() {
 	const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
 		pickReminders: true,
 		thursdayReminder: true,
-		saturdayReminder: true,
-		thursdayReminderTime: '13:00',
-		saturdayReminderTime: '12:00'
+		saturdayReminder: true
 	});
 	const [pushEnabled, setPushEnabled] = useState(false);
 	const [pushSupported, setPushSupported] = useState(false);
@@ -236,13 +232,6 @@ export default function SettingsPage() {
 
 	return (
 		<div className='container mx-auto px-4 py-8 max-w-2xl'>
-			<div className='mb-6'>
-				<Button variant='ghost' onClick={() => router.push('/dashboard')} className='flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors'>
-					<ArrowLeft className='h-4 w-4' />
-					Back to Dashboard
-				</Button>
-			</div>
-
 			<Card className='glass border-white/10 p-6 sm:p-8'>
 				<div className='mb-6'>
 					<h1 className='text-3xl font-bold text-foreground mb-2'>Settings</h1>
@@ -387,21 +376,6 @@ export default function SettingsPage() {
 											onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, thursdayReminder: checked }))}
 										/>
 									</div>
-									{emailPreferences.thursdayReminder && (
-										<div className='flex items-center gap-2'>
-											<Clock className='h-4 w-4 text-muted-foreground' />
-											<Label htmlFor='thursday-time' className='text-sm'>
-												Reminder time:
-											</Label>
-											<input
-												id='thursday-time'
-												type='time'
-												value={emailPreferences.thursdayReminderTime}
-												onChange={e => setEmailPreferences(prev => ({ ...prev, thursdayReminderTime: e.target.value }))}
-												className='px-3 py-2 rounded-md border border-white/10 bg-background/50 text-foreground focus:border-primary/50 focus:outline-none'
-											/>
-										</div>
-									)}
 								</div>
 							)}
 
@@ -421,21 +395,6 @@ export default function SettingsPage() {
 											onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, saturdayReminder: checked }))}
 										/>
 									</div>
-									{emailPreferences.saturdayReminder && (
-										<div className='flex items-center gap-2'>
-											<Clock className='h-4 w-4 text-muted-foreground' />
-											<Label htmlFor='saturday-time' className='text-sm'>
-												Reminder time:
-											</Label>
-											<input
-												id='saturday-time'
-												type='time'
-												value={emailPreferences.saturdayReminderTime}
-												onChange={e => setEmailPreferences(prev => ({ ...prev, saturdayReminderTime: e.target.value }))}
-												className='px-3 py-2 rounded-md border border-white/10 bg-background/50 text-foreground focus:border-primary/50 focus:outline-none'
-											/>
-										</div>
-									)}
 								</div>
 							)}
 						</div>
@@ -496,10 +455,7 @@ export default function SettingsPage() {
 						{/* Info Note */}
 						<div className='p-4 rounded-lg bg-primary/5 border border-primary/20'>
 							<p className='text-sm text-muted-foreground'>
-								<strong>Note:</strong> Reminders are only sent for leagues where you haven&apos;t submitted picks yet. If you&apos;ve made picks for all your leagues, you won&apos;t receive any reminders.
-							</p>
-							<p className='text-xs text-muted-foreground mt-2'>
-								Reminder times may vary by up to 2 hours from your preferred time. Emails are sent once per day on Thursdays and Saturdays.
+								<strong>Note:</strong> Reminders are only sent for leagues where you haven&apos;t submitted picks yet. If you&apos;ve made picks for all your leagues, you won&apos;t receive any reminders. Emails are sent once per day on Thursdays and Saturdays.
 							</p>
 						</div>
 					</div>
