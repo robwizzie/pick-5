@@ -62,6 +62,7 @@ export async function POST(req: Request) {
 
 		// Check if the user is already a member
 		if (league.members.includes(session.user.id)) {
+			console.log('[Join League] User already a member');
 			return NextResponse.json({
 				error: 'You are already a member of this league',
 				league: {
@@ -72,8 +73,10 @@ export async function POST(req: Request) {
 		}
 
 		// Add the user to the league
+		console.log('[Join League] Adding user to league members');
 		league.members.push(session.user.id);
 		await league.save();
+		console.log('[Join League] Successfully added user to league');
 
 		return NextResponse.json({
 			success: true,
