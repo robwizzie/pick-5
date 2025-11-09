@@ -56,8 +56,14 @@ export async function POST(req: Request) {
 				name: league.name
 			}
 		});
-	} catch (error) {
+	} catch (error: unknown) {
 		console.error('Error joining league:', error);
-		return NextResponse.json({ error: 'Failed to join league' }, { status: 500 });
+		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+		const errorStack = error instanceof Error ? error.stack : undefined;
+		console.error('Error details:', { message: errorMessage, stack: errorStack });
+		return NextResponse.json({
+			error: 'Failed to join league',
+			details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+		}, { status: 500 });
 	}
 }
