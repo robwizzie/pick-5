@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Link as LinkIcon, Users, Trophy, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
+import { MoreVertical, Link as LinkIcon, Trophy, CheckCircle2, Clock } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NFLService } from '@/services/nflService';
 
 interface League {
@@ -34,7 +34,8 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 	const router = useRouter();
 	const [copiedLeagueId, setCopiedLeagueId] = useState<string | null>(null);
 	const [leagueStats, setLeagueStats] = useState<Map<string, LeagueStats>>(new Map());
-	const [currentWeek, setCurrentWeek] = useState<number>(1);
+	const [currentWeek, setCurrentWeek] = useState<number | null>(null);
+	const isLoadingRef = useRef(false);
 
 	useEffect(() => {
 		const loadCurrentWeek = async () => {
@@ -46,6 +47,10 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 
 	useEffect(() => {
 		const loadLeagueStats = async () => {
+			// Prevent multiple simultaneous loads
+			if (isLoadingRef.current) return;
+
+			isLoadingRef.current = true;
 			const statsMap = new Map<string, LeagueStats>();
 
 			for (const league of leagues) {
@@ -77,9 +82,10 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 			}
 
 			setLeagueStats(statsMap);
+			isLoadingRef.current = false;
 		};
 
-		if (leagues.length > 0 && userId && currentWeek) {
+		if (leagues.length > 0 && userId && currentWeek !== null) {
 			loadLeagueStats();
 		}
 	}, [leagues, userId, currentWeek]);
