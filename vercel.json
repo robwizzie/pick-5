@@ -1,12 +1,12 @@
 {
 	"crons": [
 		{
-			"path": "/api/cron/send-pick-reminders",
-			"schedule": "0 13 * * 4"
+			"path": "/api/cron/master",
+			"schedule": "0 9 * * 0"
 		},
 		{
-			"path": "/api/cron/send-pick-reminders",
-			"schedule": "0 12 * * 6"
+			"path": "/api/cron/master",
+			"schedule": "0 14 * * 2,4,5,6"
 		}
 	]
 }

@@ -101,31 +101,63 @@ export function WeeklyPicks() {
 			// Fetch odds for Standard mode leagues
 			if (leagueMode === 'standard') {
 				try {
-					const oddsResponse = await fetch('/api/odds/nfl');
+					// Fetch odds from centralized snapshot (reduces API calls dramatically)
+					const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
+					let snapshotOdds = [];
 					if (oddsResponse.ok) {
-						const oddsData = await oddsResponse.json();
-
-						// Match odds to games and attach them
-						const gamesWithOdds = weeklyGames.map(game => {
-							const gameOdds = oddsData.find((o: any) =>
-								o.home_team === game.home.team || o.away_team === game.away.team
-							);
-
-							if (gameOdds) {
-								return {
-									...game,
-									home: { ...game.home, odds: gameOdds.home?.odds },
-									away: { ...game.away, odds: gameOdds.away?.odds }
-								};
-							}
-							return game;
-						});
-
-						setGames(gamesWithOdds);
-					} else {
-						console.error('[WeeklyPicks] Failed to fetch odds');
-						setGames(weeklyGames);
+						const data = await oddsResponse.json();
+						snapshotOdds = data.odds || [];
+						console.log(`[WeeklyPicks] Loaded ${snapshotOdds.length} odds from snapshot`);
 					}
+
+					// If no snapshot odds available, fall back to user's stored odds from picks
+					let storedOddsMap = new Map();
+					if (snapshotOdds.length === 0 && leagueId) {
+						console.log('[WeeklyPicks] No snapshot odds found, falling back to stored picks');
+						const picksResponse = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
+						if (picksResponse.ok) {
+							const picksData = await picksResponse.json();
+							if (picksData?.picks) {
+								// Build a map of gameId -> {homeOdds, awayOdds}
+								picksData.picks.forEach((pick: any) => {
+									if (pick.odds) {
+										if (!storedOddsMap.has(pick.gameId)) {
+											storedOddsMap.set(pick.gameId, {});
+										}
+										const gameOdds = storedOddsMap.get(pick.gameId);
+										if (pick.isHome) {
+											gameOdds.homeOdds = pick.odds;
+										} else {
+											gameOdds.awayOdds = pick.odds;
+										}
+									}
+								});
+							}
+						}
+					}
+
+					// Match odds to games
+					const gamesWithOdds = weeklyGames.map(game => {
+						// First try to find odds from snapshot
+						const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+
+						// Fall back to stored odds from user's picks
+						const storedOdds = storedOddsMap.get(game.id);
+
+						const homeOdds = snapshotGameOdds?.home?.odds || storedOdds?.homeOdds;
+						const awayOdds = snapshotGameOdds?.away?.odds || storedOdds?.awayOdds;
+
+						if (homeOdds || awayOdds) {
+							return {
+								...game,
+								home: { ...game.home, odds: homeOdds },
+								away: { ...game.away, odds: awayOdds }
+							};
+						}
+						return game;
+					});
+
+					setGames(gamesWithOdds);
 				} catch (oddsError) {
 					console.error('[WeeklyPicks] Error fetching odds:', oddsError);
 					setGames(weeklyGames);
