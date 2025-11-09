@@ -1,20 +1,36 @@
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useSession } from 'next-auth/react';
+import { redirect, usePathname } from 'next/navigation';
+import { useEffect } from 'react';
+import Link from 'next/link';
 
 const ADMIN_USER_ID = '67c124e9cce9530ce4c1a655';
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-	const session = await getServerSession(authOptions);
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+	const { data: session, status } = useSession();
+	const pathname = usePathname();
+	const isAdminHome = pathname === '/admin';
 
-	// Check if user is logged in
-	if (!session?.user) {
-		redirect('/api/auth/signin');
+	useEffect(() => {
+		if (status === 'unauthenticated') {
+			window.location.href = '/api/auth/signin';
+		}
+	}, [status]);
+
+	if (status === 'loading') {
+		return (
+			<div className='min-h-screen flex items-center justify-center'>
+				<div className='animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full' />
+			</div>
+		);
 	}
 
-	// Check if user is admin
-	if (session.user.id !== ADMIN_USER_ID) {
-		redirect('/');
+	if (!session?.user || session.user.id !== ADMIN_USER_ID) {
+		if (typeof window !== 'undefined') {
+			window.location.href = '/';
+		}
+		return null;
 	}
 
 	return (
@@ -49,12 +65,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 								<p className='text-xs text-muted-foreground'>Pick 5 Management Tools</p>
 							</div>
 						</div>
-						<a
-							href='/'
-							className='text-sm text-muted-foreground hover:text-primary transition-colors'
-						>
-							← Back to App
-						</a>
+						{isAdminHome ? (
+							<Link
+								href='/'
+								className='text-sm text-muted-foreground hover:text-primary transition-colors'
+							>
+								← Back to App
+							</Link>
+						) : (
+							<Link
+								href='/admin'
+								className='text-sm text-muted-foreground hover:text-primary transition-colors'
+							>
+								← Back to Admin Dashboard
+							</Link>
+						)}
 					</div>
 				</div>
 			</div>
