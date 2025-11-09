@@ -3,7 +3,7 @@
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Home, Settings, LogOut, BarChart3 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Settings, LogOut, BarChart3, Shield } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useSession, signOut } from 'next-auth/react';
@@ -12,6 +12,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { AuthDialog } from './AuthDialog';
 import { WeekSelectorModal } from './WeekSelectorModal';
 import { useState, useEffect } from 'react';
+
+const ADMIN_USER_ID = '67c124e9cce9530ce4c1a655';
 
 export function Nav() {
 	const { currentWeek, setCurrentWeek } = useWeek();
@@ -28,6 +30,7 @@ export function Nav() {
 	const isCreateLeague = pathname === '/league/create';
 	const isJoinLeague = pathname === '/league/join';
 	const isBrowseLeague = pathname === '/league/browse';
+	const isAdmin = session?.user?.id === ADMIN_USER_ID;
 
 	// Fetch weeks with picks for the current league
 	useEffect(() => {
@@ -137,6 +140,15 @@ export function Nav() {
 										<BarChart3 className='h-4 w-4' />
 										<span>My Stats</span>
 									</DropdownMenuItem>
+									{isAdmin && (
+										<>
+											<DropdownMenuSeparator className='bg-white/10' />
+											<DropdownMenuItem onClick={() => router.push('/admin')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10 text-primary'>
+												<Shield className='h-4 w-4' />
+												<span>Admin Tools</span>
+											</DropdownMenuItem>
+										</>
+									)}
 									<DropdownMenuSeparator className='bg-white/10' />
 									<DropdownMenuItem onClick={() => router.push('/settings')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
 										<Settings className='h-4 w-4' />
