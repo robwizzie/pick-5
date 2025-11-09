@@ -61,6 +61,10 @@ export async function GET(req: Request) {
 
 		console.log(`[Pick Reminders] Running cron job - Day: ${dayOfWeek}, Hour: ${currentHour}`);
 
+		// On Hobby plan, cron runs once per day with approximate timing (within the hour)
+		// We'll send to all users on the appropriate day, regardless of their exact preferred time
+		// For more precise timing, upgrade to Pro plan
+
 		// Get current NFL week
 		const currentWeek = getCurrentNFLWeek();
 		console.log(`[Pick Reminders] Current NFL week: ${currentWeek}`);
@@ -97,15 +101,21 @@ export async function GET(req: Request) {
 		// Process each user
 		for (const user of users) {
 			try {
-				// Check if user's preferred reminder time matches current hour
+				// On Hobby plan: Send to all eligible users on the appropriate day
+				// On Pro plan: The cron runs hourly and checks exact preferred times
+				// Since we can't determine the plan from here, we use a flexible 2-hour window
 				if (isThursday) {
 					const [thursdayHour] = (user.emailPreferences?.thursdayReminderTime || '13:00').split(':');
-					if (parseInt(thursdayHour) !== currentHour) {
+					const userHour = parseInt(thursdayHour);
+					// Allow 2-hour window (for Hobby plan's approximate timing)
+					if (Math.abs(userHour - currentHour) > 1) {
 						continue;
 					}
 				} else if (isSaturday) {
 					const [saturdayHour] = (user.emailPreferences?.saturdayReminderTime || '12:00').split(':');
-					if (parseInt(saturdayHour) !== currentHour) {
+					const userHour = parseInt(saturdayHour);
+					// Allow 2-hour window (for Hobby plan's approximate timing)
+					if (Math.abs(userHour - currentHour) > 1) {
 						continue;
 					}
 				}
