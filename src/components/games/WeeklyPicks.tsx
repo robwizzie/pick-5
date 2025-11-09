@@ -101,31 +101,64 @@ export function WeeklyPicks() {
 			// Fetch odds for Standard mode leagues
 			if (leagueMode === 'standard') {
 				try {
-					const oddsResponse = await fetch('/api/odds/nfl');
-					if (oddsResponse.ok) {
-						const oddsData = await oddsResponse.json();
-
-						// Match odds to games and attach them
-						const gamesWithOdds = weeklyGames.map(game => {
-							const gameOdds = oddsData.find((o: any) =>
-								o.home_team === game.home.team || o.away_team === game.away.team
-							);
-
-							if (gameOdds) {
-								return {
-									...game,
-									home: { ...game.home, odds: gameOdds.home?.odds },
-									away: { ...game.away, odds: gameOdds.away?.odds }
-								};
+					// First, get existing picks to retrieve stored odds
+					let storedOddsMap = new Map();
+					if (leagueId) {
+						const picksResponse = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
+						if (picksResponse.ok) {
+							const picksData = await picksResponse.json();
+							if (picksData?.picks) {
+								// Build a map of gameId -> {homeOdds, awayOdds}
+								picksData.picks.forEach((pick: any) => {
+									if (pick.odds) {
+										if (!storedOddsMap.has(pick.gameId)) {
+											storedOddsMap.set(pick.gameId, {});
+										}
+										const gameOdds = storedOddsMap.get(pick.gameId);
+										if (pick.isHome) {
+											gameOdds.homeOdds = pick.odds;
+										} else {
+											gameOdds.awayOdds = pick.odds;
+										}
+									}
+								});
 							}
-							return game;
-						});
-
-						setGames(gamesWithOdds);
-					} else {
-						console.error('[WeeklyPicks] Failed to fetch odds');
-						setGames(weeklyGames);
+						}
 					}
+
+					// Then fetch current odds from API (for games that haven't started)
+					const oddsResponse = await fetch('/api/odds/nfl');
+					let liveOddsData = [];
+					if (oddsResponse.ok) {
+						liveOddsData = await oddsResponse.json();
+					}
+
+					// Match odds to games, preferring stored odds for games that have started
+					const gamesWithOdds = weeklyGames.map(game => {
+						// Check if we have stored odds for this game
+						const storedOdds = storedOddsMap.get(game.id);
+
+						// Try to find live odds
+						const liveOdds = liveOddsData.find((o: any) =>
+							o.home_team === game.home.team || o.away_team === game.away.team
+						);
+
+						// For games that have started, use stored odds if available
+						// For games that haven't started, use live odds
+						const homeOdds = storedOdds?.homeOdds || liveOdds?.home?.odds;
+						const awayOdds = storedOdds?.awayOdds || liveOdds?.away?.odds;
+
+						if (homeOdds || awayOdds) {
+							return {
+								...game,
+								home: { ...game.home, odds: homeOdds },
+								away: { ...game.away, odds: awayOdds }
+							};
+						}
+						return game;
+					});
+
+					setGames(gamesWithOdds);
 				} catch (oddsError) {
 					console.error('[WeeklyPicks] Error fetching odds:', oddsError);
 					setGames(weeklyGames);

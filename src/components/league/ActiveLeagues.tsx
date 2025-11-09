@@ -104,6 +104,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 			{leagues.map(league => {
 				const isCommissioner = userId && league.creatorId === userId;
 				const stats = leagueStats.get(league._id);
+				const isLoading = !stats && leagues.length > 0;
 
 				return (
 					<div key={league._id} className='relative'>
@@ -111,74 +112,77 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 							onClick={() => router.push(`/league/${league._id}`)}
 							className='w-full p-6 bg-card border-2 border-primary/20 rounded-lg text-left transition-all hover:bg-primary/10 hover:border-primary/40 group'
 						>
-							<div className='flex items-start justify-between gap-4'>
-								{/* Left: League Name & Mode */}
-								<div className='flex-1 space-y-3'>
-									<div className='flex items-center gap-3'>
-										<h3 className='font-oswald text-2xl uppercase tracking-wide text-primary group-hover:text-primary/80 transition-colors'>
+							<div className='flex items-center justify-between gap-6'>
+								{/* Left: League Info */}
+								<div className='flex-1 min-w-0'>
+									<div className='flex items-center gap-3 mb-4'>
+										<h3 className='font-oswald text-2xl uppercase tracking-wide text-primary group-hover:text-primary/80 transition-colors truncate'>
 											{league.name}
 										</h3>
 										{league.mode && (
-											<span className='text-xs px-2 py-1 rounded-full bg-primary/10 text-primary/80 font-medium'>
-												{league.mode === 'steve' ? 'Steve Mode' : 'Standard'}
+											<span className='text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary/80 font-medium whitespace-nowrap'>
+												{league.mode === 'steve' ? 'Steve' : 'Standard'}
 											</span>
 										)}
 									</div>
 
-									{/* Stats Row */}
-									<div className='flex flex-wrap items-center gap-4 text-sm text-muted-foreground'>
-										{/* Picks Status */}
-										<div className='flex items-center gap-1.5'>
-											{stats?.hasPicks ? (
-												<>
-													<CheckCircle2 className='h-4 w-4 text-green-400' />
-													<span className='text-green-400'>Week {currentWeek} Picks In</span>
-												</>
-											) : (
-												<>
-													<Clock className='h-4 w-4 text-orange-400' />
-													<span className='text-orange-400'>Week {currentWeek} Picks Needed</span>
-												</>
-											)}
+									{isLoading ? (
+										<div className='flex items-center gap-4'>
+											<div className='h-4 w-32 bg-muted/20 rounded animate-pulse' />
+											<div className='h-4 w-24 bg-muted/20 rounded animate-pulse' />
 										</div>
-
-										{/* Rank */}
-										{stats?.rank && (
-											<div className='flex items-center gap-1.5'>
-												<Trophy className='h-4 w-4' />
-												<span>Rank #{stats.rank} of {stats.totalMembers}</span>
+									) : stats ? (
+										<div className='flex items-center gap-6 text-sm'>
+											{/* Picks Status */}
+											<div className='flex items-center gap-2'>
+												{stats.hasPicks ? (
+													<>
+														<CheckCircle2 className='h-4 w-4 text-green-400 flex-shrink-0' />
+														<span className='text-green-400 font-medium'>Picks In</span>
+													</>
+												) : (
+													<>
+														<Clock className='h-4 w-4 text-orange-400 flex-shrink-0' />
+														<span className='text-orange-400 font-medium'>Picks Needed</span>
+													</>
+												)}
 											</div>
-										)}
 
-										{/* Members */}
-										{stats?.totalMembers && (
-											<div className='flex items-center gap-1.5'>
-												<Users className='h-4 w-4' />
-												<span>{stats.totalMembers} {stats.totalMembers === 1 ? 'Member' : 'Members'}</span>
+											{/* Rank & Members */}
+											<div className='flex items-center gap-4 text-muted-foreground'>
+												{stats.rank && (
+													<div className='flex items-center gap-1.5'>
+														<Trophy className='h-4 w-4 flex-shrink-0' />
+														<span className='whitespace-nowrap'>#{stats.rank} of {stats.totalMembers}</span>
+													</div>
+												)}
 											</div>
-										)}
-									</div>
+										</div>
+									) : null}
 								</div>
 
-								{/* Right: Points & Actions */}
+								{/* Right: Points & Menu */}
 								<div className='flex items-center gap-6'>
-									{/* Points Display */}
-									{stats && (
+									{isLoading ? (
 										<div className='text-right space-y-1'>
-											<div className='flex items-center gap-2'>
-												<TrendingUp className='h-4 w-4 text-primary' />
-												<span className='text-2xl font-bold text-primary'>{stats.currentWeekPoints}</span>
+											<div className='h-8 w-16 bg-muted/20 rounded animate-pulse mb-1' />
+											<div className='h-3 w-20 bg-muted/20 rounded animate-pulse' />
+										</div>
+									) : stats ? (
+										<div className='text-right space-y-1 min-w-[80px]'>
+											<div className='flex items-center justify-end gap-2'>
+												<span className='text-3xl font-bold text-primary tabular-nums'>{stats.currentWeekPoints}</span>
 											</div>
-											<p className='text-xs text-muted-foreground'>This Week</p>
+											<p className='text-xs text-muted-foreground'>Week {currentWeek}</p>
 											{stats.seasonPoints > 0 && (
-												<p className='text-xs text-muted-foreground'>{stats.seasonPoints} Season Total</p>
+												<p className='text-xs text-muted-foreground/70 tabular-nums'>{stats.seasonPoints} Season</p>
 											)}
 										</div>
-									)}
+									) : null}
 
 									{/* Commissioner Menu */}
 									{isCommissioner && (
-										<div onClick={handleDropdownClick}>
+										<div onClick={handleDropdownClick} className='flex-shrink-0'>
 											<DropdownMenu>
 												<DropdownMenuTrigger asChild>
 													<Button variant='ghost' size='sm' className='h-8 w-8 p-0 hover:bg-primary/20'>
