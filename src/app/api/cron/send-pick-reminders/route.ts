@@ -6,9 +6,8 @@ import { Pick } from '@/models/Pick';
 import { PushSubscription } from '@/models/PushSubscription';
 import { Resend } from 'resend';
 import webPush from 'web-push';
-import { ThursdayReminderEmail } from '@/emails/ThursdayReminderEmail';
-import { SaturdayReminderEmail } from '@/emails/SaturdayReminderEmail';
-import React from 'react';
+import ThursdayReminderEmail from '@/emails/ThursdayReminderEmail';
+import SaturdayReminderEmail from '@/emails/SaturdayReminderEmail';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -165,13 +164,13 @@ export async function GET(req: Request) {
 								? `🏈 Thursday Night Football starts soon! Make your picks`
 								: `⏰ Last chance! Get your picks in before Sunday`,
 							react: isThursday
-								? React.createElement(ThursdayReminderEmail, {
+								? ThursdayReminderEmail({
 										userName: user.name || 'Player',
 										thursdayGame: thursdayGame!,
 										leagues: leaguesWithoutPicks,
 										unsubscribeToken: user.unsubscribeToken || ''
 									})
-								: React.createElement(SaturdayReminderEmail, {
+								: SaturdayReminderEmail({
 										userName: user.name || 'Player',
 										leagues: leaguesWithoutPicks,
 										unsubscribeToken: user.unsubscribeToken || ''
