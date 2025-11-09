@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { checkAdminAuth } from '@/lib/adminAuth';
 import { connectDB } from '@/lib/db';
 import { OddsSnapshot } from '@/models/OddsSnapshot';
 import { NFLService } from '@/services/nflService';
@@ -12,10 +11,10 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(req: Request) {
 	try {
-		const session = await getServerSession(authOptions);
+		const session = await checkAdminAuth();
 
 		if (!session) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+			return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
 		}
 
 		const { searchParams } = new URL(req.url);
