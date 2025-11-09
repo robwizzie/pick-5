@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function FixOddsPage() {
-	const [gameId, setGameId] = useState('');
-	const [week, setWeek] = useState('11');
+	const [gameId, setGameId] = useState('401772636');
+	const [week, setWeek] = useState('10');
 	const [homeTeam, setHomeTeam] = useState('Indianapolis Colts');
 	const [awayTeam, setAwayTeam] = useState('Atlanta Falcons');
 	const [homeOdds, setHomeOdds] = useState('-350');
@@ -22,23 +22,37 @@ export default function FixOddsPage() {
 		setResult(null);
 
 		try {
-			const response = await fetch('/api/admin/fix-game-odds', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					gameId,
-					week: parseInt(week),
-					homeTeam,
-					awayTeam,
-					homeOdds: parseInt(homeOdds),
-					awayOdds: parseInt(awayOdds)
-				})
-			});
+			const payload = {
+				gameId,
+				week: parseInt(week),
+				homeTeam,
+				awayTeam,
+				homeOdds: parseInt(homeOdds),
+				awayOdds: parseInt(awayOdds)
+			};
 
-			const data = await response.json();
-			setResult(data);
+			// Step 1: Update existing picks
+			const picksResponse = await fetch('/api/admin/fix-game-odds', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const picksData = await picksResponse.json();
+
+			// Step 2: Create/update odds snapshot so everyone sees correct odds
+			const snapshotResponse = await fetch('/api/admin/create-odds-snapshot', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+			const snapshotData = await snapshotResponse.json();
+
+			// Combine results
+			setResult({
+				success: picksData.success && snapshotData.success,
+				picksUpdated: picksData,
+				snapshotCreated: snapshotData
+			});
 		} catch (error) {
 			setResult({ error: 'Failed to update odds', details: String(error) });
 		} finally {
@@ -54,6 +68,9 @@ export default function FixOddsPage() {
 				<Card className='glass border-white/10'>
 					<CardHeader>
 						<CardTitle>Update Pre-Game Odds</CardTitle>
+						<p className='text-sm text-muted-foreground mt-2'>
+							This will update odds for existing user picks AND create an odds snapshot so everyone sees the correct odds.
+						</p>
 					</CardHeader>
 					<CardContent>
 						<form onSubmit={handleSubmit} className='space-y-4'>
