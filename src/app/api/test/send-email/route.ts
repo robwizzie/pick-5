@@ -42,7 +42,7 @@ export async function GET(req: Request) {
 
 		// Send test email
 		if (type === 'thursday') {
-			const emailHtml = render(
+			const emailHtml = await render(
 				ThursdayReminderEmail({
 					userName: session.user.name || 'Player',
 					thursdayGame: mockThursdayGame,
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
 				html: emailHtml
 			});
 		} else {
-			const emailHtml = render(
+			const emailHtml = await render(
 				SaturdayReminderEmail({
 					userName: session.user.name || 'Player',
 					leagues: mockLeagues,

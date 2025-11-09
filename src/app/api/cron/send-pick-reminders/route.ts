@@ -158,7 +158,7 @@ export async function GET(req: Request) {
 				// Send email
 				try {
 					if (user.emailPreferences?.pickReminders) {
-						const emailHtml = render(
+						const emailHtml = await render(
 							isThursday
 								? ThursdayReminderEmail({
 										userName: user.name || 'Player',
