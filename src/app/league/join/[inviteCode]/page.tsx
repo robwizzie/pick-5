@@ -14,7 +14,8 @@ interface JoinInvitePageProps {
 }
 
 export default function JoinInvitePage({ params }: JoinInvitePageProps) {
-	const resolvedParams = use(params);
+	// Handle case where params might be undefined
+	const resolvedParams = params ? use(params) : { inviteCode: '' };
 	const inviteCode = resolvedParams.inviteCode;
 	const router = useRouter();
 	const { status } = useSession();
@@ -24,6 +25,12 @@ export default function JoinInvitePage({ params }: JoinInvitePageProps) {
 	const [errorMessage, setErrorMessage] = useState('');
 
 	const handleJoinLeague = useCallback(async () => {
+		if (!inviteCode) {
+			setJoinStatus('error');
+			setErrorMessage('Invalid invite code');
+			return;
+		}
+
 		try {
 			setJoinStatus('loading');
 
