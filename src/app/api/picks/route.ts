@@ -222,8 +222,9 @@ export async function GET(req: Request) {
 				return NextResponse.json({ error: 'League not found' }, { status: 404 });
 			}
 
-			const isRequesterMember = league.members.some((m: any) => m.userId.toString() === session.user.id);
-			const isTargetMember = league.members.some((m: any) => m.userId.toString() === requestedUserId);
+			// members is an array of user ID strings, not objects
+			const isRequesterMember = league.members.some((userId: string) => userId.toString() === session.user.id);
+			const isTargetMember = league.members.some((userId: string) => userId.toString() === requestedUserId);
 
 			if (!isRequesterMember || !isTargetMember) {
 				return NextResponse.json({ error: 'Unauthorized to view these picks' }, { status: 403 });
