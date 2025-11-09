@@ -92,6 +92,22 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 	const isStandardMode = leagueMode === 'standard';
 
+	// LOG: Debug what GameCard receives
+	console.log('[GameCard] 🎯 Rendering card:', {
+		gameId: game.id,
+		awayTeam: game.away.team,
+		awayOdds: game.away.odds,
+		awayScore: game.away.score,
+		homeTeam: game.home.team,
+		homeOdds: game.home.odds,
+		homeScore: game.home.score,
+		status: game.status,
+		showScores: showScores,
+		isStandardMode: isStandardMode,
+		leagueMode: leagueMode,
+		selected: selected
+	});
+
 	// Helper function to format game date and time
 	const formatGameDateTime = (date: Date) => {
 		const gameDate = new Date(date);
@@ -200,14 +216,33 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.team}</div>
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
-									{isStandardMode && game.away.odds !== undefined && (
-										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-											<span className={`text-xs ${selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
-										</div>
-									)}
-									{showScores && game.away.score !== undefined && <div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>}
+									{(() => {
+										const awayOdds = game.away.odds;
+										const shouldShowOdds = isStandardMode && awayOdds !== undefined;
+										console.log(`[GameCard] 💰 Away team ${game.away.team} odds check:`, {
+											isStandardMode,
+											awayOdds: awayOdds,
+											shouldShowOdds
+										});
+										return shouldShowOdds && awayOdds !== undefined ? (
+											<div className='flex items-center gap-1.5 mt-1'>
+												<span className={`text-xs font-semibold ${selected === game.away.team ? 'text-black/80' : getOddsColorClass(awayOdds)}`}>{formatOdds(awayOdds)}</span>
+												<span className={`text-xs ${selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+												<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(awayOdds)} pts</span>
+											</div>
+										) : null;
+									})()}
+									{(() => {
+										const shouldShowScore = showScores && game.away.score !== undefined;
+										console.log(`[GameCard] 🏈 Away team ${game.away.team} score check:`, {
+											showScores,
+											awayScore: game.away.score,
+											shouldShowScore
+										});
+										return shouldShowScore ? (
+											<div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>
+										) : null;
+									})()}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 								</div>
 							</div>
@@ -240,14 +275,33 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.team}</div>
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
-									{isStandardMode && game.home.odds !== undefined && (
-										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-											<span className={`text-xs ${selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
-										</div>
-									)}
-									{showScores && game.home.score !== undefined && <div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>}
+									{(() => {
+										const homeOdds = game.home.odds;
+										const shouldShowOdds = isStandardMode && homeOdds !== undefined;
+										console.log(`[GameCard] 💰 Home team ${game.home.team} odds check:`, {
+											isStandardMode,
+											homeOdds: homeOdds,
+											shouldShowOdds
+										});
+										return shouldShowOdds && homeOdds !== undefined ? (
+											<div className='flex items-center gap-1.5 mt-1'>
+												<span className={`text-xs font-semibold ${selected === game.home.team ? 'text-black/80' : getOddsColorClass(homeOdds)}`}>{formatOdds(homeOdds)}</span>
+												<span className={`text-xs ${selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+												<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(homeOdds)} pts</span>
+											</div>
+										) : null;
+									})()}
+									{(() => {
+										const shouldShowScore = showScores && game.home.score !== undefined;
+										console.log(`[GameCard] 🏈 Home team ${game.home.team} score check:`, {
+											showScores,
+											homeScore: game.home.score,
+											shouldShowScore
+										});
+										return shouldShowScore ? (
+											<div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>
+										) : null;
+									})()}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 								</div>
 							</div>
