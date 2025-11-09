@@ -55,8 +55,13 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 		<div className='flex items-center gap-0.5 mt-2'>
 			<div className='flex -space-x-2'>
 				{visiblePicks.map((pick, index) => (
-					<div key={pick.userId} title={pick.name} className='cursor-help' style={{ zIndex: maxVisible - index }}>
-						<Avatar className='w-6 h-6 border-2 border-card'>
+					<div
+						key={pick.userId}
+						title={pick.name}
+						className='cursor-help relative'
+						style={{ zIndex: maxVisible - index }}
+					>
+						<Avatar className='w-6 h-6 border-2 border-card pointer-events-none'>
 							<AvatarImage src={pick.image || undefined} alt={pick.name} />
 							<AvatarFallback className='bg-primary/20 text-primary text-[10px] font-semibold'>
 								{pick.name
