@@ -90,6 +90,58 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 	const isStandardMode = leagueMode === 'standard';
 
+	// Helper function to format game date and time
+	const formatGameDateTime = (date: Date) => {
+		const gameDate = new Date(date);
+		const now = new Date();
+		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const tomorrow = new Date(today);
+		tomorrow.setDate(tomorrow.getDate() + 1);
+		const gameDay = new Date(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate());
+
+		let dayText = '';
+		if (gameDay.getTime() === today.getTime()) {
+			dayText = 'Today';
+		} else if (gameDay.getTime() === tomorrow.getTime()) {
+			dayText = 'Tomorrow';
+		} else {
+			// Show day of week
+			dayText = gameDate.toLocaleDateString('en-US', { weekday: 'short' });
+		}
+
+		const timeText = gameDate.toLocaleTimeString('en-US', {
+			hour: 'numeric',
+			minute: '2-digit',
+			hour12: true
+		});
+
+		return { dayText, timeText, fullDate: gameDate };
+	};
+
+	// Helper function to get game status display
+	const getGameStatus = () => {
+		const status = game.status?.toLowerCase() || 'scheduled';
+
+		if (status === 'post' || status === 'final') {
+			return { text: 'FINAL', color: 'text-muted-foreground', bgColor: 'bg-muted/30' };
+		}
+
+		if (status === 'in' || status === 'in_progress') {
+			return { text: 'LIVE', color: 'text-green-400', bgColor: 'bg-green-500/20' };
+		}
+
+		// Pre-game
+		const { dayText, timeText } = formatGameDateTime(game.date);
+		return {
+			text: `${dayText} ${timeText}`,
+			color: 'text-primary',
+			bgColor: 'bg-primary/10',
+			isScheduled: true
+		};
+	};
+
+	const statusInfo = getGameStatus();
+
 	const getTeamButtonStyle = (isTeamSelected: boolean, isTeamCorrect: boolean | null) => {
 		const fontWeight = isTeamSelected ? 'font-bold' : 'font-normal';
 		const baseStyle = `${fontWeight} !hover:bg-transparent !hover:border-current !active:scale-100`;
@@ -143,9 +195,19 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 						</Button>
 					</div>
 
-					{/* Center Section */}
-					<div className='flex flex-row justify-center items-center my-4 xl:my-0 xl:mx-4 xl:flex-col min-w-[80px]'>
+					{/* Center Section - Game Status & Time */}
+					<div className='flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[120px] gap-2'>
 						<span className='text-sm font-medium text-accent'>@</span>
+						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor}`}>
+							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
+								{statusInfo.text}
+							</div>
+							{statusInfo.isScheduled && (
+								<div className='text-[10px] text-muted-foreground mt-0.5'>
+									{formatGameDateTime(game.date).fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+								</div>
+							)}
+						</div>
 					</div>
 
 					{/* Home Team */}
