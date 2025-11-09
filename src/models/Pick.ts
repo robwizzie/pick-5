@@ -18,7 +18,8 @@ const PickSchema = new mongoose.Schema({
 			team: String,
 			opponent: String,
 			isHome: Boolean,
-			isCorrect: Boolean
+			isCorrect: Boolean,
+			odds: Number // Store odds at time of pick submission
 		}
 	],
 	tfsGame: String,
