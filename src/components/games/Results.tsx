@@ -130,8 +130,43 @@ export function Results() {
 				const picksData = await picksResponse.json();
 				const leaguePicksData = await leaguePicksResponse.json();
 
+				// Fetch odds for Standard mode leagues (same logic as WeeklyPicks)
+				let gamesWithOdds = weeklyGames;
+				if (leagueMode === 'standard') {
+					try {
+						// Fetch odds from centralized snapshot
+						const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
+						let snapshotOdds = [];
+						if (oddsResponse.ok) {
+							const data = await oddsResponse.json();
+							snapshotOdds = data.odds || [];
+							console.log(`[Results] 💰 Loaded ${snapshotOdds.length} odds from snapshot`);
+						}
+
+						// Match odds to games
+						gamesWithOdds = weeklyGames.map(game => {
+							const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+
+							const homeOdds = snapshotGameOdds?.home?.odds;
+							const awayOdds = snapshotGameOdds?.away?.odds;
+
+							if (homeOdds || awayOdds) {
+								return {
+									...game,
+									home: { ...game.home, odds: homeOdds },
+									away: { ...game.away, odds: awayOdds }
+								};
+							}
+							return game;
+						});
+						console.log('[Results] 💰 Merged odds with games');
+					} catch (error) {
+						console.error('[Results] Error fetching odds:', error);
+					}
+				}
+
 				// LOG: Check what data we received
-				console.log('[Results] 📊 Games data from API:', weeklyGames.map(g => ({
+				console.log('[Results] 📊 Games data from API:', gamesWithOdds.map(g => ({
 					id: g.id,
 					away: `${g.away.team} (odds: ${g.away.odds}, score: ${g.away.score})`,
 					home: `${g.home.team} (odds: ${g.home.odds}, score: ${g.home.score})`,
@@ -144,7 +179,7 @@ export function Results() {
 					isHome: p.isHome
 				})));
 
-				setGames(weeklyGames);
+				setGames(gamesWithOdds);
 				setPicks(picksData);
 				setLeaguePicks(leaguePicksData);
 				setLastUpdated(new Date());
@@ -187,9 +222,12 @@ export function Results() {
 		total: typeof game.home.score === 'number' && typeof game.away.score === 'number' && game.home.score !== undefined && game.away.score !== undefined ? game.home.score + game.away.score : undefined
 	});
 
-	// Determine game status - only 'completed' if game has actually finished
+	// Determine game status - check for in_progress, completed, or pending
 	const checkGameStatus = (game: Game): 'completed' | 'in_progress' | 'pending' => {
-		return hasGameFinished(game) ? 'completed' : 'pending';
+		if (hasGameFinished(game)) return 'completed';
+		const status = game.status?.toLowerCase();
+		if (status === 'in' || status === 'in_progress') return 'in_progress';
+		return 'pending';
 	};
 
 	// Check if a pick is correct - only returns true/false if game is finished
@@ -264,6 +302,7 @@ export function Results() {
 			const gameStatus = checkGameStatus(game);
 			const isCorrect = checkPickCorrect(pick, game);
 			const gameFinished = hasGameFinished(game);
+			const gameInProgress = gameStatus === 'in_progress';
 
 			//  Calculate points based on league mode
 			let pickPoints = 0;
@@ -280,16 +319,18 @@ export function Results() {
 			const badgeStyle = 'absolute px-2 py-1 rounded-full text-xs font-medium border';
 
 			// LOG: Check what data is being passed to GameCard
+			// Show scores for both finished games AND in-progress games
+			const shouldShowScores = gameFinished || gameInProgress;
 			const gameCardData = {
 				...game,
 				away: {
 					...game.away,
-					score: gameFinished && scores.away !== undefined ? scores.away : undefined,
+					score: shouldShowScores && scores.away !== undefined ? scores.away : undefined,
 					odds: !pick.isHome && pick.odds !== undefined ? pick.odds : game.away.odds
 				},
 				home: {
 					...game.home,
-					score: gameFinished && scores.home !== undefined ? scores.home : undefined,
+					score: shouldShowScores && scores.home !== undefined ? scores.home : undefined,
 					odds: pick.isHome && pick.odds !== undefined ? pick.odds : game.home.odds
 				},
 				status: gameStatus
@@ -299,7 +340,8 @@ export function Results() {
 				gameId: pick.gameId,
 				gameStatus: gameStatus,
 				gameFinished: gameFinished,
-				showScores: gameFinished,
+				gameInProgress: gameInProgress,
+				showScores: shouldShowScores,
 				pickOdds: pick.odds,
 				pickIsHome: pick.isHome,
 				awayTeam: gameCardData.away.team,
@@ -318,6 +360,8 @@ export function Results() {
 						<div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(pickPoints)}`}>
 							{pickPoints > 0 ? `+${pickPoints} pts` : '0 pts'}
 						</div>
+					) : gameInProgress ? (
+						<div className={`${badgeStyle} top-2 right-2 z-10 bg-green-500/20 text-green-400 border-green-500/50`}>Live</div>
 					) : (
 						<div className={`${badgeStyle} top-2 right-2 z-10 bg-muted text-muted-foreground`}>Pending</div>
 					)}
@@ -327,7 +371,7 @@ export function Results() {
 						<GameCard
 							game={gameCardData}
 							selected={pick.team}
-							showScores={gameFinished}
+							showScores={shouldShowScores}
 							disabled={true}
 							isCorrect={gameFinished ? isCorrect : null}
 							noHover={true}
