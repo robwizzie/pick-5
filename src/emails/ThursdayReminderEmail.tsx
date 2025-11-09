@@ -70,7 +70,7 @@ export const ThursdayReminderEmail = ({
 					{/* Leagues List */}
 					<Section style={leaguesBox}>
 						{leagues.map((league, index) => (
-							<div key={league.id} style={leagueItem}>
+							<div key={league.id} style={index === leagues.length - 1 ? leagueItemLast : leagueItem}>
 								<Text style={leagueName}>
 									<span style={bullet}>•</span> {league.name}
 									<span style={leagueMode}> ({league.mode === 'steve' ? 'Steve Mode' : 'Standard Mode'})</span>
@@ -162,6 +162,10 @@ const leaguesBox = {
 
 const leagueItem = {
 	marginBottom: '8px'
+};
+
+const leagueItemLast = {
+	marginBottom: '0'
 };
 
 const leagueName = {
