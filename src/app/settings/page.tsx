@@ -498,6 +498,9 @@ export default function SettingsPage() {
 							<p className='text-sm text-muted-foreground'>
 								<strong>Note:</strong> Reminders are only sent for leagues where you haven&apos;t submitted picks yet. If you&apos;ve made picks for all your leagues, you won&apos;t receive any reminders.
 							</p>
+							<p className='text-xs text-muted-foreground mt-2'>
+								Reminder times may vary by up to 2 hours from your preferred time. Emails are sent once per day on Thursdays and Saturdays.
+							</p>
 						</div>
 					</div>
 				)}
