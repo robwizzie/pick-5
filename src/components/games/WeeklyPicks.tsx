@@ -101,9 +101,19 @@ export function WeeklyPicks() {
 			// Fetch odds for Standard mode leagues
 			if (leagueMode === 'standard') {
 				try {
-					// First, get existing picks to retrieve stored odds
+					// Fetch odds from centralized snapshot (reduces API calls dramatically)
+					const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
+					let snapshotOdds = [];
+					if (oddsResponse.ok) {
+						const data = await oddsResponse.json();
+						snapshotOdds = data.odds || [];
+						console.log(`[WeeklyPicks] Loaded ${snapshotOdds.length} odds from snapshot`);
+					}
+
+					// If no snapshot odds available, fall back to user's stored odds from picks
 					let storedOddsMap = new Map();
-					if (leagueId) {
+					if (snapshotOdds.length === 0 && leagueId) {
+						console.log('[WeeklyPicks] No snapshot odds found, falling back to stored picks');
 						const picksResponse = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
 						if (picksResponse.ok) {
 							const picksData = await picksResponse.json();
@@ -126,27 +136,16 @@ export function WeeklyPicks() {
 						}
 					}
 
-					// Then fetch current odds from API (for games that haven't started)
-					const oddsResponse = await fetch('/api/odds/nfl');
-					let liveOddsData = [];
-					if (oddsResponse.ok) {
-						liveOddsData = await oddsResponse.json();
-					}
-
-					// Match odds to games, preferring stored odds for games that have started
+					// Match odds to games
 					const gamesWithOdds = weeklyGames.map(game => {
-						// Check if we have stored odds for this game
+						// First try to find odds from snapshot
+						const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+
+						// Fall back to stored odds from user's picks
 						const storedOdds = storedOddsMap.get(game.id);
 
-						// Try to find live odds
-						const liveOdds = liveOddsData.find((o: any) =>
-							o.home_team === game.home.team || o.away_team === game.away.team
-						);
-
-						// For games that have started, use stored odds if available
-						// For games that haven't started, use live odds
-						const homeOdds = storedOdds?.homeOdds || liveOdds?.home?.odds;
-						const awayOdds = storedOdds?.awayOdds || liveOdds?.away?.odds;
+						const homeOdds = snapshotGameOdds?.home?.odds || storedOdds?.homeOdds;
+						const awayOdds = snapshotGameOdds?.away?.odds || storedOdds?.awayOdds;
 
 						if (homeOdds || awayOdds) {
 							return {

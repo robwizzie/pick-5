@@ -7,6 +7,18 @@
 		{
 			"path": "/api/cron/send-pick-reminders",
 			"schedule": "0 12 * * 6"
+		},
+		{
+			"path": "/api/cron/fetch-odds",
+			"schedule": "0 14 * * 2"
+		},
+		{
+			"path": "/api/cron/fetch-odds",
+			"schedule": "0 14 * * 5"
+		},
+		{
+			"path": "/api/cron/fetch-odds",
+			"schedule": "0 9 * * 0"
 		}
 	]
 }
