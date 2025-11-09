@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { checkAdminAuth } from '@/lib/adminAuth';
 import { OddsService } from '@/services/oddsService';
 
 export const dynamic = 'force-dynamic';
@@ -11,11 +10,11 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: Request) {
 	try {
-		// Verify user is authenticated (basic protection)
-		const session = await getServerSession(authOptions);
+		// Verify user is admin
+		const session = await checkAdminAuth();
 
 		if (!session) {
-			return NextResponse.json({ error: 'Unauthorized - must be logged in' }, { status: 401 });
+			return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
 		}
 
 		console.log(`[Admin Trigger] ${session.user?.email} manually triggering odds fetch`);
