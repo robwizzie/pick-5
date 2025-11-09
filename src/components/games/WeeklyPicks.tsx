@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { GameCard } from './GameCard';
+import { PickGameCard } from './PickGameCard';
 import { NFLService } from '@/services/nflService';
 import { useStats } from '@/contexts/StatsContext';
 import { useWeek } from '@/contexts/WeekContext';
@@ -532,16 +533,24 @@ export function WeeklyPicks() {
 							<div className='space-y-3'>
 								{picks.map((pick, index) => {
 									const game = games.find(g => g.id === pick.gameId);
+									if (!game) return null;
+
 									const isCorrect = isPickCorrect(pick, game);
-									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
+									const gameCompleted = typeof game.home.score === 'number' && typeof game.away.score === 'number';
+
 									return (
-										<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
-											<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {index + 1}</div>
-											{game && <div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-primary text-black shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>}
-											<div className='mt-8'>
-												<GameCard game={game} selected={pick.team} showScores={true} disabled={true} isCorrect={isCorrect} leaguePicks={gameCompleted ? leaguePicks[pick.gameId] : undefined} leagueMode={leagueMode} />
-											</div>
-										</div>
+										<PickGameCard
+											key={pick.gameId}
+											game={game}
+											pick={pick}
+											pickIndex={index}
+											gameFinished={gameCompleted}
+											showScores={true}
+											isCorrect={isCorrect}
+											leaguePicks={leaguePicks[pick.gameId]}
+											leagueMode={leagueMode}
+											variant="picks"
+										/>
 									);
 								})}
 							</div>
