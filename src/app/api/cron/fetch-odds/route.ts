@@ -127,8 +127,17 @@ export async function GET(req: Request) {
 			const homeOdds = parseInt(String(homeOutcome.price));
 			const awayOdds = parseInt(String(awayOutcome.price));
 
+			// Check if snapshot already exists to determine if this is create or update
+			const existingSnapshot = await OddsSnapshot.findOne({
+				week: currentWeek,
+				season: currentSeason,
+				gameId: espnGame.id
+			});
+
+			const isUpdate = !!existingSnapshot;
+
 			// Upsert the odds snapshot
-			const result = await OddsSnapshot.findOneAndUpdate(
+			await OddsSnapshot.findOneAndUpdate(
 				{
 					week: currentWeek,
 					season: currentSeason,
@@ -152,21 +161,12 @@ export async function GET(req: Request) {
 				}
 			);
 
-			if (result) {
-				// Check if this was an insert (created) or update
-				const existing = await OddsSnapshot.findOne({
-					week: currentWeek,
-					season: currentSeason,
-					gameId: espnGame.id
-				}).lean();
-
-				if (existing && existing.lastUpdated.getTime() === result.lastUpdated.getTime()) {
-					snapshotsCreated++;
-					console.log(`[Odds Cron] Created snapshot for ${oddsGame.away_team} @ ${oddsGame.home_team} (${espnGame.id}): ${awayOdds}/${homeOdds}`);
-				} else {
-					snapshotsUpdated++;
-					console.log(`[Odds Cron] Updated snapshot for ${oddsGame.away_team} @ ${oddsGame.home_team} (${espnGame.id}): ${awayOdds}/${homeOdds}`);
-				}
+			if (isUpdate) {
+				snapshotsUpdated++;
+				console.log(`[Odds Cron] Updated snapshot for ${oddsGame.away_team} @ ${oddsGame.home_team} (${espnGame.id}): ${awayOdds}/${homeOdds}`);
+			} else {
+				snapshotsCreated++;
+				console.log(`[Odds Cron] Created snapshot for ${oddsGame.away_team} @ ${oddsGame.home_team} (${espnGame.id}): ${awayOdds}/${homeOdds}`);
 			}
 		}
 
