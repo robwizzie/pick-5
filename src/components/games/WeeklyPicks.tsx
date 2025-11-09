@@ -607,8 +607,45 @@ export function WeeklyPicks() {
 								const renderGameCard = (game: Game) => {
 									const isPicked = picks.find(p => p.gameId === game.id);
 									const gameStarted = hasGameStarted(game);
-									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
+									const gameFinished = hasGameFinished(game);
 									const canSelect = !gameStarted;
+
+									// If game is finished AND user has a pick, show PickGameCard with results
+									if (gameFinished && isPicked) {
+										const isCorrect = isPickCorrect(isPicked, game);
+										const gameInProgress = game.status?.toLowerCase() === 'in' || game.status?.toLowerCase() === 'in_progress';
+
+										let pickPoints = 0;
+										if (isCorrect === true) {
+											if (leagueMode === 'standard' && isPicked.odds !== undefined) {
+												pickPoints = calculatePointsFromOdds(isPicked.odds);
+											} else {
+												pickPoints = 2; // Steve mode or no odds
+											}
+										}
+
+										const pickIndex = picks.findIndex(p => p.gameId === game.id);
+
+										return (
+											<PickGameCard
+												key={game.id}
+												game={game}
+												pick={isPicked}
+												pickIndex={pickIndex}
+												gameFinished={gameFinished}
+												gameInProgress={gameInProgress}
+												showScores={true}
+												isCorrect={isCorrect}
+												pickPoints={pickPoints}
+												leaguePicks={leaguePicks[game.id]}
+												leagueMode={leagueMode}
+												variant="results"
+											/>
+										);
+									}
+
+									// Otherwise show normal GameCard with selection
+									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
 
 									return (
 										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
