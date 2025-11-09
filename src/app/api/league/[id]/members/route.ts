@@ -20,14 +20,15 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 		}
 
 		// Check if user is a member of this league
-		const isMember = league.members.some((m: any) => m.userId.toString() === session.user.id);
+		// members is an array of user ID strings, not objects
+		const isMember = league.members.some((userId: string) => userId.toString() === session.user.id);
 		if (!isMember) {
 			return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
 		}
 
 		// Fetch user details for all members
-		const memberUserIds = league.members.map((m: any) => m.userId);
-		const users = await User.find({ _id: { $in: memberUserIds } }).select('_id name image');
+		// members array already contains user IDs
+		const users = await User.find({ _id: { $in: league.members } }).select('_id name image');
 
 		return NextResponse.json(users);
 	} catch (error) {
