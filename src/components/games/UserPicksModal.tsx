@@ -5,9 +5,10 @@ import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { GameCard } from './GameCard';
+import { PickGameCard } from './PickGameCard';
 import { NFLService } from '@/services/nflService';
 import { hasGameStarted, hasGameFinished } from '@/services/gameUtils';
+import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import type { Game } from './GameCard';
 import { X } from 'lucide-react';
 
@@ -25,6 +26,7 @@ interface UserPick {
 	opponent: string;
 	isHome: boolean;
 	isCorrect?: boolean | null;
+	odds?: number;
 }
 
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: UserPicksModalProps) {
@@ -35,6 +37,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 	const [games, setGames] = useState<Game[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [leagueMode, setLeagueMode] = useState<string>('standard');
 
 	// Check if viewing own picks
 	const isViewingOwnPicks = session?.user?.id === userId;
@@ -44,6 +47,15 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 			try {
 				setLoading(true);
 				setError(null);
+
+				// Fetch league mode
+				const leagueResponse = await fetch(`/api/league/${leagueId}`);
+				let fetchedLeagueMode = 'standard';
+				if (leagueResponse.ok) {
+					const leagueData = await leagueResponse.json();
+					fetchedLeagueMode = leagueData.mode || 'standard';
+					setLeagueMode(fetchedLeagueMode);
+				}
 
 				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(week), fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`)]);
 
@@ -59,7 +71,39 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 					setTfsScore(picksData.tfsScore || null);
 				}
 
-				setGames(weeklyGames);
+				// Fetch odds for Standard mode leagues
+				let gamesWithOdds = weeklyGames;
+				if (fetchedLeagueMode === 'standard') {
+					try {
+						const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}`);
+						let snapshotOdds = [];
+						if (oddsResponse.ok) {
+							const data = await oddsResponse.json();
+							snapshotOdds = data.odds || [];
+						}
+
+						// Match odds to games
+						gamesWithOdds = weeklyGames.map(game => {
+							const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+
+							const homeOdds = snapshotGameOdds?.home?.odds;
+							const awayOdds = snapshotGameOdds?.away?.odds;
+
+							if (homeOdds || awayOdds) {
+								return {
+									...game,
+									home: { ...game.home, odds: homeOdds },
+									away: { ...game.away, odds: awayOdds }
+								};
+							}
+							return game;
+						});
+					} catch (error) {
+						console.error('[UserPicksModal] Error fetching odds:', error);
+					}
+				}
+
+				setGames(gamesWithOdds);
 			} catch (err) {
 				console.error('Error loading user picks:', err);
 				setError('Error loading picks');
@@ -84,6 +128,13 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 		const homeWon = homeScore > awayScore;
 		const pickedHome = pick.team === game.home.team;
 		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
+	};
+
+	const checkGameStatus = (game: Game): 'completed' | 'in_progress' | 'pending' => {
+		if (hasGameFinished(game)) return 'completed';
+		const status = game.status?.toLowerCase();
+		if (status === 'in' || status === 'in_progress') return 'in_progress';
+		return 'pending';
 	};
 
 	const getGameScore = (game: Game) => {
@@ -147,51 +198,39 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 											const game = games.find(g => g.id === pick.gameId);
 											if (!game) return null;
 
-											const gameStarted = hasGameStarted(game);
-											const gameFinished = hasGameFinished(game);
+											const gameStatus = checkGameStatus(game);
+											const gameFinished = gameStatus === 'completed';
+											const gameInProgress = gameStatus === 'in_progress';
 
 											const isCorrect = isPickCorrect(pick, game);
-											const scores = getGameScore(game);
 
-											// For own picks: show all games (started or not)
-											// For other users: only show started games
-											if (!gameStarted && isViewingOwnPicks) {
-												return (
-													<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
-														<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {displayIndex + 1}</div>
-														<div className='absolute px-2 py-1 top-2 right-2 rounded-full text-xs font-medium bg-muted text-muted-foreground z-10'>Not Started</div>
-														<div className='mt-8'>
-															<GameCard game={game} selected={pick.team} showScores={false} disabled={true} isCorrect={null} noHover={true} />
-														</div>
-													</div>
-												);
+											// Calculate points based on league mode
+											let pickPoints = 0;
+											if (gameFinished && isCorrect === true) {
+												if (leagueMode === 'standard' && pick.odds !== undefined) {
+													pickPoints = calculatePointsFromOdds(pick.odds);
+												} else {
+													pickPoints = 2; // Steve mode or no odds
+												}
 											}
 
+											// Show scores for finished or in-progress games
+											const shouldShowScores = gameFinished || gameInProgress;
+
 											return (
-												<div key={pick.gameId} className='relative rounded-lg overflow-hidden bg-card border-2 border-primary/20'>
-													<div className='absolute px-2 py-1 rounded-full text-xs font-medium top-2 left-2 z-10 bg-primary text-black'>Pick {displayIndex + 1}</div>
-													{gameFinished && <div className={`absolute px-2 py-1 rounded-full text-xs font-medium top-2 right-2 z-10 ${isCorrect === true ? 'bg-green-500 text-black' : isCorrect === false ? 'bg-red-500 text-black' : 'bg-muted text-muted-foreground'}`}>{isCorrect === true ? '+2 pts' : isCorrect === false ? '0 pts' : 'Pending'}</div>}
-													<div className='mt-8'>
-														<GameCard
-															game={{
-																...game,
-																away: {
-																	...game.away,
-																	score: gameFinished && scores.away !== undefined ? scores.away : undefined
-																},
-																home: {
-																	...game.home,
-																	score: gameFinished && scores.home !== undefined ? scores.home : undefined
-																}
-															}}
-															selected={pick.team}
-															showScores={gameFinished}
-															disabled={true}
-															isCorrect={gameFinished ? isCorrect : null}
-															noHover={true}
-														/>
-													</div>
-												</div>
+												<PickGameCard
+													key={pick.gameId}
+													game={game}
+													pick={pick}
+													pickIndex={displayIndex}
+													gameFinished={gameFinished}
+													gameInProgress={gameInProgress}
+													showScores={shouldShowScores}
+													isCorrect={isCorrect}
+													pickPoints={pickPoints}
+													leagueMode={leagueMode}
+													variant="picks"
+												/>
 											);
 										});
 									})()}
