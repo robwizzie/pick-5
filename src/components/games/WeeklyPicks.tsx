@@ -564,23 +564,82 @@ export function WeeklyPicks() {
 					) : (
 						<div>
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
-							<div className='space-y-3'>
-								{games.map(game => {
+
+							{(() => {
+								// Organize games by status
+								const liveGames = games.filter(g => {
+									const status = g.status?.toLowerCase();
+									return status === 'in' || status === 'in_progress';
+								});
+
+								const upcomingGames = games.filter(g => {
+									const status = g.status?.toLowerCase();
+									return status === 'pre' || status === 'scheduled' || !status;
+								});
+
+								const pastGames = games.filter(g => {
+									const status = g.status?.toLowerCase();
+									return status === 'post' || status === 'final';
+								});
+
+								const renderGameCard = (game: Game) => {
 									const isPicked = picks.find(p => p.gameId === game.id);
 									const gameStarted = hasGameStarted(game);
 									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
-
-									// Allow editing if game has not started, even if already picked
-									// If game has started, do not allow selection (unless it is not picked)
 									const canSelect = !gameStarted;
 
 									return (
 										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
-											<GameCard game={game} selected={isPicked?.team} onSelect={handleTeamSelect} disabled={!canSelect || (picks.length >= 5 && !isPicked)} showScores={gameStarted} leaguePicks={gameCompleted ? leaguePicks[game.id] : undefined} leagueMode={leagueMode} />
+											<GameCard
+												game={game}
+												selected={isPicked?.team}
+												onSelect={handleTeamSelect}
+												disabled={!canSelect || (picks.length >= 5 && !isPicked)}
+												showScores={gameStarted}
+												leaguePicks={gameCompleted ? leaguePicks[game.id] : undefined}
+												leagueMode={leagueMode}
+											/>
 										</div>
 									);
-								})}
-							</div>
+								};
+
+								return (
+									<>
+										{/* Live Games */}
+										{liveGames.length > 0 && (
+											<div className='mb-6'>
+												<div className='flex items-center gap-2 mb-3'>
+													<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
+													<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
+												</div>
+												<div className='space-y-3'>
+													{liveGames.map(renderGameCard)}
+												</div>
+											</div>
+										)}
+
+										{/* Upcoming Games */}
+										{upcomingGames.length > 0 && (
+											<div className='mb-6'>
+												<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
+												<div className='space-y-3'>
+													{upcomingGames.map(renderGameCard)}
+												</div>
+											</div>
+										)}
+
+										{/* Past Games */}
+										{pastGames.length > 0 && (
+											<div className='mb-6'>
+												<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
+												<div className='space-y-3'>
+													{pastGames.map(renderGameCard)}
+												</div>
+											</div>
+										)}
+									</>
+								);
+							})()}
 
 							{picks.length === 5 && leagueMode === 'steve' && (
 								<div className='mt-6 space-y-4'>
