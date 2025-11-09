@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Resend } from 'resend';
+import { render } from '@react-email/render';
 import ThursdayReminderEmail from '@/emails/ThursdayReminderEmail';
 import SaturdayReminderEmail from '@/emails/SaturdayReminderEmail';
 
@@ -41,27 +42,35 @@ export async function GET(req: Request) {
 
 		// Send test email
 		if (type === 'thursday') {
-			await resend.emails.send({
-				from: 'Pick 5 <noreply@sportspick5.com>',
-				to: session.user.email,
-				subject: '🏈 [TEST] Thursday Night Football starts soon! Make your picks',
-				react: ThursdayReminderEmail({
+			const emailHtml = render(
+				ThursdayReminderEmail({
 					userName: session.user.name || 'Player',
 					thursdayGame: mockThursdayGame,
 					leagues: mockLeagues,
 					unsubscribeToken: 'test-token-12345'
 				})
-			});
-		} else {
+			);
+
 			await resend.emails.send({
 				from: 'Pick 5 <noreply@sportspick5.com>',
 				to: session.user.email,
-				subject: '⏰ [TEST] Last chance! Get your picks in before Sunday',
-				react: SaturdayReminderEmail({
+				subject: '🏈 [TEST] Thursday Night Football starts soon! Make your picks',
+				html: emailHtml
+			});
+		} else {
+			const emailHtml = render(
+				SaturdayReminderEmail({
 					userName: session.user.name || 'Player',
 					leagues: mockLeagues,
 					unsubscribeToken: 'test-token-12345'
 				})
+			);
+
+			await resend.emails.send({
+				from: 'Pick 5 <noreply@sportspick5.com>',
+				to: session.user.email,
+				subject: '⏰ [TEST] Last chance! Get your picks in before Sunday',
+				html: emailHtml
 			});
 		}
 
