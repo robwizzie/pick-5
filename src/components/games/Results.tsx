@@ -130,6 +130,20 @@ export function Results() {
 				const picksData = await picksResponse.json();
 				const leaguePicksData = await leaguePicksResponse.json();
 
+				// LOG: Check what data we received
+				console.log('[Results] 📊 Games data from API:', weeklyGames.map(g => ({
+					id: g.id,
+					away: `${g.away.team} (odds: ${g.away.odds}, score: ${g.away.score})`,
+					home: `${g.home.team} (odds: ${g.home.odds}, score: ${g.home.score})`,
+					status: g.status
+				})));
+				console.log('[Results] 📝 Picks data from API:', picksData?.picks?.map((p: any) => ({
+					gameId: p.gameId,
+					team: p.team,
+					odds: p.odds,
+					isHome: p.isHome
+				})));
+
 				setGames(weeklyGames);
 				setPicks(picksData);
 				setLeaguePicks(leaguePicksData);
@@ -265,6 +279,38 @@ export function Results() {
 
 			const badgeStyle = 'absolute px-2 py-1 rounded-full text-xs font-medium border';
 
+			// LOG: Check what data is being passed to GameCard
+			const gameCardData = {
+				...game,
+				away: {
+					...game.away,
+					score: gameFinished && scores.away !== undefined ? scores.away : undefined,
+					odds: !pick.isHome && pick.odds !== undefined ? pick.odds : game.away.odds
+				},
+				home: {
+					...game.home,
+					score: gameFinished && scores.home !== undefined ? scores.home : undefined,
+					odds: pick.isHome && pick.odds !== undefined ? pick.odds : game.home.odds
+				},
+				status: gameStatus
+			};
+
+			console.log(`[Results] 🎮 GameCard data for ${pick.team}:`, {
+				gameId: pick.gameId,
+				gameStatus: gameStatus,
+				gameFinished: gameFinished,
+				showScores: gameFinished,
+				pickOdds: pick.odds,
+				pickIsHome: pick.isHome,
+				awayTeam: gameCardData.away.team,
+				awayScore: gameCardData.away.score,
+				awayOdds: gameCardData.away.odds,
+				homeTeam: gameCardData.home.team,
+				homeScore: gameCardData.home.score,
+				homeOdds: gameCardData.home.odds,
+				leagueMode: leagueMode
+			});
+
 			return (
 				<div key={pick.gameId} className='relative rounded-lg overflow-hidden border-2 bg-card border-primary/20 pointer-events-none'>
 					{/* Badges moved outside GameCard */}
@@ -279,23 +325,7 @@ export function Results() {
 					<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>Pick {index + 1}</div>
 					<div className='mt-8'>
 						<GameCard
-							game={{
-								...game,
-								// Only pass scores if game is finished
-								away: {
-									...game.away,
-									score: gameFinished && scores.away !== undefined ? scores.away : undefined,
-									// Add odds from pick if this was the away team pick
-									odds: !pick.isHome && pick.odds !== undefined ? pick.odds : game.away.odds
-								},
-								home: {
-									...game.home,
-									score: gameFinished && scores.home !== undefined ? scores.home : undefined,
-									// Add odds from pick if this was the home team pick
-									odds: pick.isHome && pick.odds !== undefined ? pick.odds : game.home.odds
-								},
-								status: gameStatus
-							}}
+							game={gameCardData}
 							selected={pick.team}
 							showScores={gameFinished}
 							disabled={true}
