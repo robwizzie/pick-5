@@ -72,13 +72,10 @@ export async function POST(req: Request) {
 			}, { status: 400 });
 		}
 
-		// Add the user to the league using findByIdAndUpdate to avoid validation issues
+		// Add the user to the league
 		console.log('[Join League] Adding user to league members');
-		await League.findByIdAndUpdate(
-			leagueId,
-			{ $addToSet: { members: session.user.id } },
-			{ new: true }
-		);
+		league.members.push(session.user.id);
+		await league.save();
 		console.log('[Join League] Successfully added user to league');
 
 		return NextResponse.json({
