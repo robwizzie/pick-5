@@ -5,6 +5,7 @@ import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
 import { PushSubscription } from '@/models/PushSubscription';
 import { Resend } from 'resend';
+import { render } from '@react-email/render';
 import webPush from 'web-push';
 import ThursdayReminderEmail from '@/emails/ThursdayReminderEmail';
 import SaturdayReminderEmail from '@/emails/SaturdayReminderEmail';
@@ -157,13 +158,8 @@ export async function GET(req: Request) {
 				// Send email
 				try {
 					if (user.emailPreferences?.pickReminders) {
-						await resend.emails.send({
-							from: 'Pick 5 <noreply@sportspick5.com>',
-							to: user.email,
-							subject: isThursday
-								? `🏈 Thursday Night Football starts soon! Make your picks`
-								: `⏰ Last chance! Get your picks in before Sunday`,
-							react: isThursday
+						const emailHtml = await render(
+							isThursday
 								? ThursdayReminderEmail({
 										userName: user.name || 'Player',
 										thursdayGame: thursdayGame!,
@@ -175,6 +171,15 @@ export async function GET(req: Request) {
 										leagues: leaguesWithoutPicks,
 										unsubscribeToken: user.unsubscribeToken || ''
 									})
+						);
+
+						await resend.emails.send({
+							from: 'Pick 5 <noreply@sportspick5.com>',
+							to: user.email,
+							subject: isThursday
+								? `🏈 Thursday Night Football starts soon! Make your picks`
+								: `⏰ Last chance! Get your picks in before Sunday`,
+							html: emailHtml
 						});
 
 						emailsSent++;
