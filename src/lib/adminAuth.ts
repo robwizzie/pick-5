@@ -14,7 +14,7 @@ export async function checkAdminAuth() {
 		return null;
 	}
 
-	// @ts-ignore - session.user.id exists but TypeScript doesn't know about it
+	// @ts-expect-error - session.user.id exists but TypeScript doesn't know about it
 	if (session.user.id !== ADMIN_USER_ID) {
 		return null;
 	}
