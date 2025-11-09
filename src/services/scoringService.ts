@@ -5,6 +5,7 @@ interface GameResult {
 	awayScore: number | undefined;
 	homeTeam: string;
 	awayTeam: string;
+	status?: string; // Game status: 'pre', 'in', 'post'
 }
 
 export class ScoringService {
@@ -38,7 +39,30 @@ export class ScoringService {
 	}
 
 	/**
-	 * Calculate week score - only scores games that have finished (have both scores)
+	 * Check if a game has actually finished (not in progress)
+	 * Only count games with status 'post' as completed
+	 */
+	private static isGameFinished(gameResult: GameResult): boolean {
+		// Prefer using status field if available
+		if (gameResult.status) {
+			// Only count games with status 'post' as finished
+			// 'pre' = not started, 'in' = in progress, 'post' = completed
+			return gameResult.status === 'post';
+		}
+
+		// Fallback: check if both scores are present and at least one is > 0
+		// This is less reliable as games in progress will also meet this criteria
+		return (
+			typeof gameResult.homeScore === 'number' &&
+			typeof gameResult.awayScore === 'number' &&
+			gameResult.homeScore !== undefined &&
+			gameResult.awayScore !== undefined &&
+			(gameResult.homeScore > 0 || gameResult.awayScore > 0)
+		);
+	}
+
+	/**
+	 * Calculate week score - only scores games that have finished (status='post')
 	 * Returns completedGames count for accurate win percentage calculation
 	 * tfsGame and tfsScore can be null for Standard mode leagues
 	 */
@@ -55,9 +79,8 @@ export class ScoringService {
 				return { ...pick, isCorrect: null };
 			}
 
-			// Only score if game has finished (both scores are present, are numbers, and at least one is > 0)
-			// This prevents scoring games that haven't started (which would have 0/0 as default)
-			const gameFinished = typeof gameResult.homeScore === 'number' && typeof gameResult.awayScore === 'number' && gameResult.homeScore !== undefined && gameResult.awayScore !== undefined && (gameResult.homeScore > 0 || gameResult.awayScore > 0);
+			// Only score if game has finished (status='post')
+			const gameFinished = this.isGameFinished(gameResult);
 
 			if (!gameFinished) {
 				return { ...pick, isCorrect: null };
@@ -78,8 +101,8 @@ export class ScoringService {
 		if (tfsGame && tfsScore !== null) {
 			const tfsGameResult = gameResults.find(g => g.id === tfsGame);
 			if (tfsGameResult) {
-				// Only score TFS if game has finished (both scores are present, are numbers, and at least one is > 0)
-				const tfsGameFinished = typeof tfsGameResult.homeScore === 'number' && typeof tfsGameResult.awayScore === 'number' && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined && (tfsGameResult.homeScore > 0 || tfsGameResult.awayScore > 0);
+				// Only score TFS if game has finished (status='post')
+				const tfsGameFinished = this.isGameFinished(tfsGameResult);
 
 				if (tfsGameFinished && tfsGameResult.homeScore !== undefined && tfsGameResult.awayScore !== undefined) {
 					const actualScore = tfsGameResult.homeScore + tfsGameResult.awayScore;
