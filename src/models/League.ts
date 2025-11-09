@@ -1,7 +1,21 @@
-import { Schema, model, models } from 'mongoose';
+import { Schema, model, models, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-const LeagueSchema = new Schema(
+// Define interface for League document with comparePassword method
+interface ILeague extends Document {
+	name: string;
+	sport: string;
+	mode: string;
+	password: string;
+	creatorId: string;
+	members: string[];
+	inviteCode: string;
+	createdAt: Date;
+	updatedAt: Date;
+	comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
+const LeagueSchema = new Schema<ILeague>(
 	{
 		name: { type: String, required: true },
 		sport: { type: String, required: true },
@@ -42,4 +56,4 @@ LeagueSchema.methods.comparePassword = async function (candidatePassword: string
 	return bcrypt.compare(candidatePassword, this.password);
 };
 
-export const League = models.League || model('League', LeagueSchema);
+export const League = models.League || model<ILeague>('League', LeagueSchema);
