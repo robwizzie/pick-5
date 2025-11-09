@@ -18,6 +18,11 @@ export async function GET() {
 	try {
 		await connectDB();
 		const db = mongoose.connection.db;
+
+		if (!db) {
+			throw new Error('Database connection not established');
+		}
+
 		const leaguesCollection = db.collection('leagues');
 
 		// Find all leagues without inviteCode
