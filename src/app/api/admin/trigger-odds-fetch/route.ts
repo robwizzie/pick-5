@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { OddsService } from '@/services/oddsService';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,38 +20,19 @@ export async function POST(req: Request) {
 
 		console.log(`[Admin Trigger] ${session.user?.email} manually triggering odds fetch`);
 
-		// Get the base URL
-		const baseUrl = process.env.VERCEL_URL
-			? `https://${process.env.VERCEL_URL}`
-			: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+		// Call the shared service function directly
+		const result = await OddsService.fetchAndStoreOdds();
 
-		// Call the fetch-odds endpoint with the cron secret
-		const cronSecret = process.env.CRON_SECRET;
-		const headers: HeadersInit = {};
-
-		if (cronSecret) {
-			headers['authorization'] = `Bearer ${cronSecret}`;
-		}
-
-		const response = await fetch(`${baseUrl}/api/cron/fetch-odds`, {
-			method: 'GET',
-			headers
-		});
-
-		if (!response.ok) {
-			const errorText = await response.text();
-			console.error('[Admin Trigger] Failed to fetch odds:', errorText);
+		if (!result.success) {
 			return NextResponse.json(
 				{
 					error: 'Failed to fetch odds',
-					details: errorText,
-					status: response.status
+					details: result.error
 				},
-				{ status: response.status }
+				{ status: 500 }
 			);
 		}
 
-		const result = await response.json();
 		console.log('[Admin Trigger] Odds fetch completed:', result);
 
 		return NextResponse.json({
