@@ -5,7 +5,7 @@ import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
-import { GameCard } from './GameCard';
+import { PickGameCard } from './PickGameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { useWeek } from '@/contexts/WeekContext';
@@ -140,7 +140,6 @@ export function Results() {
 						if (oddsResponse.ok) {
 							const data = await oddsResponse.json();
 							snapshotOdds = data.odds || [];
-							console.log(`[Results] 💰 Loaded ${snapshotOdds.length} odds from snapshot`);
 						}
 
 						// Match odds to games
@@ -159,25 +158,10 @@ export function Results() {
 							}
 							return game;
 						});
-						console.log('[Results] 💰 Merged odds with games');
 					} catch (error) {
 						console.error('[Results] Error fetching odds:', error);
 					}
 				}
-
-				// LOG: Check what data we received
-				console.log('[Results] 📊 Games data from API:', gamesWithOdds.map(g => ({
-					id: g.id,
-					away: `${g.away.team} (odds: ${g.away.odds}, score: ${g.away.score})`,
-					home: `${g.home.team} (odds: ${g.home.odds}, score: ${g.home.score})`,
-					status: g.status
-				})));
-				console.log('[Results] 📝 Picks data from API:', picksData?.picks?.map((p: any) => ({
-					gameId: p.gameId,
-					team: p.team,
-					odds: p.odds,
-					isHome: p.isHome
-				})));
 
 				setGames(gamesWithOdds);
 				setPicks(picksData);
@@ -259,12 +243,6 @@ export function Results() {
 		return 0;
 	};
 
-	const getPointsColor = (points: number) => {
-		if (points > 0) return 'bg-[#22c55e] text-black'; // Green with black text
-		if (points < 0) return 'bg-destructive text-white';
-		return 'bg-muted text-muted-foreground';
-	};
-
 	const getTextColor = (points: number) => {
 		if (points > 0) return 'text-[#22c55e]'; // Green
 		if (points < 0) return 'text-destructive';
@@ -298,7 +276,6 @@ export function Results() {
 				return null;
 			}
 
-			const scores = getGameScore(game);
 			const gameStatus = checkGameStatus(game);
 			const isCorrect = checkPickCorrect(pick, game);
 			const gameFinished = hasGameFinished(game);
@@ -316,70 +293,24 @@ export function Results() {
 				correctPicks += 1;
 			}
 
-			const badgeStyle = 'absolute px-2 py-1 rounded-full text-xs font-medium border';
-
-			// LOG: Check what data is being passed to GameCard
 			// Show scores for both finished games AND in-progress games
 			const shouldShowScores = gameFinished || gameInProgress;
-			const gameCardData = {
-				...game,
-				away: {
-					...game.away,
-					score: shouldShowScores && scores.away !== undefined ? scores.away : undefined,
-					odds: !pick.isHome && pick.odds !== undefined ? pick.odds : game.away.odds
-				},
-				home: {
-					...game.home,
-					score: shouldShowScores && scores.home !== undefined ? scores.home : undefined,
-					odds: pick.isHome && pick.odds !== undefined ? pick.odds : game.home.odds
-				},
-				status: gameStatus
-			};
-
-			console.log(`[Results] 🎮 GameCard data for ${pick.team}:`, {
-				gameId: pick.gameId,
-				gameStatus: gameStatus,
-				gameFinished: gameFinished,
-				gameInProgress: gameInProgress,
-				showScores: shouldShowScores,
-				pickOdds: pick.odds,
-				pickIsHome: pick.isHome,
-				awayTeam: gameCardData.away.team,
-				awayScore: gameCardData.away.score,
-				awayOdds: gameCardData.away.odds,
-				homeTeam: gameCardData.home.team,
-				homeScore: gameCardData.home.score,
-				homeOdds: gameCardData.home.odds,
-				leagueMode: leagueMode
-			});
 
 			return (
-				<div key={pick.gameId} className='relative rounded-lg overflow-hidden border-2 bg-card border-primary/20 pointer-events-none'>
-					{/* Badges moved outside GameCard */}
-					{gameFinished ? (
-						<div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(pickPoints)}`}>
-							{pickPoints > 0 ? `+${pickPoints} pts` : '0 pts'}
-						</div>
-					) : gameInProgress ? (
-						<div className={`${badgeStyle} top-2 right-2 z-10 bg-green-500/20 text-green-400 border-green-500/50`}>Live</div>
-					) : (
-						<div className={`${badgeStyle} top-2 right-2 z-10 bg-muted text-muted-foreground`}>Pending</div>
-					)}
-					<div className='absolute top-2 left-1/2 transform -translate-x-1/2 px-2 py-1 rounded-full bg-primary text-black text-xs font-medium shadow-md z-10'>{new Date(game.date).toLocaleDateString()}</div>
-					<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>Pick {index + 1}</div>
-					<div className='mt-8'>
-						<GameCard
-							game={gameCardData}
-							selected={pick.team}
-							showScores={shouldShowScores}
-							disabled={true}
-							isCorrect={gameFinished ? isCorrect : null}
-							noHover={true}
-							leaguePicks={gameFinished ? leaguePicks[pick.gameId] : undefined}
-							leagueMode={leagueMode}
-						/>
-					</div>
-				</div>
+				<PickGameCard
+					key={pick.gameId}
+					game={game}
+					pick={pick}
+					pickIndex={index}
+					gameFinished={gameFinished}
+					gameInProgress={gameInProgress}
+					showScores={shouldShowScores}
+					isCorrect={isCorrect}
+					pickPoints={pickPoints}
+					leaguePicks={leaguePicks[pick.gameId]}
+					leagueMode={leagueMode}
+					variant="results"
+				/>
 			);
 		}).filter(Boolean);
 
