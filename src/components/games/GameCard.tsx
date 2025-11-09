@@ -217,17 +217,18 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.team}</div>
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
 									{(() => {
-										const shouldShowOdds = isStandardMode && game.away.odds !== undefined;
+										const awayOdds = game.away.odds;
+										const shouldShowOdds = isStandardMode && awayOdds !== undefined;
 										console.log(`[GameCard] 💰 Away team ${game.away.team} odds check:`, {
 											isStandardMode,
-											awayOdds: game.away.odds,
+											awayOdds: awayOdds,
 											shouldShowOdds
 										});
-										return shouldShowOdds ? (
+										return shouldShowOdds && awayOdds !== undefined ? (
 											<div className='flex items-center gap-1.5 mt-1'>
-												<span className={`text-xs font-semibold ${selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
+												<span className={`text-xs font-semibold ${selected === game.away.team ? 'text-black/80' : getOddsColorClass(awayOdds)}`}>{formatOdds(awayOdds)}</span>
 												<span className={`text-xs ${selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-												<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
+												<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(awayOdds)} pts</span>
 											</div>
 										) : null;
 									})()}
@@ -275,17 +276,18 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.team}</div>
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
 									{(() => {
-										const shouldShowOdds = isStandardMode && game.home.odds !== undefined;
+										const homeOdds = game.home.odds;
+										const shouldShowOdds = isStandardMode && homeOdds !== undefined;
 										console.log(`[GameCard] 💰 Home team ${game.home.team} odds check:`, {
 											isStandardMode,
-											homeOdds: game.home.odds,
+											homeOdds: homeOdds,
 											shouldShowOdds
 										});
-										return shouldShowOdds ? (
+										return shouldShowOdds && homeOdds !== undefined ? (
 											<div className='flex items-center gap-1.5 mt-1'>
-												<span className={`text-xs font-semibold ${selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
+												<span className={`text-xs font-semibold ${selected === game.home.team ? 'text-black/80' : getOddsColorClass(homeOdds)}`}>{formatOdds(homeOdds)}</span>
 												<span className={`text-xs ${selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-												<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
+												<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(homeOdds)} pts</span>
 											</div>
 										) : null;
 									})()}
