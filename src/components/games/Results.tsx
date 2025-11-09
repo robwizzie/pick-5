@@ -37,6 +37,12 @@ interface LeaguePicksData {
 	};
 }
 
+interface LeagueMember {
+	_id: string;
+	name: string;
+	image?: string | null;
+}
+
 export function Results() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
@@ -48,10 +54,44 @@ export function Results() {
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
+	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [leagueMembers, setLeagueMembers] = useState<LeagueMember[]>([]);
+	const [selectedUserId, setSelectedUserId] = useState<string>('');
+
+	// Fetch league details and members
+	useEffect(() => {
+		const fetchLeagueData = async () => {
+			if (!leagueId || !session?.user?.id) return;
+
+			try {
+				const [leagueResponse, membersResponse] = await Promise.all([
+					fetch(`/api/league/${leagueId}`),
+					fetch(`/api/league/${leagueId}/members`)
+				]);
+
+				if (leagueResponse.ok) {
+					const leagueData = await leagueResponse.json();
+					setLeagueMode(leagueData.mode || 'standard');
+				}
+
+				if (membersResponse.ok) {
+					const membersData = await membersResponse.json();
+					setLeagueMembers(membersData);
+				}
+
+				// Set current user as default
+				setSelectedUserId(session.user.id);
+			} catch (error) {
+				console.error('Error fetching league data:', error);
+			}
+		};
+
+		fetchLeagueData();
+	}, [leagueId, session?.user?.id]);
 
 	useEffect(() => {
 		const loadData = async (isPolling = false) => {
-			if (sessionStatus === 'loading') return;
+			if (sessionStatus === 'loading' || !selectedUserId) return;
 
 			try {
 				if (!leagueId) {
@@ -67,10 +107,15 @@ export function Results() {
 					setLoading(true);
 				}
 
+				// Fetch picks for selected user
+				const picksUrl = selectedUserId === session?.user?.id
+					? `/api/picks?week=${currentWeek}&leagueId=${leagueId}`
+					: `/api/picks/user?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`;
+
 				// Pass leagueId to the backend
 				const [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
 					NFLService.getWeeklyGames(currentWeek),
-					fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
+					fetch(picksUrl, { cache: 'no-store' }),
 					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
 				]);
 
