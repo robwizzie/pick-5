@@ -12,6 +12,7 @@ import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { hasGameFinished } from '@/services/gameUtils';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface WeeklyPicks {
@@ -28,6 +29,7 @@ interface WeeklyPicks {
 }
 
 interface UserPick {
+	_id: string;
 	userId: string;
 	name: string;
 	image: string | null;
@@ -38,12 +40,6 @@ interface LeaguePicksData {
 		away: UserPick[];
 		home: UserPick[];
 	};
-}
-
-interface LeagueMember {
-	_id: string;
-	name: string;
-	image?: string | null;
 }
 
 export function Results() {
@@ -58,43 +54,57 @@ export function Results() {
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
-	const [leagueMembers, setLeagueMembers] = useState<LeagueMember[]>([]);
+	const [leagueMembers, setLeagueMembers] = useState<UserPick[]>([]);
 	const [selectedUserId, setSelectedUserId] = useState<string>('');
 
-	// Fetch league details and members
+	// Fetch league mode
 	useEffect(() => {
-		const fetchLeagueData = async () => {
-			if (!leagueId || !session?.user?.id) return;
+		const fetchLeagueMode = async () => {
+			if (!leagueId) return;
 
 			try {
-				const [leagueResponse, membersResponse] = await Promise.all([
-					fetch(`/api/league/${leagueId}`),
-					fetch(`/api/league/${leagueId}/members`)
-				]);
-
-				if (leagueResponse.ok) {
-					const leagueData = await leagueResponse.json();
+				const response = await fetch(`/api/league/${leagueId}`);
+				if (response.ok) {
+					const leagueData = await response.json();
 					setLeagueMode(leagueData.mode || 'standard');
 				}
-
-				if (membersResponse.ok) {
-					const membersData = await membersResponse.json();
-					setLeagueMembers(membersData);
-				}
-
-				// Set current user as default
-				setSelectedUserId(session.user.id);
 			} catch (error) {
-				console.error('Error fetching league data:', error);
+				console.error('Error fetching league mode:', error);
 			}
 		};
 
-		fetchLeagueData();
-	}, [leagueId, session?.user?.id]);
+		fetchLeagueMode();
+	}, [leagueId]);
+
+	// Fetch league members
+	useEffect(() => {
+		const fetchLeagueMembers = async () => {
+			if (!leagueId) return;
+
+			try {
+				const response = await fetch(`/api/league/${leagueId}/members`);
+				if (response.ok) {
+					const members = await response.json();
+					setLeagueMembers(members);
+					// Set current user as default selected
+					if (session?.user?.id && !selectedUserId) {
+						setSelectedUserId(session.user.id);
+					}
+				}
+			} catch (error) {
+				console.error('Error fetching league members:', error);
+			}
+		};
+
+		if (session?.user) {
+			fetchLeagueMembers();
+		}
+	}, [leagueId, session?.user, selectedUserId]);
 
 	useEffect(() => {
 		const loadData = async (isPolling = false) => {
-			if (sessionStatus === 'loading' || !selectedUserId) return;
+			if (sessionStatus === 'loading') return;
+			if (!selectedUserId) return; // Wait for user selection
 
 			try {
 				if (!leagueId) {
@@ -110,15 +120,10 @@ export function Results() {
 					setLoading(true);
 				}
 
-				// Fetch picks for selected user
-				const picksUrl = selectedUserId === session?.user?.id
-					? `/api/picks?week=${currentWeek}&leagueId=${leagueId}`
-					: `/api/picks/user?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`;
-
-				// Pass leagueId to the backend
+				// Pass leagueId and userId to the backend
 				const [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
 					NFLService.getWeeklyGames(currentWeek),
-					fetch(picksUrl, { cache: 'no-store' }),
+					fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`, { cache: 'no-store' }),
 					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
 				]);
 
@@ -159,7 +164,7 @@ export function Results() {
 		}, pollingInterval);
 
 		return () => clearInterval(pollInterval);
-	}, [currentWeek, sessionStatus, leagueId]);
+	}, [currentWeek, sessionStatus, leagueId, selectedUserId]);
 
 	// Game score calculation utility
 	const getGameScore = (game: Game) => ({
@@ -218,7 +223,9 @@ export function Results() {
 	const results = useMemo(() => {
 		if (!picks || !games.length)
 			return {
-				gameElements: [],
+				liveGames: [],
+				upcomingGames: [],
+				pastGames: [],
 				totalPoints: 0,
 				correctPicks: 0,
 				tfsPoints: 0
@@ -228,8 +235,8 @@ export function Results() {
 		let correctPicks = 0;
 		let tfsPoints = 0;
 
-		// Process game picks
-		const gameElements = picks.picks.map((pick, index) => {
+		// Process game picks and organize by status
+		const allGameElements = picks.picks.map((pick, index) => {
 			const game = games.find(g => g.id === pick.gameId);
 			if (!game) return null;
 
@@ -289,6 +296,31 @@ export function Results() {
 					</div>
 				</div>
 			);
+		}).filter(Boolean);
+
+		// Organize games by status
+		const liveGames = allGameElements.filter((element: any) => {
+			if (!element) return false;
+			const game = games.find(g => g.id === element.key);
+			if (!game) return false;
+			const status = game.status?.toLowerCase();
+			return status === 'in' || status === 'in_progress';
+		});
+
+		const upcomingGames = allGameElements.filter((element: any) => {
+			if (!element) return false;
+			const game = games.find(g => g.id === element.key);
+			if (!game) return false;
+			const status = game.status?.toLowerCase();
+			return status === 'pre' || status === 'scheduled' || !status;
+		});
+
+		const pastGames = allGameElements.filter((element: any) => {
+			if (!element) return false;
+			const game = games.find(g => g.id === element.key);
+			if (!game) return false;
+			const status = game.status?.toLowerCase();
+			return status === 'post' || status === 'final';
 		});
 
 		// Calculate TFS points (only if game is finished)
@@ -305,7 +337,9 @@ export function Results() {
 		}
 
 		return {
-			gameElements,
+			liveGames,
+			upcomingGames,
+			pastGames,
 			totalPoints,
 			correctPicks,
 			tfsPoints
@@ -366,8 +400,29 @@ export function Results() {
 	return (
 		<Card className='bg-card border-primary/20'>
 			<CardHeader>
-				<div className='flex items-center justify-between'>
+				<div className='flex items-center justify-between mb-4'>
 					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
+					<Select value={selectedUserId} onValueChange={setSelectedUserId}>
+						<SelectTrigger className='w-[200px]'>
+							<SelectValue placeholder='Select user' />
+						</SelectTrigger>
+						<SelectContent>
+							{leagueMembers.map(member => (
+								<SelectItem key={member._id} value={member._id}>
+									<div className='flex items-center gap-2'>
+										<Avatar className='w-5 h-5'>
+											<AvatarImage src={member.image || undefined} alt={member.name} />
+											<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
+										</Avatar>
+										<span>{member.name}</span>
+									</div>
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
+				<div className='flex items-center justify-between'>
+					<div></div>
 					<div className='flex items-center gap-2'>
 						{isUpdating && (
 							<div className='flex items-center gap-1 text-xs text-primary/80'>
@@ -392,10 +447,44 @@ export function Results() {
 				)}
 
 				<div className='space-y-6'>
-					{/* Game Picks */}
+					{/* Game Picks organized by status */}
 					<div>
-						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>Your Picks</h3>
-						<div className='space-y-3'>{results.gameElements}</div>
+						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>
+							{selectedUserId === session?.user?.id ? 'Your Picks' : `${leagueMembers.find(m => m._id === selectedUserId)?.name}'s Picks`}
+						</h3>
+
+						{/* Live Games */}
+						{results.liveGames.length > 0 && (
+							<div className='mb-6'>
+								<div className='flex items-center gap-2 mb-3'>
+									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
+									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
+								</div>
+								<div className='space-y-3'>
+									{results.liveGames}
+								</div>
+							</div>
+						)}
+
+						{/* Upcoming Games */}
+						{results.upcomingGames.length > 0 && (
+							<div className='mb-6'>
+								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
+								<div className='space-y-3'>
+									{results.upcomingGames}
+								</div>
+							</div>
+						)}
+
+						{/* Past Games */}
+						{results.pastGames.length > 0 && (
+							<div className='mb-6'>
+								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
+								<div className='space-y-3'>
+									{results.pastGames}
+								</div>
+							</div>
+						)}
 					</div>
 
 					{/* TFS Prediction - Only for Steve mode */}
