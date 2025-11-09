@@ -49,12 +49,18 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 
 	const visiblePicks = picks.slice(0, maxVisible);
 	const remainingCount = picks.length - maxVisible;
+	const remainingNames = picks.slice(maxVisible).map(p => p.name).join(', ');
 
 	return (
 		<div className='flex items-center gap-0.5 mt-2'>
 			<div className='flex -space-x-2'>
 				{visiblePicks.map((pick, index) => (
-					<Avatar key={pick.userId} className='w-6 h-6 border-2 border-card' style={{ zIndex: maxVisible - index }}>
+					<Avatar
+						key={pick.userId}
+						className='w-6 h-6 border-2 border-card cursor-help'
+						style={{ zIndex: maxVisible - index }}
+						title={pick.name}
+					>
 						<AvatarImage src={pick.image || undefined} alt={pick.name} />
 						<AvatarFallback className='bg-primary/20 text-primary text-[10px] font-semibold'>
 							{pick.name
@@ -67,7 +73,14 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 					</Avatar>
 				))}
 			</div>
-			{remainingCount > 0 && <span className='text-xs text-black ml-1'>+{remainingCount}</span>}
+			{remainingCount > 0 && (
+				<span
+					className='text-xs text-black ml-1 cursor-help'
+					title={remainingNames}
+				>
+					+{remainingCount}
+				</span>
+			)}
 		</div>
 	);
 }
@@ -118,9 +131,9 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
 									{isStandardMode && game.away.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-											<span className='text-xs text-muted-foreground'>•</span>
-											<span className='text-xs font-bold text-primary'>{calculatePointsFromOdds(game.away.odds)} pts</span>
+											<span className={`text-xs font-semibold ${selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
+											<span className={`text-xs ${selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+											<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 										</div>
 									)}
 									{showScores && game.away.score !== undefined && <div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>}
@@ -147,9 +160,9 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
 									{isStandardMode && game.home.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-											<span className='text-xs text-muted-foreground'>•</span>
-											<span className='text-xs font-bold text-primary'>{calculatePointsFromOdds(game.home.odds)} pts</span>
+											<span className={`text-xs font-semibold ${selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
+											<span className={`text-xs ${selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+											<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 										</div>
 									)}
 									{showScores && game.home.score !== undefined && <div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>}
