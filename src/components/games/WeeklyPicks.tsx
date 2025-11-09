@@ -37,7 +37,7 @@ export function WeeklyPicks() {
 	const { data: session, status: sessionStatus } = useSession();
 	const { refreshStats } = useStats();
 	const [games, setGames] = useState<Game[]>([]);
-	const [picks, setPicks] = useState<{ gameId: string; team: string; opponent: string; isHome: boolean }[]>([]);
+	const [picks, setPicks] = useState<{ gameId: string; team: string; opponent: string; isHome: boolean; odds?: number }[]>([]);
 	const [tfsGame, setTfsGame] = useState('');
 	const [tfsScore, setTfsScore] = useState('');
 	const [loading, setLoading] = useState(true);
@@ -347,7 +347,7 @@ export function WeeklyPicks() {
 		}
 	};
 
-	const handleTeamSelect = (gameId: string, selectedTeam: string, opponent: string, isHome: boolean) => {
+	const handleTeamSelect = (gameId: string, selectedTeam: string, opponent: string, isHome: boolean, odds?: number) => {
 		if (!session) {
 			setError('Please sign in to make picks');
 			return;
@@ -362,14 +362,14 @@ export function WeeklyPicks() {
 			// Otherwise update/add pick
 			if (existing !== -1) {
 				const newPicks = [...current];
-				newPicks[existing] = { gameId, team: selectedTeam, opponent, isHome };
+				newPicks[existing] = { gameId, team: selectedTeam, opponent, isHome, odds };
 				return newPicks;
 			}
 			if (current.length >= 5) {
 				setError('You can only select 5 games');
 				return current;
 			}
-			return [...current, { gameId, team: selectedTeam, opponent, isHome }];
+			return [...current, { gameId, team: selectedTeam, opponent, isHome, odds }];
 		});
 	};
 
