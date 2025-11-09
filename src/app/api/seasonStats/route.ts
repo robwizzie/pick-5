@@ -2,10 +2,12 @@
 import { NextResponse } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
+import { League } from '@/models/League';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
+import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +26,13 @@ export async function GET(req: Request) {
 		}
 
 		await connectDB();
+
+		// Fetch league to get mode
+		const league = await League.findById(leagueId).lean();
+		if (!league) {
+			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+		}
+		const leagueMode = (league as any).mode || 'standard';
 
 		// Find picks for the user in the specific league
 		const userPicks = await Pick.find({ userId: session.user.id, leagueId }).lean();
@@ -64,7 +73,9 @@ export async function GET(req: Request) {
 				pick.picks,
 				weekResults,
 				pick.tfsGame,
-				pick.tfsScore
+				pick.tfsScore,
+				leagueMode,
+				calculatePointsFromOdds
 			);
 
 			// Store weekly stats
