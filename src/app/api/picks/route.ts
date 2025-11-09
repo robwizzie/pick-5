@@ -221,6 +221,10 @@ export async function GET(req: Request) {
 			return NextResponse.json(null);
 		}
 
+		// Get league for mode
+		const league = await League.findById(leagueId);
+		const leagueMode = league?.mode || 'standard';
+
 		// Get current game results for re-scoring if needed
 		const games = await NFLService.getWeeklyGames(parseInt(week, 10));
 		const gameResults = games.map(game => ({
@@ -230,11 +234,21 @@ export async function GET(req: Request) {
 			homeScore: typeof game.home.score === 'number' ? game.home.score : undefined,
 			awayScore: typeof game.away.score === 'number' ? game.away.score : undefined,
 			homeTeam: game.home.team,
-			awayTeam: game.away.team
+			awayTeam: game.away.team,
+			status: game.status // Pass game status for proper finished check
 		}));
 
 		// Recalculate scores with current results (only scores finished games)
-		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(picks.picks, gameResults, picks.tfsGame, picks.tfsScore);
+		// For Standard mode, need to import and pass calculatePointsFromOdds
+		const { calculatePointsFromOdds } = await import('@/utils/oddsUtils');
+		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(
+			picks.picks,
+			gameResults,
+			picks.tfsGame,
+			picks.tfsScore,
+			leagueMode,
+			calculatePointsFromOdds
+		);
 
 		// Update picks with current scores if they've changed
 		if (weeklyPoints !== picks.weeklyPoints || correctPicks !== picks.correctPicks || tfsPoints !== picks.tfsPoints) {
