@@ -26,8 +26,12 @@ export async function GET(req: Request) {
 
 		console.log(`[Master Cron] Running at ${now.toISOString()}, day of week: ${dayOfWeek}`);
 
-		// Tuesday (2): Fetch odds
+		// Tuesday (2): Send score emails and fetch odds
 		if (dayOfWeek === 2) {
+			console.log('[Master Cron] Tuesday - Sending score emails');
+			const scoreEmailResult = await sendScoreEmails(req);
+			results.push({ task: 'send-score-emails', day: 'Tuesday', result: scoreEmailResult });
+
 			console.log('[Master Cron] Tuesday - Fetching odds');
 			const oddsResult = await fetchOdds(req);
 			results.push({ task: 'fetch-odds', day: 'Tuesday', result: oddsResult });
@@ -119,6 +123,36 @@ async function sendReminders(req: Request): Promise<any> {
 			: 'http://localhost:3000';
 
 		const response = await fetch(`${baseUrl}/api/cron/send-pick-reminders`, {
+			method: 'GET',
+			headers: {
+				'authorization': req.headers.get('authorization') || ''
+			}
+		});
+
+		if (!response.ok) {
+			const error = await response.text();
+			return { success: false, error };
+		}
+
+		return await response.json();
+	} catch (error) {
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		};
+	}
+}
+
+/**
+ * Send weekly score emails
+ */
+async function sendScoreEmails(req: Request): Promise<any> {
+	try {
+		const baseUrl = process.env.VERCEL_URL
+			? `https://${process.env.VERCEL_URL}`
+			: 'http://localhost:3000';
+
+		const response = await fetch(`${baseUrl}/api/cron/send-score-emails`, {
 			method: 'GET',
 			headers: {
 				'authorization': req.headers.get('authorization') || ''
