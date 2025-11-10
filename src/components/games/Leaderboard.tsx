@@ -36,6 +36,24 @@ export function Leaderboard() {
 	const [key, setKey] = useState(0); // Force rerender mechanism
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+	const [leagueMode, setLeagueMode] = useState<string>('');
+
+	// Fetch league details to get the mode
+	useEffect(() => {
+		const fetchLeagueDetails = async () => {
+			if (!leagueId) return;
+			try {
+				const response = await fetch(`/api/league/${leagueId}`);
+				if (response.ok) {
+					const data = await response.json();
+					setLeagueMode(data.mode || 'standard');
+				}
+			} catch (error) {
+				console.error('[Leaderboard] Error fetching league details:', error);
+			}
+		};
+		fetchLeagueDetails();
+	}, [leagueId]);
 
 	// Fetch leaderboard data
 	const fetchLeaderboard = async (isPolling = false) => {
@@ -224,10 +242,12 @@ export function Leaderboard() {
 															<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Points</p>
 															<p className='text-2xl font-bold text-primary'>{entry.points}</p>
 														</div>
-														<div>
-															<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>TFS</p>
-															<p className='text-2xl font-bold text-accent'>{entry.tfsPoints}</p>
-														</div>
+														{leagueMode === 'steve' && (
+															<div>
+																<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>TFS</p>
+																<p className='text-2xl font-bold text-accent'>{entry.tfsPoints}</p>
+															</div>
+														)}
 													</div>
 												</div>
 											</div>
