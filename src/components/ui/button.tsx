@@ -43,6 +43,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, va
 		return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
 	}
 
+	// Extract motion-specific props and pass rest as button props
+	const { onDrag, onDragStart, onDragEnd, ...buttonProps } = props as any;
+
 	// Use motion.button for animated buttons
 	return (
 		<motion.button
@@ -51,7 +54,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, va
 			whileHover={{ scale: 1.02 }}
 			whileTap={{ scale: 0.98 }}
 			transition={{ duration: 0.1 }}
-			{...props}
+			{...buttonProps}
 		/>
 	);
 });
