@@ -90,9 +90,9 @@ export async function GET(req: Request) {
 			status: game.status || 'Unknown'
 		}));
 
-		// Get all users who have email reminders enabled (we'll use the same preference)
+		// Get all users who have weekly score emails enabled
 		const users = await User.find({
-			'emailPreferences.pickReminders': true
+			'emailPreferences.weeklyScoreEmail': true
 		});
 
 		console.log(`[Score Emails] Found ${users.length} users with reminders enabled`);
