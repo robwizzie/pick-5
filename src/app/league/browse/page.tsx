@@ -223,38 +223,47 @@ export default function BrowseLeaguesPage() {
 									league.isMember ? 'border-primary/30' : ''
 								}`}
 								onClick={() => handleLeagueClick(league)}>
-								<CardContent className='p-6'>
-									<div className='flex items-center justify-between'>
-										<div className='flex-1'>
-											<div className='flex items-center gap-2'>
-												<h3 className='text-xl font-semibold text-foreground group-hover:text-primary transition-colors'>{league.name}</h3>
+								<CardContent className='p-4 sm:p-6'>
+									{/* Mobile: Stack vertically, Desktop: Horizontal */}
+									<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
+										{/* League Info */}
+										<div className='flex-1 min-w-0'>
+											{/* League Name & Member Badge */}
+											<div className='flex items-center gap-2 flex-wrap mb-2 sm:mb-0'>
+												<h3 className='text-lg sm:text-xl font-semibold text-foreground group-hover:text-primary transition-colors break-words'>
+													{league.name}
+												</h3>
 												{league.isMember && (
-													<div className='flex items-center gap-1 px-2 py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold'>
+													<div className='flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-full bg-primary/20 text-primary text-xs font-semibold whitespace-nowrap'>
 														<CheckCircle2 className='h-3 w-3' />
 														<span>Member</span>
 													</div>
 												)}
 											</div>
-											<div className='flex items-center gap-4 mt-2 text-sm text-muted-foreground'>
-												<div className='flex items-center gap-1'>
-													<Users className='h-4 w-4' />
-													<span>
+
+											{/* League Meta Info */}
+											<div className='flex flex-wrap items-center gap-3 sm:gap-4 mt-2 text-xs sm:text-sm text-muted-foreground'>
+												<div className='flex items-center gap-1 sm:gap-1.5'>
+													<Users className='h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0' />
+													<span className='whitespace-nowrap'>
 														{league.memberCount} {league.memberCount === 1 ? 'member' : 'members'}
 													</span>
 												</div>
-												<div className='flex items-center gap-1'>
-													<Lock className='h-4 w-4' />
-													<span>Password protected</span>
+												<div className='flex items-center gap-1 sm:gap-1.5'>
+													<Lock className='h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0' />
+													<span className='whitespace-nowrap'>Password protected</span>
 												</div>
 											</div>
 										</div>
+
+										{/* Action Button */}
 										<Button
 											variant='outline'
-											className={
+											className={`w-full sm:w-auto flex-shrink-0 ${
 												league.isMember
 													? 'bg-primary/20 text-primary hover:bg-primary/30 border-primary/50'
 													: 'group-hover:bg-primary group-hover:text-primary-foreground transition-colors'
-											}>
+											}`}>
 											{league.isMember ? 'View League' : 'Join League'}
 										</Button>
 									</div>
@@ -267,18 +276,20 @@ export default function BrowseLeaguesPage() {
 				{/* Pagination */}
 				{pagination && pagination.totalPages > 1 && (
 					<Card className='glass border-white/10'>
-						<CardContent className='p-4'>
-							<div className='flex items-center justify-between'>
+						<CardContent className='p-3 sm:p-4'>
+							<div className='flex items-center justify-between gap-2'>
 								<Button
 									variant='outline'
 									onClick={() => handlePageChange(currentPage - 1)}
 									disabled={currentPage === 1}
-									className='flex items-center gap-2'>
-									<ChevronLeft className='h-4 w-4' />
-									Previous
+									size='sm'
+									className='flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-4'>
+									<ChevronLeft className='h-3 w-3 sm:h-4 sm:w-4' />
+									<span className='hidden sm:inline'>Previous</span>
+									<span className='sm:hidden'>Prev</span>
 								</Button>
 
-								<div className='flex items-center gap-2'>
+								<div className='flex items-center gap-1 sm:gap-2'>
 									{Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
 										// Show pages around current page
 										let pageNum;
@@ -297,7 +308,8 @@ export default function BrowseLeaguesPage() {
 												key={pageNum}
 												variant={currentPage === pageNum ? 'default' : 'outline'}
 												onClick={() => handlePageChange(pageNum)}
-												className={currentPage === pageNum ? 'bg-primary' : ''}>
+												size='sm'
+												className={`min-w-[32px] sm:min-w-[40px] h-8 sm:h-9 p-0 text-xs sm:text-sm ${currentPage === pageNum ? 'bg-primary' : ''}`}>
 												{pageNum}
 											</Button>
 										);
@@ -308,9 +320,11 @@ export default function BrowseLeaguesPage() {
 									variant='outline'
 									onClick={() => handlePageChange(currentPage + 1)}
 									disabled={!pagination.hasMore}
-									className='flex items-center gap-2'>
-									Next
-									<ChevronRight className='h-4 w-4' />
+									size='sm'
+									className='flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-4'>
+									<span className='hidden sm:inline'>Next</span>
+									<span className='sm:hidden'>Next</span>
+									<ChevronRight className='h-3 w-3 sm:h-4 sm:w-4' />
 								</Button>
 							</div>
 						</CardContent>
