@@ -191,70 +191,70 @@ export default function LeagueDetails() {
 
 			{/* Mobile Bottom Navigation Bar - Liquid Glass Segmented Control */}
 			<nav className='lg:hidden fixed bottom-4 left-4 right-4 z-50'>
-				<div className='mx-auto max-w-md bg-black/40 backdrop-blur-2xl border border-white/10 rounded-2xl p-1.5 shadow-2xl shadow-black/20'>
-					<div className='grid grid-cols-4 gap-1 relative'>
+				<div className='mx-auto max-w-md bg-black/30 backdrop-blur-3xl border border-white/20 rounded-full p-2 shadow-2xl shadow-black/40'>
+					<div className='grid grid-cols-4 gap-1.5 relative'>
 						<button
 							onClick={() => setMobileView('picks')}
-							className={`relative flex flex-col items-center justify-center py-2.5 px-2 rounded-xl transition-all duration-300 ${
+							className={`relative flex flex-col items-center justify-center py-3 px-2 rounded-full transition-all duration-300 ${
 								mobileView === 'picks'
 									? 'bg-primary/90 backdrop-blur-xl shadow-lg shadow-primary/30'
-									: 'hover:bg-white/5 active:scale-95'
+									: 'hover:bg-white/10 active:scale-95'
 							}`}
 						>
 							<Gamepad2 className={`h-5 w-5 transition-all duration-300 ${mobileView === 'picks' ? 'text-black' : 'text-muted-foreground'}`} />
-							{mobileView === 'picks' && (
-								<span className='text-[10px] font-bold text-black mt-0.5 animate-in fade-in slide-in-from-bottom-1 duration-200'>
-									Picks
-								</span>
-							)}
+							<span className={`text-[10px] font-bold mt-0.5 transition-all duration-300 ${
+								mobileView === 'picks' ? 'text-black' : 'text-muted-foreground'
+							}`}>
+								Picks
+							</span>
 						</button>
 
 						<button
 							onClick={() => setMobileView('results')}
-							className={`relative flex flex-col items-center justify-center py-2.5 px-2 rounded-xl transition-all duration-300 ${
+							className={`relative flex flex-col items-center justify-center py-3 px-2 rounded-full transition-all duration-300 ${
 								mobileView === 'results'
 									? 'bg-primary/90 backdrop-blur-xl shadow-lg shadow-primary/30'
-									: 'hover:bg-white/5 active:scale-95'
+									: 'hover:bg-white/10 active:scale-95'
 							}`}
 						>
 							<BarChart3 className={`h-5 w-5 transition-all duration-300 ${mobileView === 'results' ? 'text-black' : 'text-muted-foreground'}`} />
-							{mobileView === 'results' && (
-								<span className='text-[10px] font-bold text-black mt-0.5 animate-in fade-in slide-in-from-bottom-1 duration-200'>
-									Results
-								</span>
-							)}
+							<span className={`text-[10px] font-bold mt-0.5 transition-all duration-300 ${
+								mobileView === 'results' ? 'text-black' : 'text-muted-foreground'
+							}`}>
+								Results
+							</span>
 						</button>
 
 						<button
 							onClick={() => setMobileView('leaderboard')}
-							className={`relative flex flex-col items-center justify-center py-2.5 px-2 rounded-xl transition-all duration-300 ${
+							className={`relative flex flex-col items-center justify-center py-3 px-2 rounded-full transition-all duration-300 ${
 								mobileView === 'leaderboard'
 									? 'bg-primary/90 backdrop-blur-xl shadow-lg shadow-primary/30'
-									: 'hover:bg-white/5 active:scale-95'
+									: 'hover:bg-white/10 active:scale-95'
 							}`}
 						>
 							<Trophy className={`h-5 w-5 transition-all duration-300 ${mobileView === 'leaderboard' ? 'text-black' : 'text-muted-foreground'}`} />
-							{mobileView === 'leaderboard' && (
-								<span className='text-[10px] font-bold text-black mt-0.5 animate-in fade-in slide-in-from-bottom-1 duration-200'>
-									Board
-								</span>
-							)}
+							<span className={`text-[10px] font-bold mt-0.5 transition-all duration-300 ${
+								mobileView === 'leaderboard' ? 'text-black' : 'text-muted-foreground'
+							}`}>
+								Board
+							</span>
 						</button>
 
 						<button
 							onClick={() => setMobileView('stats')}
-							className={`relative flex flex-col items-center justify-center py-2.5 px-2 rounded-xl transition-all duration-300 ${
+							className={`relative flex flex-col items-center justify-center py-3 px-2 rounded-full transition-all duration-300 ${
 								mobileView === 'stats'
 									? 'bg-primary/90 backdrop-blur-xl shadow-lg shadow-primary/30'
-									: 'hover:bg-white/5 active:scale-95'
+									: 'hover:bg-white/10 active:scale-95'
 							}`}
 						>
 							<TrendingUp className={`h-5 w-5 transition-all duration-300 ${mobileView === 'stats' ? 'text-black' : 'text-muted-foreground'}`} />
-							{mobileView === 'stats' && (
-								<span className='text-[10px] font-bold text-black mt-0.5 animate-in fade-in slide-in-from-bottom-1 duration-200'>
-									Stats
-								</span>
-							)}
+							<span className={`text-[10px] font-bold mt-0.5 transition-all duration-300 ${
+								mobileView === 'stats' ? 'text-black' : 'text-muted-foreground'
+							}`}>
+								Stats
+							</span>
 						</button>
 					</div>
 				</div>
