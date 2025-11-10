@@ -6,6 +6,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useRef } from 'react';
 import { NFLService } from '@/services/nflService';
+import { motion } from 'framer-motion';
+import { Skeleton } from '@/components/ui/skeleton';
+import CountUp from 'react-countup';
 
 interface League {
 	_id: string;
@@ -107,16 +110,28 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 
 	return (
 		<div className='grid grid-cols-1 gap-4'>
-			{leagues.map(league => {
+			{leagues.map((league, index) => {
 				const isCommissioner = userId && league.creatorId === userId;
 				const stats = leagueStats.get(league._id);
 				const isLoading = !stats && leagues.length > 0;
 
 				return (
-					<div key={league._id} className='relative'>
+					<motion.div
+						key={league._id}
+						className='relative'
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{
+							duration: 0.3,
+							delay: index * 0.05,
+							ease: 'easeOut'
+						}}
+						whileHover={{ scale: 1.02 }}
+						whileTap={{ scale: 0.98 }}
+					>
 						<button
 							onClick={() => router.push(`/league/${league._id}`)}
-							className='w-full p-3 sm:p-5 bg-card border-2 border-primary/20 rounded-lg text-left transition-all hover:bg-primary/10 hover:border-primary/40 group'
+							className='w-full p-3 sm:p-5 bg-card border-2 border-primary/20 rounded-lg text-left transition-all hover:bg-primary/10 hover:border-primary/40 hover:shadow-glow group'
 						>
 							{/* Mobile Layout: Stack vertically */}
 							<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-5'>
@@ -137,8 +152,8 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 									{/* Status & Stats */}
 									{isLoading ? (
 										<div className='flex items-center gap-2.5 sm:gap-3'>
-											<div className='h-3.5 sm:h-4 w-24 sm:w-28 bg-muted/20 rounded animate-pulse' />
-											<div className='h-3.5 sm:h-4 w-16 sm:w-20 bg-muted/20 rounded animate-pulse' />
+											<Skeleton className='h-3.5 sm:h-4 w-24 sm:w-28' />
+											<Skeleton className='h-3.5 sm:h-4 w-16 sm:w-20' />
 										</div>
 									) : stats ? (
 										<div className='flex flex-wrap items-center gap-2.5 sm:gap-5 text-xs sm:text-sm'>
@@ -173,18 +188,22 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 									{/* Points Display */}
 									{isLoading ? (
 										<div className='text-right space-y-0.5'>
-											<div className='h-6 sm:h-7 w-11 sm:w-14 bg-muted/20 rounded animate-pulse' />
-											<div className='h-3 w-14 sm:w-16 bg-muted/20 rounded animate-pulse' />
+											<Skeleton className='h-6 sm:h-7 w-11 sm:w-14' />
+											<Skeleton className='h-3 w-14 sm:w-16' />
 										</div>
 									) : stats ? (
 										<div className='text-left sm:text-right space-y-0'>
 											<div className='flex items-center sm:justify-end gap-1'>
-												<span className='text-xl sm:text-2xl font-bold text-primary tabular-nums'>{stats.currentWeekPoints}</span>
+												<span className='text-xl sm:text-2xl font-bold text-primary tabular-nums font-mono'>
+													<CountUp end={stats.currentWeekPoints} duration={0.5} />
+												</span>
 												<span className='text-[10px] text-muted-foreground self-end mb-0.5'>pts</span>
 											</div>
 											<p className='text-[10px] sm:text-xs text-muted-foreground -mt-0.5'>Week {currentWeek}</p>
 											{stats.seasonPoints > 0 && (
-												<p className='text-[10px] sm:text-xs text-muted-foreground/70 tabular-nums'>{stats.seasonPoints} Season</p>
+												<p className='text-[10px] sm:text-xs text-muted-foreground/70 tabular-nums font-mono'>
+													<CountUp end={stats.seasonPoints} duration={0.5} /> Season
+												</p>
 											)}
 										</div>
 									) : null}
@@ -210,7 +229,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 								</div>
 							</div>
 						</button>
-					</div>
+					</motion.div>
 				);
 			})}
 		</div>
