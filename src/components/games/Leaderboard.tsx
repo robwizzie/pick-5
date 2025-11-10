@@ -184,8 +184,16 @@ export function Leaderboard() {
 											return 'bg-primary/10 text-primary/80';
 										};
 
+										// Get special styling for top 3
+										const getTop3Style = () => {
+											if (rank === 1) return 'border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)] hover:shadow-[0_0_30px_rgba(234,179,8,0.25)]';
+											if (rank === 2) return 'border-gray-400/30 shadow-[0_0_15px_rgba(156,163,175,0.15)] hover:shadow-[0_0_25px_rgba(156,163,175,0.25)]';
+											if (rank === 3) return 'border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.25)]';
+											return 'border-primary/20';
+										};
+
 										return (
-											<div key={entry.userId || index} className={`flex items-start p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg transition-all' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
+											<div key={entry.userId || index} className={`flex items-start p-4 bg-card border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()} ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
 												{/* Rank with crown */}
 												<div className='flex flex-col items-center gap-1 pt-1'>
 													{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
@@ -248,8 +256,16 @@ export function Leaderboard() {
 										return 'bg-primary/10 text-primary/80';
 									};
 
+									// Get special styling for top 3
+									const getTop3Style = () => {
+										if (rank === 1) return 'border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)] hover:shadow-[0_0_30px_rgba(234,179,8,0.25)]';
+										if (rank === 2) return 'border-gray-400/30 shadow-[0_0_15px_rgba(156,163,175,0.15)] hover:shadow-[0_0_25px_rgba(156,163,175,0.25)]';
+										if (rank === 3) return 'border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.25)]';
+										return 'border-primary/20 hover:border-primary/40';
+									};
+
 									return (
-										<div key={index} className='flex items-start p-4 bg-card border-2 border-primary/20 rounded-lg gap-3 hover:border-primary/40 transition-all'>
+										<div key={index} className={`flex items-start p-4 bg-card border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()}`}>
 											{/* Rank with crown */}
 											<div className='flex flex-col items-center gap-1 pt-1'>
 												{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
