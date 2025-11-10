@@ -5,6 +5,11 @@ import { WeekProvider } from '@/contexts/WeekContext';
 import { LeagueProvider } from '@/contexts/LeagueContext';
 import { Nav } from '@/components/games/Nav';
 import '../styles/globals.css';
+import '@fontsource/space-grotesk/400.css';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/700.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/700.css';
 
 export const metadata: Metadata = {
 	title: 'Pick 5 - NFL Fantasy League',
