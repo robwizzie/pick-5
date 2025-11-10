@@ -87,7 +87,7 @@ export async function GET(req: Request) {
 			awayScore: game.away.score || 0,
 			homeTeam: game.home.team,
 			awayTeam: game.away.team,
-			status: game.status
+			status: game.status || 'Unknown'
 		}));
 
 		// Get all users who have email reminders enabled (we'll use the same preference)
@@ -210,7 +210,7 @@ export async function GET(req: Request) {
 
 							// Find the game with the most wrong picks
 							let maxWrongPicks = 0;
-							for (const [, value] of gameUpsetCounts) {
+							for (const [, value] of Array.from(gameUpsetCounts.entries())) {
 								if (value.count > maxWrongPicks) {
 									maxWrongPicks = value.count;
 									upsetInfo = {

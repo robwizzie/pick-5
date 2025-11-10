@@ -72,9 +72,7 @@ export const SteveScoreEmail = ({
 	return (
 		<Html>
 			<Head />
-			<Preview>
-				Week {weekNumber} Results - You scored {userPoints}/{maxPoints} points in {leagueName}!
-			</Preview>
+			<Preview>{`Week ${weekNumber} Results - You scored ${userPoints}/${maxPoints} points in ${leagueName}!`}</Preview>
 			<Body style={main}>
 				<Container style={container}>
 					{/* Logo */}
