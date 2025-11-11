@@ -1,4 +1,5 @@
 import Image from 'next/image';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
@@ -140,7 +141,8 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			return {
 				text: 'LIVE',
 				color: 'text-green-400',
-				bgColor: 'bg-green-500/20',
+				bgColor: 'bg-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.2)]',
+				isLive: true,
 				dayText,
 				timeText,
 				fullDate
@@ -186,9 +188,15 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		  };
 
 	return (
-		<div className='relative'>
+		<motion.div
+			className='relative'
+			initial={{ opacity: 0, y: 10 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ duration: 0.2 }}
+			whileHover={noHover ? {} : { scale: 1.01 }}
+		>
 			{/* GameCard Container */}
-			<div className='rounded-lg p-4 bg-card transition-all'>
+			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm border border-white/5 transition-all shadow-sm hover:shadow-md hover:border-primary/10'>
 				<div className='flex flex-col xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
@@ -217,7 +225,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					{/* Center Section - Game Status & Time */}
 					<div className='flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[120px] gap-2'>
 						<span className='text-sm font-medium text-accent'>@</span>
-						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor}`}>
+						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
+							{(statusInfo as any).isLive && (
+								<span className='absolute -left-1 top-1/2 -translate-y-1/2 flex h-2 w-2'>
+									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'></span>
+									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
+								</span>
+							)}
 							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
 								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
 							</div>
@@ -255,7 +269,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					</div>
 				</div>
 			</div>
-		</div>
+		</motion.div>
 	);
 }
 
