@@ -9,8 +9,10 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { NFLService } from '@/services/nflService';
-import { Crown, Trophy, TrendingUp, Target, Zap, Users, BarChart3, Flame, Award } from 'lucide-react';
+import { Crown, Trophy, TrendingUp, Target, Zap, Users, BarChart3, Flame, Award, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { GameCard } from './GameCard';
+import type { Game } from './GameCard';
 
 interface RecapData {
 	// User's performance
@@ -29,37 +31,41 @@ interface RecapData {
 		points: number;
 		correct: number;
 	}>;
-	// Most popular picks
-	popularPicks: Array<{
-		team: string;
-		opponent: string;
-		pickCount: number;
-		totalPlayers: number;
-		wasCorrect: boolean;
-		odds?: number;
-	}>;
-	// Biggest upsets
+	// Biggest upsets with full game data
 	upsets: Array<{
+		gameId: string;
+		game: Game;
 		team: string;
 		opponent: string;
 		odds: number;
 		points: number;
 		pickCount: number;
+		correctPickers: Array<{ userId: string; name: string; image: string | null }>;
+	}>;
+	// Most picked correct games
+	mostPickedCorrect: Array<{
+		gameId: string;
+		game: Game;
+		winningTeam: string;
+		losingTeam: string;
+		pickCount: number;
+		totalPicks: number;
+		pickers: Array<{ userId: string; name: string; image: string | null }>;
+	}>;
+	// Most picked incorrect games
+	mostPickedIncorrect: Array<{
+		gameId: string;
+		game: Game;
+		losingTeam: string;
+		winningTeam: string;
+		pickCount: number;
+		totalPicks: number;
+		pickers: Array<{ userId: string; name: string; image: string | null }>;
 	}>;
 	// Perfect week users
 	perfectWeek: Array<{
 		player: string;
 		image: string | null;
-		points: number;
-	}>;
-	// Contrarian picks (picked against consensus and won)
-	contrarians: Array<{
-		player: string;
-		image: string | null;
-		team: string;
-		opponent: string;
-		pickCount: number; // How many picked this team
-		totalPlayers: number;
 		points: number;
 	}>;
 	// League stats
@@ -72,6 +78,18 @@ interface RecapData {
 	};
 	// Week highlights
 	highlights: string[];
+}
+
+// Helper function to check if recap is available for a week
+export async function isRecapAvailable(week: number, leagueId: string): Promise<boolean> {
+	try {
+		const response = await fetch(`/api/recap?week=${week}&leagueId=${leagueId}`);
+		if (!response.ok) return false;
+		const data = await response.json();
+		return data.hasPicks && data.weekCompleted;
+	} catch {
+		return false;
+	}
 }
 
 export function Recap() {
@@ -102,17 +120,15 @@ export function Recap() {
 		fetchLeagueDetails();
 	}, [leagueId]);
 
-	// Determine available weeks (completed weeks only)
+	// Determine available weeks (weeks with completed games AND user picks)
 	useEffect(() => {
 		const determineAvailableWeeks = async () => {
+			if (!leagueId) return;
 			const weeks: number[] = [];
 			for (let w = 1; w < currentWeek; w++) {
-				const games = await NFLService.getWeeklyGames(w);
-				const allCompleted = games.every(g => {
-					const status = g.status?.toLowerCase();
-					return status === 'final' || status === 'status_final' || status === 'post';
-				});
-				if (allCompleted && games.length > 0) {
+				// Check if recap is available (has picks and is completed)
+				const available = await isRecapAvailable(w, leagueId);
+				if (available) {
 					weeks.push(w);
 				}
 			}
@@ -123,7 +139,7 @@ export function Recap() {
 			}
 		};
 		determineAvailableWeeks();
-	}, [currentWeek]);
+	}, [currentWeek, leagueId]);
 
 	// Fetch and calculate recap data
 	useEffect(() => {
@@ -136,15 +152,26 @@ export function Recap() {
 				setLoading(true);
 				setError(null);
 
-				// Fetch leaderboard data for selected week
-				const response = await fetch(`/api/leaderboard?week=${selectedWeek}&leagueId=${leagueId}`);
-				if (!response.ok) throw new Error('Failed to fetch recap data');
+				// Fetch both leaderboard data and recap analytics in parallel
+				const [leaderboardResponse, recapResponse] = await Promise.all([
+					fetch(`/api/leaderboard?week=${selectedWeek}&leagueId=${leagueId}`),
+					fetch(`/api/recap?week=${selectedWeek}&leagueId=${leagueId}`)
+				]);
 
-				const data = await response.json();
-				const { weeklyResults, seasonStats } = data;
+				if (!leaderboardResponse.ok || !recapResponse.ok) {
+					throw new Error('Failed to fetch recap data');
+				}
 
-				// Fetch game results for the week
-				const games = await NFLService.getWeeklyGames(selectedWeek);
+				const leaderboardData = await leaderboardResponse.json();
+				const recapAnalytics = await recapResponse.json();
+
+				// Check if recap is available
+				if (!recapAnalytics.hasPicks || !recapAnalytics.weekCompleted) {
+					setError('Recap not available for this week yet.');
+					return;
+				}
+
+				const { weeklyResults } = leaderboardData;
 
 				// Also fetch previous week's standings for rank change calculation
 				let previousWeekResults: Array<{ userId: string; points: number }> = [];
@@ -161,7 +188,13 @@ export function Recap() {
 				}
 
 				// Calculate all recap statistics
-				const recap = calculateRecapData(weeklyResults, seasonStats, games, previousWeekResults, session.user.id, leagueMode);
+				const recap = calculateRecapData(
+					weeklyResults,
+					previousWeekResults,
+					recapAnalytics,
+					session.user.id,
+					leagueMode
+				);
 				setRecapData(recap);
 			} catch (err) {
 				console.error('[Recap] Failed to load recap:', err);
@@ -176,9 +209,12 @@ export function Recap() {
 
 	const calculateRecapData = (
 		weeklyResults: Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean }>,
-		seasonStats: Array<{ player: string; image: string | null; totalPoints: number }>,
-		games: Array<{ id: string; status?: string }>,
 		previousWeekResults: Array<{ userId: string; points: number }>,
+		recapAnalytics: {
+			upsets: RecapData['upsets'];
+			mostPickedCorrect: RecapData['mostPickedCorrect'];
+			mostPickedIncorrect: RecapData['mostPickedIncorrect'];
+		},
 		currentUserId: string,
 		mode: string
 	): RecapData => {
@@ -215,11 +251,7 @@ export function Recap() {
 			correct: r.correct
 		}));
 
-		// Most popular picks - need to fetch all user picks
-		// For now, we'll calculate from available data (this would ideally be done server-side)
-		const popularPicks: RecapData['popularPicks'] = [];
-
-		// Perfect week (5/5 in steve mode, or all correct in standard)
+		// Perfect week (5/5 correct picks)
 		const perfectWeek = sorted
 			.filter(r => r.correct === 5)
 			.slice(0, 5)
@@ -228,12 +260,6 @@ export function Recap() {
 				image: r.image,
 				points: r.points
 			}));
-
-		// Upsets - teams with high odds that won (this would need game data with odds)
-		const upsets: RecapData['upsets'] = [];
-
-		// Contrarians - users who picked against popular consensus
-		const contrarians: RecapData['contrarians'] = [];
 
 		// League stats
 		const totalPlayers = weeklyResults.length;
@@ -291,10 +317,10 @@ export function Recap() {
 		return {
 			userStats,
 			topPerformers,
-			popularPicks,
-			upsets,
+			upsets: recapAnalytics.upsets,
+			mostPickedCorrect: recapAnalytics.mostPickedCorrect,
+			mostPickedIncorrect: recapAnalytics.mostPickedIncorrect,
 			perfectWeek,
-			contrarians,
 			leagueStats,
 			highlights
 		};
@@ -554,6 +580,171 @@ export function Recap() {
 										</Avatar>
 										<span className='font-semibold text-foreground text-sm'>{player.player}</span>
 										<span className='text-xs text-green-400 font-bold'>({player.points} pts)</span>
+									</motion.div>
+								))}
+							</div>
+						</CardContent>
+					</Card>
+				</motion.div>
+			)}
+
+			{/* Craziest Upsets */}
+			{recapData.upsets && recapData.upsets.length > 0 && (
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.3, delay: 0.4 }}
+				>
+					<Card className='border-2 border-orange-500/30 bg-orange-500/5'>
+						<CardHeader>
+							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-orange-400 flex items-center gap-2'>
+								<Flame className='h-5 w-5' />
+								Craziest Upsets
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className='space-y-6'>
+								{recapData.upsets.slice(0, 3).map((upset, idx) => (
+									<motion.div
+										key={upset.gameId}
+										initial={{ opacity: 0, x: -10 }}
+										animate={{ opacity: 1, x: 0 }}
+										transition={{ duration: 0.3, delay: 0.5 + idx * 0.1 }}
+										className='space-y-3'
+									>
+										<div className='flex items-center justify-between mb-2'>
+											<div>
+												<p className='text-sm font-semibold text-foreground'>
+													<span className='text-orange-400'>{upset.team}</span> beat {upset.opponent}
+												</p>
+												<p className='text-xs text-muted-foreground'>
+													+{upset.odds} odds • Worth {upset.points} pts
+												</p>
+											</div>
+											{upset.correctPickers.length > 0 && (
+												<div className='text-right'>
+													<p className='text-xs text-muted-foreground'>Called by:</p>
+													<div className='flex items-center gap-1 justify-end mt-1'>
+														{upset.correctPickers.slice(0, 3).map((picker, i) => (
+															<Avatar key={picker.userId} className='w-6 h-6 border-2 border-card' style={{ zIndex: 3 - i }}>
+																<AvatarImage src={picker.image || undefined} alt={picker.name} />
+																<AvatarFallback className='bg-orange-500/20 text-orange-400 text-[10px] font-semibold'>
+																	{picker.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+																</AvatarFallback>
+															</Avatar>
+														))}
+														{upset.correctPickers.length > 3 && (
+															<span className='text-xs text-orange-400 ml-1'>+{upset.correctPickers.length - 3}</span>
+														)}
+													</div>
+												</div>
+											)}
+										</div>
+										<GameCard
+											game={upset.game}
+											showScores={true}
+											disabled={true}
+											noHover={true}
+											leagueMode={leagueMode}
+										/>
+									</motion.div>
+								))}
+							</div>
+						</CardContent>
+					</Card>
+				</motion.div>
+			)}
+
+			{/* Most Picked Correct (Standard Mode Only) */}
+			{leagueMode === 'standard' && recapData.mostPickedCorrect && recapData.mostPickedCorrect.length > 0 && (
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.3, delay: 0.5 }}
+				>
+					<Card className='border-2 border-green-500/30 bg-green-500/5'>
+						<CardHeader>
+							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-green-400 flex items-center gap-2'>
+								<ThumbsUp className='h-5 w-5' />
+								Most Picked Correctly
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className='space-y-6'>
+								{recapData.mostPickedCorrect.slice(0, 2).map((pick, idx) => (
+									<motion.div
+										key={pick.gameId}
+										initial={{ opacity: 0, x: -10 }}
+										animate={{ opacity: 1, x: 0 }}
+										transition={{ duration: 0.3, delay: 0.6 + idx * 0.1 }}
+										className='space-y-3'
+									>
+										<div className='flex items-center justify-between mb-2'>
+											<div>
+												<p className='text-sm font-semibold text-foreground'>
+													<span className='text-green-400'>{pick.winningTeam}</span> beat {pick.losingTeam}
+												</p>
+												<p className='text-xs text-muted-foreground'>
+													{pick.pickCount} of {pick.totalPicks} players picked correctly
+												</p>
+											</div>
+										</div>
+										<GameCard
+											game={pick.game}
+											showScores={true}
+											disabled={true}
+											noHover={true}
+											leagueMode={leagueMode}
+										/>
+									</motion.div>
+								))}
+							</div>
+						</CardContent>
+					</Card>
+				</motion.div>
+			)}
+
+			{/* Most Picked Incorrectly (Standard Mode Only) */}
+			{leagueMode === 'standard' && recapData.mostPickedIncorrect && recapData.mostPickedIncorrect.length > 0 && (
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.3, delay: 0.6 }}
+				>
+					<Card className='border-2 border-red-500/30 bg-red-500/5'>
+						<CardHeader>
+							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-red-400 flex items-center gap-2'>
+								<ThumbsDown className='h-5 w-5' />
+								Most Picked Incorrectly
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className='space-y-6'>
+								{recapData.mostPickedIncorrect.slice(0, 2).map((pick, idx) => (
+									<motion.div
+										key={pick.gameId}
+										initial={{ opacity: 0, x: -10 }}
+										animate={{ opacity: 1, x: 0 }}
+										transition={{ duration: 0.3, delay: 0.7 + idx * 0.1 }}
+										className='space-y-3'
+									>
+										<div className='flex items-center justify-between mb-2'>
+											<div>
+												<p className='text-sm font-semibold text-foreground'>
+													{pick.pickCount} players picked <span className='text-red-400'>{pick.losingTeam}</span>
+												</p>
+												<p className='text-xs text-muted-foreground'>
+													But {pick.winningTeam} won
+												</p>
+											</div>
+										</div>
+										<GameCard
+											game={pick.game}
+											showScores={true}
+											disabled={true}
+											noHover={true}
+											leagueMode={leagueMode}
+										/>
 									</motion.div>
 								))}
 							</div>
