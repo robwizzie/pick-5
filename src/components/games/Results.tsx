@@ -470,10 +470,10 @@ export function Results() {
 		return (
 			<Card className='bg-card border-primary/20'>
 				<CardHeader>
-					<div className='flex items-center justify-between mb-4'>
+					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
 						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} - All Games</CardTitle>
 						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
-							<SelectTrigger className='w-[200px]'>
+							<SelectTrigger className='w-full sm:w-[200px]'>
 								<SelectValue placeholder='Select user' />
 							</SelectTrigger>
 							<SelectContent>
@@ -609,10 +609,10 @@ export function Results() {
 		return (
 			<Card className='bg-card border-primary/20'>
 				<CardHeader>
-					<div className='flex items-center justify-between mb-4'>
+					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
 						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
 						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
-							<SelectTrigger className='w-[200px]'>
+							<SelectTrigger className='w-full sm:w-[200px]'>
 								<SelectValue placeholder='Select user' />
 							</SelectTrigger>
 							<SelectContent>
@@ -652,10 +652,10 @@ export function Results() {
 	return (
 		<Card className='bg-card border-primary/20'>
 			<CardHeader>
-				<div className='flex items-center justify-between mb-4'>
+				<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
 					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
 					<Select value={selectedUserId} onValueChange={setSelectedUserId}>
-						<SelectTrigger className='w-[200px]'>
+						<SelectTrigger className='w-full sm:w-[200px]'>
 							<SelectValue placeholder='Select user' />
 						</SelectTrigger>
 						<SelectContent>
