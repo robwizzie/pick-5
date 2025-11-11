@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
@@ -223,7 +224,11 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 											<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 										</div>
 									)}
-									{showScores && game.away.score !== undefined && <div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>}
+									{showScores && game.away.score !== undefined && (
+										<div className={`text-lg mt-1 font-mono ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
+											<CountUp end={game.away.score} duration={0.8} preserveValue />
+										</div>
+									)}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 								</div>
 							</div>
@@ -275,7 +280,11 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 											<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 										</div>
 									)}
-									{showScores && game.home.score !== undefined && <div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>}
+									{showScores && game.home.score !== undefined && (
+										<div className={`text-lg mt-1 font-mono ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
+											<CountUp end={game.home.score} duration={0.8} preserveValue />
+										</div>
+									)}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 								</div>
 							</div>
