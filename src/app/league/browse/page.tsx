@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -149,31 +150,42 @@ export default function BrowseLeaguesPage() {
 		<div className='min-h-screen p-4 pt-8'>
 			<div className='max-w-5xl mx-auto space-y-6'>
 				{/* Header */}
-				<div className='text-center space-y-2'>
+				<motion.div
+					className='text-center space-y-2'
+					initial={{ opacity: 0, y: -20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.4 }}
+				>
 					<h1 className='text-4xl font-display font-bold gradient-text'>Browse Leagues</h1>
 					<p className='text-muted-foreground'>Find and join a league to start making picks</p>
-				</div>
+				</motion.div>
 
 				{/* Search Bar */}
-				<Card className='glass border-white/10'>
-					<CardContent className='p-4'>
-						<form onSubmit={handleSearch} className='flex gap-2'>
-							<div className='relative flex-1'>
-								<Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
-								<Input
-									type='text'
-									placeholder='Search leagues by name...'
-									value={searchInput}
-									onChange={e => setSearchInput(e.target.value)}
-									className='pl-10 glass border-white/10 bg-background/50 focus:border-primary/50'
-								/>
-							</div>
-							<Button type='submit' className='bg-primary hover:bg-primary/90'>
-								Search
-							</Button>
-						</form>
-					</CardContent>
-				</Card>
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.4, delay: 0.1 }}
+				>
+					<Card className='glass border-primary/20 bg-card/80 backdrop-blur-sm'>
+						<CardContent className='p-4'>
+							<form onSubmit={handleSearch} className='flex gap-2'>
+								<div className='relative flex-1'>
+									<Search className='absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground' />
+									<Input
+										type='text'
+										placeholder='Search leagues by name...'
+										value={searchInput}
+										onChange={e => setSearchInput(e.target.value)}
+										className='pl-10 glass border-white/10 bg-background/50 focus:border-primary/50'
+									/>
+								</div>
+								<Button type='submit' className='bg-primary hover:bg-primary/90'>
+									Search
+								</Button>
+							</form>
+						</CardContent>
+					</Card>
+				</motion.div>
 
 				{/* Results Info */}
 				{pagination && (
@@ -196,34 +208,45 @@ export default function BrowseLeaguesPage() {
 						<Spinner />
 					</div>
 				) : leagues.length === 0 ? (
-					<Card className='glass border-white/10'>
-						<CardContent className='p-12 text-center'>
-							<p className='text-lg text-muted-foreground'>
-								{searchTerm ? `No leagues found matching "${searchTerm}"` : 'No leagues available'}
-							</p>
-							{searchTerm && (
-								<Button
-									variant='outline'
-									onClick={() => {
-										setSearchInput('');
-										setSearchTerm('');
-									}}
-									className='mt-4'>
-									Clear Search
-								</Button>
-							)}
-						</CardContent>
-					</Card>
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						transition={{ duration: 0.3 }}
+					>
+						<Card className='glass border-primary/20 bg-card/80 backdrop-blur-sm'>
+							<CardContent className='p-12 text-center'>
+								<p className='text-lg text-muted-foreground'>
+									{searchTerm ? `No leagues found matching "${searchTerm}"` : 'No leagues available'}
+								</p>
+								{searchTerm && (
+									<Button
+										variant='outline'
+										onClick={() => {
+											setSearchInput('');
+											setSearchTerm('');
+										}}
+										className='mt-4'>
+										Clear Search
+									</Button>
+								)}
+							</CardContent>
+						</Card>
+					</motion.div>
 				) : (
 					<div className='grid gap-4'>
-						{leagues.map(league => (
-							<Card
+						{leagues.map((league, index) => (
+							<motion.div
 								key={league.id}
-								className={`glass border-white/10 hover:border-primary/50 transition-all cursor-pointer group ${
-									league.isMember ? 'border-primary/30' : ''
-								}`}
-								onClick={() => handleLeagueClick(league)}>
-								<CardContent className='p-4 sm:p-6'>
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.3, delay: index * 0.05 }}
+							>
+								<Card
+									className={`glass border-primary/20 bg-card/80 backdrop-blur-sm hover:border-primary/50 transition-all cursor-pointer group ${
+										league.isMember ? 'border-primary/30' : ''
+									}`}
+									onClick={() => handleLeagueClick(league)}>
+									<CardContent className='p-4 sm:p-6'>
 									{/* Mobile: Stack vertically, Desktop: Horizontal */}
 									<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4'>
 										{/* League Info */}
@@ -269,14 +292,20 @@ export default function BrowseLeaguesPage() {
 									</div>
 								</CardContent>
 							</Card>
+							</motion.div>
 						))}
 					</div>
 				)}
 
 				{/* Pagination */}
 				{pagination && pagination.totalPages > 1 && (
-					<Card className='glass border-white/10'>
-						<CardContent className='p-3 sm:p-4'>
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						transition={{ duration: 0.3, delay: 0.2 }}
+					>
+						<Card className='glass border-primary/20 bg-card/80 backdrop-blur-sm'>
+							<CardContent className='p-3 sm:p-4'>
 							<div className='flex items-center justify-between gap-2'>
 								<Button
 									variant='outline'
@@ -329,12 +358,13 @@ export default function BrowseLeaguesPage() {
 							</div>
 						</CardContent>
 					</Card>
+					</motion.div>
 				)}
 			</div>
 
 			{/* Password Modal */}
 			<Dialog open={showPasswordModal} onOpenChange={setShowPasswordModal}>
-				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-md'>
+				<DialogContent className='glass border-primary/20 backdrop-blur-xl sm:max-w-md'>
 					<DialogHeader>
 						<DialogTitle className='text-2xl font-bold text-primary'>Join League</DialogTitle>
 						<DialogDescription className='text-muted-foreground'>Enter the password to join {selectedLeague?.name}</DialogDescription>
