@@ -14,7 +14,7 @@ import { SeasonStats } from '@/components/games/SeasonStats';
 import { Leaderboard } from '@/components/games/Leaderboard';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
-import { Share2, Copy, Check, Info, LogOut } from 'lucide-react';
+import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp } from 'lucide-react';
 
 interface League {
 	name: string;
@@ -36,6 +36,7 @@ export default function LeagueDetails() {
 	const [copied, setCopied] = useState(false);
 	const [loadingInvite, setLoadingInvite] = useState(false);
 	const [loadingLeave, setLoadingLeave] = useState(false);
+	const [mobileView, setMobileView] = useState<'picks' | 'results' | 'leaderboard' | 'stats'>('picks');
 
 	// Fetch league details
 	useEffect(() => {
@@ -154,7 +155,8 @@ export default function LeagueDetails() {
 				</div>
 			</Card>
 
-			<div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+			{/* Desktop Layout - Keep current tab design */}
+			<div className='hidden lg:grid grid-cols-1 lg:grid-cols-3 gap-8'>
 				<div className='lg:col-span-2 space-y-8'>
 					<Tabs defaultValue='picks'>
 						<TabsList className='w-full bg-muted grid grid-cols-2 p-1'>
@@ -178,6 +180,67 @@ export default function LeagueDetails() {
 					<Leaderboard />
 				</div>
 			</div>
+
+			{/* Mobile Layout - Bottom Navigation */}
+			<div className='lg:hidden pb-20'>
+				{mobileView === 'picks' && <WeeklyPicks />}
+				{mobileView === 'results' && <Results />}
+				{mobileView === 'leaderboard' && <Leaderboard />}
+				{mobileView === 'stats' && <SeasonStats />}
+			</div>
+
+			{/* Mobile Bottom Navigation Bar */}
+			<nav className='lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-xl border-t border-primary/20 shadow-lg'>
+				<div className='grid grid-cols-4 gap-1 p-2'>
+					<button
+						onClick={() => setMobileView('picks')}
+						className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all ${
+							mobileView === 'picks'
+								? 'bg-primary text-black shadow-lg shadow-primary/30'
+								: 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+						}`}
+					>
+						<Gamepad2 className={`h-5 w-5 mb-1 ${mobileView === 'picks' ? 'animate-pulse' : ''}`} />
+						<span className='text-xs font-semibold'>Picks</span>
+					</button>
+
+					<button
+						onClick={() => setMobileView('results')}
+						className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all ${
+							mobileView === 'results'
+								? 'bg-primary text-black shadow-lg shadow-primary/30'
+								: 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+						}`}
+					>
+						<BarChart3 className={`h-5 w-5 mb-1 ${mobileView === 'results' ? 'animate-pulse' : ''}`} />
+						<span className='text-xs font-semibold'>Results</span>
+					</button>
+
+					<button
+						onClick={() => setMobileView('leaderboard')}
+						className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all ${
+							mobileView === 'leaderboard'
+								? 'bg-primary text-black shadow-lg shadow-primary/30'
+								: 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+						}`}
+					>
+						<Trophy className={`h-5 w-5 mb-1 ${mobileView === 'leaderboard' ? 'animate-pulse' : ''}`} />
+						<span className='text-xs font-semibold'>Board</span>
+					</button>
+
+					<button
+						onClick={() => setMobileView('stats')}
+						className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all ${
+							mobileView === 'stats'
+								? 'bg-primary text-black shadow-lg shadow-primary/30'
+								: 'text-muted-foreground hover:text-primary hover:bg-primary/10'
+						}`}
+					>
+						<TrendingUp className={`h-5 w-5 mb-1 ${mobileView === 'stats' ? 'animate-pulse' : ''}`} />
+						<span className='text-xs font-semibold'>Stats</span>
+					</button>
+				</div>
+			</nav>
 
 			{/* Invite Link Modal */}
 			<Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
