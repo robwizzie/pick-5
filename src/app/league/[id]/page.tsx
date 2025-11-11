@@ -64,17 +64,31 @@ export default function LeagueDetails() {
 		const checkRecapAvailability = async () => {
 			if (!id) return;
 			try {
-				// Check recent weeks for any available recap data
+				// Check if any weeks have both picks and completed games
 				let hasAnyRecap = false;
-				// Check last 5 weeks
-				for (let week = 1; week <= 18; week++) {
-					const response = await fetch(`/api/recap?week=${week}&leagueId=${id}`);
-					if (response.ok) {
-						const data = await response.json();
-						if (data.hasPicks && data.weekCompleted) {
-							hasAnyRecap = true;
-							break;
+
+				// Get current NFL week first
+				const currentWeekResponse = await fetch('/api/nfl/week');
+				let currentNFLWeek = 11; // Default fallback
+				if (currentWeekResponse.ok) {
+					const weekData = await currentWeekResponse.json();
+					currentNFLWeek = weekData.week || 11;
+				}
+
+				// Check weeks up to current week
+				for (let week = 1; week <= currentNFLWeek; week++) {
+					try {
+						const response = await fetch(`/api/recap?week=${week}&leagueId=${id}`);
+						if (response.ok) {
+							const data = await response.json();
+							if (data.hasPicks && data.weekCompleted) {
+								hasAnyRecap = true;
+								break;
+							}
 						}
+					} catch {
+						// Continue checking other weeks
+						continue;
 					}
 				}
 				setHasRecapData(hasAnyRecap);
