@@ -43,8 +43,9 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, va
 		return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
 	}
 
-	// Extract motion-specific props and pass rest as button props
-	const { onDrag, onDragStart, onDragEnd, ...buttonProps } = props as any;
+	// Extract HTML events that conflict with Framer Motion
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	const { onDrag, onDragStart, onDragEnd, onDragOver, onDragEnter, onDragLeave, onDrop, onAnimationStart, onAnimationEnd, onAnimationIteration, onTransitionEnd, ...buttonProps } = props;
 
 	// Use motion.button for animated buttons
 	return (

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { MoreVertical, Link as LinkIcon, Trophy, CheckCircle2, Clock } from 'lucide-react';
+import { MoreVertical, Link as LinkIcon, Trophy, CheckCircle2, Clock, Crown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useRef } from 'react';
@@ -64,12 +64,12 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 						const data = await response.json();
 
 						// Find user's data in weekly results
-						const userWeeklyData = data.weeklyResults?.find((r: any) => r.userId === userId);
-						const userSeasonData = data.seasonStats?.find((s: any) => s.player === userWeeklyData?.player);
+						const userWeeklyData = data.weeklyResults?.find((r: { userId?: string; player?: string; points?: number; hasPicks?: boolean }) => r.userId === userId);
+						const userSeasonData = data.seasonStats?.find((s: { player?: string; totalPoints?: number }) => s.player === userWeeklyData?.player);
 
 						// Calculate user's rank
-						const sortedResults = [...(data.weeklyResults || [])].sort((a, b) => b.points - a.points);
-						const userRank = sortedResults.findIndex((r: any) => r.userId === userId) + 1;
+						const sortedResults = [...(data.weeklyResults || [])].sort((a: { points?: number }, b: { points?: number }) => (b.points || 0) - (a.points || 0));
+						const userRank = sortedResults.findIndex((r: { userId?: string }) => r.userId === userId) + 1;
 
 						statsMap.set(league._id, {
 							hasPicks: userWeeklyData?.hasPicks || false,
@@ -108,12 +108,29 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 		e.stopPropagation();
 	};
 
+	// Helper functions for top 3 styling
+	const getRankBadgeStyle = (rank: number | null) => {
+		if (rank === 1) return 'bg-yellow-500/20 text-yellow-400';
+		if (rank === 2) return 'bg-gray-400/20 text-gray-300';
+		if (rank === 3) return 'bg-orange-500/20 text-orange-400';
+		return 'bg-primary/10 text-primary/80';
+	};
+
+	const getTop3BorderStyle = (rank: number | null) => {
+		if (rank === 1) return 'border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)] hover:shadow-[0_0_30px_rgba(234,179,8,0.25)]';
+		if (rank === 2) return 'border-gray-400/30 shadow-[0_0_15px_rgba(156,163,175,0.15)] hover:shadow-[0_0_25px_rgba(156,163,175,0.25)]';
+		if (rank === 3) return 'border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.25)]';
+		return 'border-primary/20 hover:border-primary/40';
+	};
+
 	return (
 		<div className='grid grid-cols-1 gap-4'>
 			{leagues.map((league, index) => {
 				const isCommissioner = userId && league.creatorId === userId;
 				const stats = leagueStats.get(league._id);
 				const isLoading = !stats && leagues.length > 0;
+				const rank = stats?.rank || null;
+				const isTop3 = rank !== null && rank <= 3;
 
 				return (
 					<motion.div
@@ -131,7 +148,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 					>
 						<button
 							onClick={() => router.push(`/league/${league._id}`)}
-							className='w-full p-3 sm:p-5 bg-card border-2 border-primary/20 rounded-lg text-left transition-all hover:bg-primary/10 hover:border-primary/40 hover:shadow-glow group'
+							className={`w-full p-3 sm:p-5 bg-card border-2 rounded-lg text-left transition-all hover:bg-primary/10 hover:shadow-glow group ${getTop3BorderStyle(rank)}`}
 						>
 							{/* Mobile Layout: Stack vertically */}
 							<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-5'>
@@ -172,11 +189,17 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 												)}
 											</div>
 
-											{/* Rank & Members */}
+											{/* Rank & Members with special badges for top 3 */}
 											{stats.rank && (
-												<div className='flex items-center gap-1 sm:gap-1.5 text-muted-foreground'>
-													<Trophy className='h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0' />
-													<span className='whitespace-nowrap'>#{stats.rank} of {stats.totalMembers}</span>
+												<div className='flex items-center gap-1.5 sm:gap-2'>
+													{stats.rank === 1 && (
+														<Crown className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-400 animate-pulse flex-shrink-0' fill='currentColor' />
+													)}
+													{!isTop3 && <Trophy className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0' />}
+													<span className={`text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${getRankBadgeStyle(stats.rank)}`}>
+														#{stats.rank}
+													</span>
+													<span className='text-xs sm:text-sm text-muted-foreground whitespace-nowrap'>of {stats.totalMembers}</span>
 												</div>
 											)}
 										</div>

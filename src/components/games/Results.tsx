@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { PickGameCard } from './PickGameCard';
+import { GameCard } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { useWeek } from '@/contexts/WeekContext';
@@ -120,6 +121,54 @@ export function Results() {
 					setIsUpdating(true);
 				} else {
 					setLoading(true);
+				}
+
+				// Handle "All Games" view differently
+				if (selectedUserId === 'all-games') {
+					const [weeklyGames, leaguePicksResponse] = await Promise.all([
+						NFLService.getWeeklyGames(currentWeek),
+						fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
+					]);
+
+					const leaguePicksData = await leaguePicksResponse.json();
+
+					// Fetch odds for Standard mode leagues
+					let gamesWithOdds = weeklyGames;
+					if (leagueMode === 'standard') {
+						try {
+							const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
+							let snapshotOdds = [];
+							if (oddsResponse.ok) {
+								const data = await oddsResponse.json();
+								snapshotOdds = data.odds || [];
+							}
+
+							gamesWithOdds = weeklyGames.map(game => {
+								const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+								const homeOdds = snapshotGameOdds?.home?.odds;
+								const awayOdds = snapshotGameOdds?.away?.odds;
+
+								if (homeOdds || awayOdds) {
+									return {
+										...game,
+										home: { ...game.home, odds: homeOdds },
+										away: { ...game.away, odds: awayOdds }
+									};
+								}
+								return game;
+							});
+						} catch (error) {
+							console.error('[Results] Error fetching odds:', error);
+						}
+					}
+
+					setGames(gamesWithOdds);
+					setPicks(null); // No specific user picks
+					setLeaguePicks(leaguePicksData);
+					setLastUpdated(new Date());
+					setLoading(false);
+					setIsUpdating(false);
+					return;
 				}
 
 				// Pass leagueId and userId to the backend
@@ -389,6 +438,173 @@ export function Results() {
 		);
 	}
 
+	// Helper function to format time ago
+	const getTimeAgo = (date: Date | null) => {
+		if (!date) return '';
+		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+		if (seconds < 60) return 'just now';
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		return `${hours}h ago`;
+	};
+
+	// Handle "All Games" view
+	if (selectedUserId === 'all-games') {
+		// Organize games by status
+		const liveGames = games.filter(g => {
+			const status = g.status?.toLowerCase();
+			return status === 'in' || status === 'in_progress';
+		});
+
+		const upcomingGames = games.filter(g => {
+			const status = g.status?.toLowerCase();
+			return status === 'pre' || status === 'scheduled' || !status;
+		});
+
+		const finalGames = games.filter(g => {
+			const status = g.status?.toLowerCase();
+			return status === 'post' || status === 'final';
+		});
+
+		return (
+			<Card className='bg-card border-primary/20'>
+				<CardHeader>
+					<div className='flex items-center justify-between mb-4'>
+						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} - All Games</CardTitle>
+						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
+							<SelectTrigger className='w-[200px]'>
+								<SelectValue placeholder='Select user' />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value='all-games' className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
+									<div className='flex items-center gap-2'>
+										<span className='font-semibold text-primary'>All Games</span>
+									</div>
+								</SelectItem>
+								{leagueMembers.map(member => (
+									<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
+										<div className='flex items-center gap-2'>
+											<Avatar className='w-5 h-5'>
+												<AvatarImage src={member.image || undefined} alt={member.name} />
+												<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
+											</Avatar>
+											<span>{member.name}</span>
+										</div>
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
+					<div className='flex items-center justify-between'>
+						<div></div>
+						<div className='flex items-center gap-2'>
+							{isUpdating && (
+								<div className='flex items-center gap-1 text-xs text-primary/80'>
+									<div className='h-2 w-2 rounded-full bg-primary animate-pulse' />
+									<span>Updating...</span>
+								</div>
+							)}
+							{!isUpdating && lastUpdated && (
+								<div className='flex items-center gap-1 text-xs text-muted-foreground'>
+									<div className='h-2 w-2 rounded-full bg-green-500' />
+									<span>Live • {getTimeAgo(lastUpdated)}</span>
+								</div>
+							)}
+						</div>
+					</div>
+				</CardHeader>
+				<CardContent>
+					<div className='space-y-6'>
+						{/* Live Games */}
+						{liveGames.length > 0 && (
+							<div>
+								<div className='flex items-center gap-2 mb-3'>
+									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
+									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
+								</div>
+								<div className='space-y-3'>
+									{liveGames.map((game, index) => (
+										<motion.div
+											key={game.id}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
+										>
+											<GameCard
+												game={game}
+												showScores={true}
+												disabled={true}
+												noHover={true}
+												leaguePicks={leaguePicks[game.id]}
+												leagueMode={leagueMode}
+											/>
+										</motion.div>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* Upcoming Games */}
+						{upcomingGames.length > 0 && (
+							<div>
+								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
+								<div className='space-y-3'>
+									{upcomingGames.map((game, index) => (
+										<motion.div
+											key={game.id}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
+										>
+											<GameCard
+												game={game}
+												showScores={false}
+												disabled={true}
+												noHover={true}
+												leaguePicks={leaguePicks[game.id]}
+												leagueMode={leagueMode}
+											/>
+										</motion.div>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* Final Games */}
+						{finalGames.length > 0 && (
+							<div>
+								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
+								<div className='space-y-3'>
+									{finalGames.map((game, index) => (
+										<motion.div
+											key={game.id}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
+										>
+											<GameCard
+												game={game}
+												showScores={true}
+												disabled={true}
+												noHover={true}
+												leaguePicks={leaguePicks[game.id]}
+												leagueMode={leagueMode}
+											/>
+										</motion.div>
+									))}
+								</div>
+							</div>
+						)}
+					</div>
+				</CardContent>
+			</Card>
+		);
+	}
+
 	if (!picks || !picks.picks.length) {
 		return (
 			<Card className='bg-card border-primary/20'>
@@ -400,6 +616,11 @@ export function Results() {
 								<SelectValue placeholder='Select user' />
 							</SelectTrigger>
 							<SelectContent>
+								<SelectItem value='all-games' className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
+									<div className='flex items-center gap-2'>
+										<span className='font-semibold text-primary'>All Games</span>
+									</div>
+								</SelectItem>
 								{leagueMembers.map(member => (
 									<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
 										<div className='flex items-center gap-2'>
@@ -428,17 +649,6 @@ export function Results() {
 		);
 	}
 
-	// Helper function to format time ago
-	const getTimeAgo = (date: Date | null) => {
-		if (!date) return '';
-		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-		if (seconds < 60) return 'just now';
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
-		const hours = Math.floor(minutes / 60);
-		return `${hours}h ago`;
-	};
-
 	return (
 		<Card className='bg-card border-primary/20'>
 			<CardHeader>
@@ -449,6 +659,11 @@ export function Results() {
 							<SelectValue placeholder='Select user' />
 						</SelectTrigger>
 						<SelectContent>
+							<SelectItem value='all-games' className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
+								<div className='flex items-center gap-2'>
+									<span className='font-semibold text-primary'>All Games</span>
+								</div>
+							</SelectItem>
 							{leagueMembers.map(member => (
 								<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
 									<div className='flex items-center gap-2'>
