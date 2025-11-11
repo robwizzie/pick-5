@@ -16,6 +16,7 @@ import { Recap } from '@/components/games/Recap';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
 import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles } from 'lucide-react';
+import { useWeek } from '@/contexts/WeekContext';
 
 interface League {
 	name: string;
@@ -30,6 +31,7 @@ export default function LeagueDetails() {
 	const [league, setLeague] = useState<League | null>(null);
 	const router = useRouter();
 	const { data: session } = useSession();
+	const { currentWeek } = useWeek();
 	const [showInviteModal, setShowInviteModal] = useState(false);
 	const [showRulesModal, setShowRulesModal] = useState(false);
 	const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -59,39 +61,18 @@ export default function LeagueDetails() {
 		fetchLeague();
 	}, [id, router]);
 
-	// Check if recap data is available for ANY week
+	// Check if recap data is available for the CURRENT week being viewed
 	useEffect(() => {
 		const checkRecapAvailability = async () => {
-			if (!id) return;
+			if (!id || !currentWeek) return;
 			try {
-				// Check if any weeks have both picks and completed games
-				let hasAnyRecap = false;
-
-				// Get current NFL week first
-				const currentWeekResponse = await fetch('/api/nfl/week');
-				let currentNFLWeek = 11; // Default fallback
-				if (currentWeekResponse.ok) {
-					const weekData = await currentWeekResponse.json();
-					currentNFLWeek = weekData.week || 11;
+				const response = await fetch(`/api/recap?week=${currentWeek}&leagueId=${id}`, { cache: 'no-store' });
+				if (response.ok) {
+					const data = await response.json();
+					setHasRecapData(data.hasPicks && data.weekCompleted);
+				} else {
+					setHasRecapData(false);
 				}
-
-				// Check weeks up to current week
-				for (let week = 1; week <= currentNFLWeek; week++) {
-					try {
-						const response = await fetch(`/api/recap?week=${week}&leagueId=${id}`);
-						if (response.ok) {
-							const data = await response.json();
-							if (data.hasPicks && data.weekCompleted) {
-								hasAnyRecap = true;
-								break;
-							}
-						}
-					} catch {
-						// Continue checking other weeks
-						continue;
-					}
-				}
-				setHasRecapData(hasAnyRecap);
 			} catch {
 				setHasRecapData(false);
 			}
@@ -101,7 +82,7 @@ export default function LeagueDetails() {
 		// Re-check every 2 minutes in case week completes
 		const interval = setInterval(checkRecapAvailability, 120000);
 		return () => clearInterval(interval);
-	}, [id]);
+	}, [id, currentWeek]);
 
 	const handleGetInviteLink = async () => {
 		try {
