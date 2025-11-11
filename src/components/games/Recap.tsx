@@ -80,6 +80,12 @@ interface RecapData {
 		image: string | null;
 		points: number;
 	}>;
+	// Best TFS performers (Steve mode only)
+	bestTFS: Array<{
+		player: string;
+		image: string | null;
+		tfsPoints: number;
+	}>;
 	// League stats
 	leagueStats: {
 		totalPlayers: number;
@@ -279,6 +285,18 @@ export function Recap() {
 				points: r.points
 			}));
 
+		// Best TFS performers (Steve mode only) - sort by TFS points
+		const tfsSorted = [...weeklyResults].sort((a, b) => (b.tfsPoints || 0) - (a.tfsPoints || 0));
+		const bestTFSScore = tfsSorted[0]?.tfsPoints || 0;
+		const bestTFS = tfsSorted
+			.filter(r => r.tfsPoints === bestTFSScore && bestTFSScore > 0)
+			.slice(0, 5)
+			.map(r => ({
+				player: r.player,
+				image: r.image,
+				tfsPoints: r.tfsPoints || 0
+			}));
+
 		// League stats
 		const totalPlayers = weeklyResults.length;
 		const totalPoints = weeklyResults.reduce((sum, r) => sum + r.points, 0);
@@ -339,6 +357,7 @@ export function Recap() {
 			mostPickedCorrect: recapAnalytics.mostPickedCorrect,
 			mostPickedIncorrect: recapAnalytics.mostPickedIncorrect,
 			perfectWeek,
+			bestTFS,
 			leagueStats,
 			highlights
 		};
@@ -617,6 +636,61 @@ export function Recap() {
 										<span className='text-xs text-green-400 font-bold'>({player.points} pts)</span>
 									</motion.div>
 								))}
+							</div>
+						</CardContent>
+					</Card>
+				</motion.div>
+			)}
+
+			{/* Best TFS Score (Steve Mode Only) */}
+			{leagueMode === 'steve' && recapData.bestTFS.length > 0 && (
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.3, delay: 0.35 }}
+				>
+					<Card className='border-2 border-purple-500/30 bg-purple-500/5'>
+						<CardHeader>
+							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-purple-400 flex items-center gap-2'>
+								<Award className='h-5 w-5' />
+								Best TFS Performance
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className='space-y-3'>
+								{/* Show TFS details */}
+								<div className='text-sm text-muted-foreground mb-3'>
+									{recapData.bestTFS[0].tfsPoints === 5 ? (
+										<span className='text-purple-400 font-semibold'>🎯 Perfect TFS score!</span>
+									) : (
+										<span>
+											Best TFS: <span className='text-purple-400 font-bold'>{recapData.bestTFS[0].tfsPoints}</span> points
+											<span className='text-muted-foreground'> ({5 - recapData.bestTFS[0].tfsPoints} off from perfect)</span>
+										</span>
+									)}
+								</div>
+
+								{/* Show players with best TFS */}
+								<div className='flex flex-wrap gap-3'>
+									{recapData.bestTFS.map((player, idx) => (
+										<motion.div
+											key={idx}
+											className='flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-sm rounded-full border-2 border-purple-500/30'
+											initial={{ opacity: 0, scale: 0.9 }}
+											animate={{ opacity: 1, scale: 1 }}
+											transition={{ duration: 0.3, delay: 0.4 + idx * 0.05 }}
+										>
+											<Avatar className='w-8 h-8'>
+												<AvatarImage src={player.image || undefined} alt={player.player} />
+												<AvatarFallback className='bg-purple-500/20 text-purple-400 font-semibold text-xs'>
+													{player.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+												</AvatarFallback>
+											</Avatar>
+											<span className='font-semibold text-foreground text-sm'>{player.player}</span>
+											<span className='text-xs text-purple-400 font-bold'>({player.tfsPoints} TFS)</span>
+										</motion.div>
+									))}
+								</div>
 							</div>
 						</CardContent>
 					</Card>
