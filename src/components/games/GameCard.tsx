@@ -174,11 +174,14 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 	const getTeamButtonStyle = (isTeamSelected: boolean, isTeamCorrect: boolean | null) => {
 		const fontWeight = isTeamSelected ? 'font-bold' : 'font-normal';
-		const baseStyle = `${fontWeight} !hover:bg-transparent !hover:border-current !active:scale-100`;
+		const baseStyle = `${fontWeight} !hover:bg-transparent !hover:border-current !active:scale-100 backdrop-blur-sm`;
 
 		if (!isTeamSelected) return `border-primary/20 text-white ${baseStyle}`;
-		if (isTeamCorrect === true) return `bg-[#22c55e] text-black border-[#22c55e] ${baseStyle}`;
-		if (isTeamCorrect === false) return `bg-destructive text-black border-destructive ${baseStyle}`;
+		// Correct pick: Green with glass effect and white text
+		if (isTeamCorrect === true) return `bg-green-500/90 text-white border-green-500 ${baseStyle}`;
+		// Incorrect pick: Red with glass effect and white text
+		if (isTeamCorrect === false) return `bg-red-500/90 text-white border-red-500 ${baseStyle}`;
+		// Selected but not graded yet
 		return `bg-primary text-black border-primary ${baseStyle}`;
 	};
 
@@ -207,10 +210,10 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		(homeWon && (game.home.odds ?? 0) >= 250)
 	);
 
-	// Helper to get winner styling
+	// Helper to get winner styling (for View All Games)
 	const getWinnerStyle = (isWinner: boolean | undefined) => {
 		if (!isWinner || !showScores || !isGameFinished) return '';
-		return 'border-green-500 bg-green-500/10';
+		return 'border-green-500/50 bg-green-500/10 backdrop-blur-sm';
 	};
 
 	return (
@@ -243,9 +246,9 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
 									{isStandardMode && game.away.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-											<span className={`text-xs ${selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
+											<span className={`text-xs font-semibold ${selected === game.away.team && isCorrect !== null ? 'text-white/90' : selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
+											<span className={`text-xs ${selected === game.away.team && isCorrect !== null ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+											<span className={`text-xs font-bold ${selected === game.away.team && isCorrect !== null ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 										</div>
 									)}
 									{showScores && game.away.score !== undefined && (
@@ -299,9 +302,9 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
 									{isStandardMode && game.home.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-											<span className={`text-xs ${selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
+											<span className={`text-xs font-semibold ${selected === game.home.team && isCorrect !== null ? 'text-white/90' : selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
+											<span className={`text-xs ${selected === game.home.team && isCorrect !== null ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+											<span className={`text-xs font-bold ${selected === game.home.team && isCorrect !== null ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 										</div>
 									)}
 									{showScores && game.home.score !== undefined && (
