@@ -176,18 +176,22 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		const fontWeight = isTeamSelected ? 'font-bold' : 'font-normal';
 		const baseStyle = `${fontWeight} !hover:bg-transparent !hover:border-current !active:scale-100 backdrop-blur-sm`;
 
-		// If not selected, check if we should show winner styling (for All Games view)
-		if (!isTeamSelected) {
-			// Show semi-transparent green for winner in All Games view
-			if (isWinner) return `bg-green-500/50 text-white border-green-500/50 ${baseStyle}`;
-			return `border-primary/20 text-white ${baseStyle}`;
+		// For user picks: only show color on the selected team (never both green and red)
+		if (isTeamSelected) {
+			// Correct pick: Semi-transparent green with white text
+			if (isTeamCorrect === true) return `bg-green-500/30 text-white border-green-500/40 ${baseStyle}`;
+			// Incorrect pick: Semi-transparent red with white text
+			if (isTeamCorrect === false) return `bg-red-500/30 text-white border-red-500/40 ${baseStyle}`;
+			// Selected but not graded yet
+			return `bg-primary text-black border-primary ${baseStyle}`;
 		}
-		// Correct pick: Semi-transparent green with white text
-		if (isTeamCorrect === true) return `bg-green-500/50 text-white border-green-500/50 ${baseStyle}`;
-		// Incorrect pick: Semi-transparent red with white text
-		if (isTeamCorrect === false) return `bg-red-500/50 text-white border-red-500/50 ${baseStyle}`;
-		// Selected but not graded yet
-		return `bg-primary text-black border-primary ${baseStyle}`;
+
+		// For All Games view: only show green for winner (no color for loser)
+		if (isWinner && showScores && isGameFinished) {
+			return `bg-green-500/30 text-white border-green-500/40 ${baseStyle}`;
+		}
+
+		return `border-primary/20 text-white ${baseStyle}`;
 	};
 
 	const buttonProps = noHover
