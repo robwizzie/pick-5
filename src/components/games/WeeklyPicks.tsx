@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
+import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -695,35 +696,113 @@ export function WeeklyPicks() {
 									<>
 										{/* Live Games */}
 										{liveGames.length > 0 && (
-											<div className='mb-6'>
+											<motion.div
+												className='mb-6'
+												initial={{ opacity: 0, y: 10 }}
+												animate={{ opacity: 1, y: 0 }}
+												transition={{ duration: 0.3 }}
+											>
 												<div className='flex items-center gap-2 mb-3'>
 													<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
 													<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 												</div>
-												<div className='space-y-3'>
-													{liveGames.map(renderGameCard)}
-												</div>
-											</div>
+												<motion.div
+													className='space-y-3'
+													initial='hidden'
+													animate='visible'
+													variants={{
+														visible: {
+															transition: {
+																staggerChildren: 0.05
+															}
+														}
+													}}
+												>
+													{liveGames.map((game, index) => (
+														<motion.div
+															key={game.id}
+															variants={{
+																hidden: { opacity: 0, y: 10 },
+																visible: { opacity: 1, y: 0 }
+															}}
+														>
+															{renderGameCard(game)}
+														</motion.div>
+													))}
+												</motion.div>
+											</motion.div>
 										)}
 
 										{/* Upcoming Games */}
 										{upcomingGames.length > 0 && (
-											<div className='mb-6'>
+											<motion.div
+												className='mb-6'
+												initial={{ opacity: 0, y: 10 }}
+												animate={{ opacity: 1, y: 0 }}
+												transition={{ duration: 0.3, delay: 0.1 }}
+											>
 												<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-												<div className='space-y-3'>
-													{upcomingGames.map(renderGameCard)}
-												</div>
-											</div>
+												<motion.div
+													className='space-y-3'
+													initial='hidden'
+													animate='visible'
+													variants={{
+														visible: {
+															transition: {
+																staggerChildren: 0.05
+															}
+														}
+													}}
+												>
+													{upcomingGames.map((game, index) => (
+														<motion.div
+															key={game.id}
+															variants={{
+																hidden: { opacity: 0, y: 10 },
+																visible: { opacity: 1, y: 0 }
+															}}
+														>
+															{renderGameCard(game)}
+														</motion.div>
+													))}
+												</motion.div>
+											</motion.div>
 										)}
 
 										{/* Past Games */}
 										{pastGames.length > 0 && (
-											<div className='mb-6'>
+											<motion.div
+												className='mb-6'
+												initial={{ opacity: 0, y: 10 }}
+												animate={{ opacity: 1, y: 0 }}
+												transition={{ duration: 0.3, delay: 0.2 }}
+											>
 												<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-												<div className='space-y-3'>
-													{pastGames.map(renderGameCard)}
-												</div>
-											</div>
+												<motion.div
+													className='space-y-3'
+													initial='hidden'
+													animate='visible'
+													variants={{
+														visible: {
+															transition: {
+																staggerChildren: 0.05
+															}
+														}
+													}}
+												>
+													{pastGames.map((game, index) => (
+														<motion.div
+															key={game.id}
+															variants={{
+																hidden: { opacity: 0, y: 10 },
+																visible: { opacity: 1, y: 0 }
+															}}
+														>
+															{renderGameCard(game)}
+														</motion.div>
+													))}
+												</motion.div>
+											</motion.div>
 										)}
 									</>
 								);
