@@ -497,113 +497,65 @@ export function Results() {
 
 						{/* Live Games */}
 						{results.liveGames.length > 0 && (
-							<motion.div
-								className='mb-6'
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								transition={{ duration: 0.3 }}
-							>
+							<div className='mb-6'>
 								<div className='flex items-center gap-2 mb-3'>
 									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
 									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 								</div>
-								<motion.div
-									className='space-y-3'
-									initial='hidden'
-									animate='visible'
-									variants={{
-										visible: {
-											transition: {
-												staggerChildren: 0.05
-											}
-										}
-									}}
-								>
+								<div className='space-y-3'>
 									{results.liveGames.map((game: any, index: number) => (
 										<motion.div
 											key={game.key || index}
-											variants={{
-												hidden: { opacity: 0, y: 10 },
-												visible: { opacity: 1, y: 0 }
-											}}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
 										>
 											{game}
 										</motion.div>
 									))}
-								</motion.div>
-							</motion.div>
+								</div>
+							</div>
 						)}
 
 						{/* Upcoming Games */}
 						{results.upcomingGames.length > 0 && (
-							<motion.div
-								className='mb-6'
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								transition={{ duration: 0.3, delay: 0.1 }}
-							>
+							<div className='mb-6'>
 								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-								<motion.div
-									className='space-y-3'
-									initial='hidden'
-									animate='visible'
-									variants={{
-										visible: {
-											transition: {
-												staggerChildren: 0.05
-											}
-										}
-									}}
-								>
+								<div className='space-y-3'>
 									{results.upcomingGames.map((game: any, index: number) => (
 										<motion.div
 											key={game.key || index}
-											variants={{
-												hidden: { opacity: 0, y: 10 },
-												visible: { opacity: 1, y: 0 }
-											}}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
 										>
 											{game}
 										</motion.div>
 									))}
-								</motion.div>
-							</motion.div>
+								</div>
+							</div>
 						)}
 
 						{/* Past Games */}
 						{results.pastGames.length > 0 && (
-							<motion.div
-								className='mb-6'
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								transition={{ duration: 0.3, delay: 0.2 }}
-							>
+							<div className='mb-6'>
 								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-								<motion.div
-									className='space-y-3'
-									initial='hidden'
-									animate='visible'
-									variants={{
-										visible: {
-											transition: {
-												staggerChildren: 0.05
-											}
-										}
-									}}
-								>
+								<div className='space-y-3'>
 									{results.pastGames.map((game: any, index: number) => (
 										<motion.div
 											key={game.key || index}
-											variants={{
-												hidden: { opacity: 0, y: 10 },
-												visible: { opacity: 1, y: 0 }
-											}}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
 										>
 											{game}
 										</motion.div>
 									))}
-								</motion.div>
-							</motion.div>
+								</div>
+							</div>
 						)}
 					</div>
 
@@ -658,8 +610,9 @@ export function Results() {
 					<motion.div
 						className='border-t border-primary/20 pt-6 mt-8'
 						initial={{ opacity: 0, y: 20 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.4, delay: 0.3 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true, margin: "-50px" }}
+						transition={{ duration: 0.4 }}
 					>
 						<div className={`grid gap-4 ${leagueMode === 'steve' ? 'grid-cols-3' : 'grid-cols-2'}`}>
 							<motion.div

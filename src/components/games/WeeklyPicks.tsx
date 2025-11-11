@@ -618,18 +618,23 @@ export function WeeklyPicks() {
 							<h3 className='text-lg font-medium mb-4'>Select 5 Games ({picks.length}/5)</h3>
 
 							{(() => {
+								// When 5 picks are made, only show picked games to reduce clutter
+								const gamesToShow = picks.length === 5
+									? games.filter(g => picks.some(p => p.gameId === g.id))
+									: games;
+
 								// Organize games by status
-								const liveGames = games.filter(g => {
+								const liveGames = gamesToShow.filter(g => {
 									const status = g.status?.toLowerCase();
 									return status === 'in' || status === 'in_progress';
 								});
 
-								const upcomingGames = games.filter(g => {
+								const upcomingGames = gamesToShow.filter(g => {
 									const status = g.status?.toLowerCase();
 									return status === 'pre' || status === 'scheduled' || !status;
 								});
 
-								const pastGames = games.filter(g => {
+								const pastGames = gamesToShow.filter(g => {
 									const status = g.status?.toLowerCase();
 									return status === 'post' || status === 'final';
 								});
@@ -696,113 +701,65 @@ export function WeeklyPicks() {
 									<>
 										{/* Live Games */}
 										{liveGames.length > 0 && (
-											<motion.div
-												className='mb-6'
-												initial={{ opacity: 0, y: 10 }}
-												animate={{ opacity: 1, y: 0 }}
-												transition={{ duration: 0.3 }}
-											>
+											<div className='mb-6'>
 												<div className='flex items-center gap-2 mb-3'>
 													<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
 													<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 												</div>
-												<motion.div
-													className='space-y-3'
-													initial='hidden'
-													animate='visible'
-													variants={{
-														visible: {
-															transition: {
-																staggerChildren: 0.05
-															}
-														}
-													}}
-												>
+												<div className='space-y-3'>
 													{liveGames.map((game, index) => (
 														<motion.div
 															key={game.id}
-															variants={{
-																hidden: { opacity: 0, y: 10 },
-																visible: { opacity: 1, y: 0 }
-															}}
+															initial={{ opacity: 0, y: 10 }}
+															whileInView={{ opacity: 1, y: 0 }}
+															viewport={{ once: true, margin: "-50px" }}
+															transition={{ duration: 0.3, delay: index * 0.05 }}
 														>
 															{renderGameCard(game)}
 														</motion.div>
 													))}
-												</motion.div>
-											</motion.div>
+												</div>
+											</div>
 										)}
 
 										{/* Upcoming Games */}
 										{upcomingGames.length > 0 && (
-											<motion.div
-												className='mb-6'
-												initial={{ opacity: 0, y: 10 }}
-												animate={{ opacity: 1, y: 0 }}
-												transition={{ duration: 0.3, delay: 0.1 }}
-											>
+											<div className='mb-6'>
 												<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-												<motion.div
-													className='space-y-3'
-													initial='hidden'
-													animate='visible'
-													variants={{
-														visible: {
-															transition: {
-																staggerChildren: 0.05
-															}
-														}
-													}}
-												>
+												<div className='space-y-3'>
 													{upcomingGames.map((game, index) => (
 														<motion.div
 															key={game.id}
-															variants={{
-																hidden: { opacity: 0, y: 10 },
-																visible: { opacity: 1, y: 0 }
-															}}
+															initial={{ opacity: 0, y: 10 }}
+															whileInView={{ opacity: 1, y: 0 }}
+															viewport={{ once: true, margin: "-50px" }}
+															transition={{ duration: 0.3, delay: index * 0.05 }}
 														>
 															{renderGameCard(game)}
 														</motion.div>
 													))}
-												</motion.div>
-											</motion.div>
+												</div>
+											</div>
 										)}
 
 										{/* Past Games */}
 										{pastGames.length > 0 && (
-											<motion.div
-												className='mb-6'
-												initial={{ opacity: 0, y: 10 }}
-												animate={{ opacity: 1, y: 0 }}
-												transition={{ duration: 0.3, delay: 0.2 }}
-											>
+											<div className='mb-6'>
 												<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-												<motion.div
-													className='space-y-3'
-													initial='hidden'
-													animate='visible'
-													variants={{
-														visible: {
-															transition: {
-																staggerChildren: 0.05
-															}
-														}
-													}}
-												>
+												<div className='space-y-3'>
 													{pastGames.map((game, index) => (
 														<motion.div
 															key={game.id}
-															variants={{
-																hidden: { opacity: 0, y: 10 },
-																visible: { opacity: 1, y: 0 }
-															}}
+															initial={{ opacity: 0, y: 10 }}
+															whileInView={{ opacity: 1, y: 0 }}
+															viewport={{ once: true, margin: "-50px" }}
+															transition={{ duration: 0.3, delay: index * 0.05 }}
 														>
 															{renderGameCard(game)}
 														</motion.div>
 													))}
-												</motion.div>
-											</motion.div>
+												</div>
+											</div>
 										)}
 									</>
 								);
