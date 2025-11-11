@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { PickGameCard } from './PickGameCard';
+import { GameCard } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { useWeek } from '@/contexts/WeekContext';
@@ -437,6 +438,17 @@ export function Results() {
 		);
 	}
 
+	// Helper function to format time ago
+	const getTimeAgo = (date: Date | null) => {
+		if (!date) return '';
+		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+		if (seconds < 60) return 'just now';
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		return `${hours}h ago`;
+	};
+
 	// Handle "All Games" view
 	if (selectedUserId === 'all-games') {
 		// Organize games by status
@@ -636,17 +648,6 @@ export function Results() {
 			</Card>
 		);
 	}
-
-	// Helper function to format time ago
-	const getTimeAgo = (date: Date | null) => {
-		if (!date) return '';
-		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-		if (seconds < 60) return 'just now';
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
-		const hours = Math.floor(minutes / 60);
-		return `${hours}h ago`;
-	};
 
 	return (
 		<Card className='bg-card border-primary/20'>

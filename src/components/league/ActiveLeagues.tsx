@@ -64,12 +64,12 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 						const data = await response.json();
 
 						// Find user's data in weekly results
-						const userWeeklyData = data.weeklyResults?.find((r: any) => r.userId === userId);
-						const userSeasonData = data.seasonStats?.find((s: any) => s.player === userWeeklyData?.player);
+						const userWeeklyData = data.weeklyResults?.find((r: { userId?: string; player?: string; points?: number; hasPicks?: boolean }) => r.userId === userId);
+						const userSeasonData = data.seasonStats?.find((s: { player?: string; totalPoints?: number }) => s.player === userWeeklyData?.player);
 
 						// Calculate user's rank
-						const sortedResults = [...(data.weeklyResults || [])].sort((a, b) => b.points - a.points);
-						const userRank = sortedResults.findIndex((r: any) => r.userId === userId) + 1;
+						const sortedResults = [...(data.weeklyResults || [])].sort((a: { points?: number }, b: { points?: number }) => (b.points || 0) - (a.points || 0));
+						const userRank = sortedResults.findIndex((r: { userId?: string }) => r.userId === userId) + 1;
 
 						statsMap.set(league._id, {
 							hasPicks: userWeeklyData?.hasPicks || false,

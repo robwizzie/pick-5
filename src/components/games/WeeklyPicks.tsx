@@ -142,7 +142,7 @@ export function WeeklyPicks() {
 					}
 
 					// If no snapshot odds available, fall back to user's stored odds from picks
-					let storedOddsMap = new Map();
+					const storedOddsMap = new Map();
 					if (snapshotOdds.length === 0 && leagueId) {
 						console.log('[WeeklyPicks] No snapshot odds found, falling back to stored picks');
 						const picksResponse = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
@@ -150,7 +150,7 @@ export function WeeklyPicks() {
 							const picksData = await picksResponse.json();
 							if (picksData?.picks) {
 								// Build a map of gameId -> {homeOdds, awayOdds}
-								picksData.picks.forEach((pick: any) => {
+								picksData.picks.forEach((pick: { gameId: string; odds?: number; isHome: boolean }) => {
 									if (pick.odds) {
 										if (!storedOddsMap.has(pick.gameId)) {
 											storedOddsMap.set(pick.gameId, {});
@@ -170,7 +170,7 @@ export function WeeklyPicks() {
 					// Match odds to games
 					const gamesWithOdds = weeklyGames.map(game => {
 						// First try to find odds from snapshot
-						const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+						const snapshotGameOdds = snapshotOdds.find((o: { id: string; home?: { odds?: number }; away?: { odds?: number } }) => o.id === game.id);
 
 						// Fall back to stored odds from user's picks
 						const storedOdds = storedOddsMap.get(game.id);
@@ -335,7 +335,13 @@ export function WeeklyPicks() {
 
 		try {
 			setIsSaving(true);
-			const requestBody: any = {
+			const requestBody: {
+				week: number;
+				picks: { gameId: string; team: string; opponent: string; isHome: boolean; odds?: number }[];
+				leagueId: string;
+				tfsGame?: string;
+				tfsScore?: number;
+			} = {
 				week: currentWeek,
 				picks,
 				leagueId
@@ -472,7 +478,13 @@ export function WeeklyPicks() {
 
 		try {
 			setIsSaving(true);
-			const requestBody: any = {
+			const requestBody: {
+				week: number;
+				picks: { gameId: string; team: string; opponent: string; isHome: boolean; odds?: number }[];
+				leagueId: string;
+				tfsGame?: string;
+				tfsScore?: number;
+			} = {
 				week: currentWeek,
 				picks,
 				leagueId
