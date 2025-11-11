@@ -67,9 +67,9 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 						const userWeeklyData = data.weeklyResults?.find((r: { userId?: string; player?: string; points?: number; hasPicks?: boolean }) => r.userId === userId);
 						const userSeasonData = data.seasonStats?.find((s: { player?: string; totalPoints?: number }) => s.player === userWeeklyData?.player);
 
-						// Calculate user's rank
-						const sortedResults = [...(data.weeklyResults || [])].sort((a: { points?: number }, b: { points?: number }) => (b.points || 0) - (a.points || 0));
-						const userRank = sortedResults.findIndex((r: { userId?: string }) => r.userId === userId) + 1;
+						// Calculate user's season rank (based on total season points)
+						const sortedSeasonStats = [...(data.seasonStats || [])].sort((a: { totalPoints?: number }, b: { totalPoints?: number }) => (b.totalPoints || 0) - (a.totalPoints || 0));
+						const userRank = sortedSeasonStats.findIndex((s: { player?: string }) => s.player === userWeeklyData?.player) + 1;
 
 						statsMap.set(league._id, {
 							hasPicks: userWeeklyData?.hasPicks || false,
@@ -218,14 +218,14 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 										<div className='text-left sm:text-right space-y-0'>
 											<div className='flex items-center sm:justify-end gap-1'>
 												<span className='text-xl sm:text-2xl font-bold text-primary tabular-nums font-mono'>
-													<CountUp end={stats.currentWeekPoints} duration={0.5} />
+													<CountUp end={stats.seasonPoints} duration={0.5} />
 												</span>
 												<span className='text-[10px] text-muted-foreground self-end mb-0.5'>pts</span>
 											</div>
-											<p className='text-[10px] sm:text-xs text-muted-foreground -mt-0.5'>Week {currentWeek}</p>
-											{stats.seasonPoints > 0 && (
+											<p className='text-[10px] sm:text-xs text-muted-foreground -mt-0.5'>Season Total</p>
+											{stats.currentWeekPoints > 0 && (
 												<p className='text-[10px] sm:text-xs text-muted-foreground/70 tabular-nums font-mono'>
-													<CountUp end={stats.seasonPoints} duration={0.5} /> Season
+													<CountUp end={stats.currentWeekPoints} duration={0.5} /> Week {currentWeek}
 												</p>
 											)}
 										</div>

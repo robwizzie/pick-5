@@ -9,6 +9,7 @@ import { render } from '@react-email/render';
 import webPush from 'web-push';
 import ThursdayReminderEmail from '@/emails/ThursdayReminderEmail';
 import SaturdayReminderEmail from '@/emails/SaturdayReminderEmail';
+import { NFLService } from '@/services/nflService';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -22,17 +23,6 @@ webPush.setVapidDetails(
 	process.env.VAPID_PRIVATE_KEY || ''
 );
 
-// Helper to get current NFL week (simplified - you may want to use your existing logic)
-function getCurrentNFLWeek(): number {
-	// For now, return a static week. Replace with your actual week calculation logic
-	// You could fetch this from your games API or calculate based on the season start date
-	const seasonStart = new Date('2024-09-05'); // Example: Week 1 starts Sept 5, 2024
-	const now = new Date();
-	const diffTime = Math.abs(now.getTime() - seasonStart.getTime());
-	const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-	const week = Math.min(Math.ceil(diffDays / 7), 18);
-	return week;
-}
 
 // Helper to get Thursday night game (you'll need to fetch from your games data)
 async function getThursdayNightGame(week: number) {
@@ -66,8 +56,8 @@ export async function GET(req: Request) {
 		// We'll send to all users on the appropriate day, regardless of their exact preferred time
 		// For more precise timing, upgrade to Pro plan
 
-		// Get current NFL week
-		const currentWeek = getCurrentNFLWeek();
+		// Get current NFL week from NFLService
+		const currentWeek = await NFLService.getCurrentWeek();
 		console.log(`[Pick Reminders] Current NFL week: ${currentWeek}`);
 
 		// Determine if this is Thursday or Saturday reminder
