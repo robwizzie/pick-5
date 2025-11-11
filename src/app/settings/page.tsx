@@ -15,6 +15,7 @@ interface EmailPreferences {
 	pickReminders: boolean;
 	thursdayReminder: boolean;
 	saturdayReminder: boolean;
+	weeklyScoreEmail: boolean;
 }
 
 export default function SettingsPage() {
@@ -33,7 +34,8 @@ export default function SettingsPage() {
 	const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
 		pickReminders: true,
 		thursdayReminder: true,
-		saturdayReminder: true
+		saturdayReminder: true,
+		weeklyScoreEmail: true
 	});
 	const [pushEnabled, setPushEnabled] = useState(false);
 	const [pushSupported, setPushSupported] = useState(false);
@@ -397,6 +399,21 @@ export default function SettingsPage() {
 									</div>
 								</div>
 							)}
+
+							{/* Weekly Score Email */}
+							<div className='flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20'>
+								<div className='space-y-1'>
+									<Label htmlFor='weekly-score-email' className='text-base font-semibold'>
+										Weekly Score Emails
+									</Label>
+									<p className='text-sm text-muted-foreground'>Receive a summary email every Tuesday with your weekly results</p>
+								</div>
+								<Switch
+									id='weekly-score-email'
+									checked={emailPreferences.weeklyScoreEmail}
+									onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, weeklyScoreEmail: checked }))}
+								/>
+							</div>
 						</div>
 
 						{/* Push Notifications Section */}

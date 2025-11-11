@@ -41,6 +41,10 @@ const UserSchema = new mongoose.Schema({
 			type: Boolean,
 			default: true
 		},
+		weeklyScoreEmail: {
+			type: Boolean,
+			default: true
+		},
 		thursdayReminderTime: {
 			type: String,
 			default: '13:00' // 1:00 PM
