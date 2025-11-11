@@ -48,8 +48,8 @@ export function PickGameCard({
 	const badgeStyle = 'absolute px-2 py-1 rounded-full text-xs font-medium border';
 
 	const getPointsColor = (points: number) => {
-		if (points > 0) return 'bg-[#22c55e] text-black';
-		if (points < 0) return 'bg-destructive text-white';
+		if (points > 0) return 'bg-green-500/50 text-white border-green-500/50';
+		if (points < 0) return 'bg-red-500/50 text-white border-red-500/50';
 		return 'bg-muted text-muted-foreground';
 	};
 

@@ -178,14 +178,14 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 		// If not selected, check if we should show winner styling (for All Games view)
 		if (!isTeamSelected) {
-			// Show opaque green for winner in All Games view
-			if (isWinner) return `bg-green-500 text-white border-green-500 ${baseStyle}`;
+			// Show semi-transparent green for winner in All Games view
+			if (isWinner) return `bg-green-500/50 text-white border-green-500/50 ${baseStyle}`;
 			return `border-primary/20 text-white ${baseStyle}`;
 		}
-		// Correct pick: Opaque green with white text
-		if (isTeamCorrect === true) return `bg-green-500 text-white border-green-500 ${baseStyle}`;
-		// Incorrect pick: Opaque red with white text
-		if (isTeamCorrect === false) return `bg-red-500 text-white border-red-500 ${baseStyle}`;
+		// Correct pick: Semi-transparent green with white text
+		if (isTeamCorrect === true) return `bg-green-500/50 text-white border-green-500/50 ${baseStyle}`;
+		// Incorrect pick: Semi-transparent red with white text
+		if (isTeamCorrect === false) return `bg-red-500/50 text-white border-red-500/50 ${baseStyle}`;
 		// Selected but not graded yet
 		return `bg-primary text-black border-primary ${baseStyle}`;
 	};
