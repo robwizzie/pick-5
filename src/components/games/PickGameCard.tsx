@@ -69,7 +69,11 @@ export function PickGameCard({
 	};
 
 	return (
-		<div className='relative rounded-lg overflow-hidden border-2 bg-card border-primary/20 pointer-events-none'>
+		<div className={`relative rounded-lg overflow-hidden border-2 bg-card pointer-events-none transition-all duration-300 ${
+			variant === 'picks'
+				? 'border-neon-green/20 shadow-neon-green/20 hover:shadow-neon-green/30'
+				: 'border-primary/20'
+		}`}>
 			{/* Left Badge: Pick Number */}
 			<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>
 				Pick {pickIndex + 1}
