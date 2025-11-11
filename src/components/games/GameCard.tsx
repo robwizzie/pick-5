@@ -19,6 +19,9 @@ interface Game {
 	away: TeamInfo;
 	date: Date;
 	status?: string;
+	clock?: string; // Time remaining (e.g., "12:34")
+	period?: number; // Quarter/period number (1-4)
+	periodDisplay?: string; // e.g., "1st", "2nd", "3rd", "4th", "OT"
 }
 
 interface UserPick {
@@ -138,11 +141,16 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		}
 
 		if (status === 'in' || status === 'in_progress') {
+			const periodText = game.periodDisplay || (game.period ? `Q${game.period}` : '');
+			const clockText = game.clock || '';
+
 			return {
 				text: 'LIVE',
 				color: 'text-green-400',
 				bgColor: 'bg-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.2)]',
 				isLive: true,
+				periodText,
+				clockText,
 				dayText,
 				timeText,
 				fullDate
@@ -236,10 +244,16 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
 							</div>
 							<div className='text-[10px] text-muted-foreground mt-0.5'>
-								{statusInfo.isScheduled
-									? statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-									: `${statusInfo.dayText} ${statusInfo.timeText}`
-								}
+								{statusInfo.isScheduled ? (
+									statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+								) : (statusInfo as any).isLive && (statusInfo as any).periodText ? (
+									<div className='flex flex-col items-center gap-0.5'>
+										<span className='text-green-400 font-semibold'>{(statusInfo as any).periodText}</span>
+										{(statusInfo as any).clockText && <span className='text-primary font-mono'>{(statusInfo as any).clockText}</span>}
+									</div>
+								) : (
+									`${statusInfo.dayText} ${statusInfo.timeText}`
+								)}
 							</div>
 						</div>
 					</div>
