@@ -114,6 +114,10 @@ export async function GET(req: Request) {
 			points: number;
 			pickCount: number;
 			correctPickers: Array<{ userId: string; name: string; image: string | null }>;
+			leaguePicks: {
+				away: Array<{ userId: string; name: string; image: string | null }>;
+				home: Array<{ userId: string; name: string; image: string | null }>;
+			};
 		}> = [];
 
 		const mostPickedCorrect: Array<{
@@ -124,6 +128,10 @@ export async function GET(req: Request) {
 			pickCount: number;
 			totalPicks: number;
 			pickers: Array<{ userId: string; name: string; image: string | null }>;
+			leaguePicks: {
+				away: Array<{ userId: string; name: string; image: string | null }>;
+				home: Array<{ userId: string; name: string; image: string | null }>;
+			};
 		}> = [];
 
 		const mostPickedIncorrect: Array<{
@@ -134,6 +142,10 @@ export async function GET(req: Request) {
 			pickCount: number;
 			totalPicks: number;
 			pickers: Array<{ userId: string; name: string; image: string | null }>;
+			leaguePicks: {
+				away: Array<{ userId: string; name: string; image: string | null }>;
+				home: Array<{ userId: string; name: string; image: string | null }>;
+			};
 		}> = [];
 
 		// Analyze each game
@@ -159,7 +171,11 @@ export async function GET(req: Request) {
 					odds: winningOdds,
 					points: Math.ceil(winningOdds / 100) + 1,
 					pickCount: correctPickers.length,
-					correctPickers
+					correctPickers,
+					leaguePicks: {
+						away: stats.awayPicks,
+						home: stats.homePicks
+					}
 				});
 			}
 
@@ -172,7 +188,11 @@ export async function GET(req: Request) {
 					losingTeam,
 					pickCount: correctPickers.length,
 					totalPicks,
-					pickers: correctPickers
+					pickers: correctPickers,
+					leaguePicks: {
+						away: stats.awayPicks,
+						home: stats.homePicks
+					}
 				});
 			}
 
@@ -184,7 +204,11 @@ export async function GET(req: Request) {
 					winningTeam,
 					pickCount: incorrectPickers.length,
 					totalPicks,
-					pickers: incorrectPickers
+					pickers: incorrectPickers,
+					leaguePicks: {
+						away: stats.awayPicks,
+						home: stats.homePicks
+					}
 				});
 			}
 		}
