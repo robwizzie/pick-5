@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
+import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
@@ -495,35 +497,113 @@ export function Results() {
 
 						{/* Live Games */}
 						{results.liveGames.length > 0 && (
-							<div className='mb-6'>
+							<motion.div
+								className='mb-6'
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.3 }}
+							>
 								<div className='flex items-center gap-2 mb-3'>
 									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
 									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 								</div>
-								<div className='space-y-3'>
-									{results.liveGames}
-								</div>
-							</div>
+								<motion.div
+									className='space-y-3'
+									initial='hidden'
+									animate='visible'
+									variants={{
+										visible: {
+											transition: {
+												staggerChildren: 0.05
+											}
+										}
+									}}
+								>
+									{results.liveGames.map((game: any, index: number) => (
+										<motion.div
+											key={game.key || index}
+											variants={{
+												hidden: { opacity: 0, y: 10 },
+												visible: { opacity: 1, y: 0 }
+											}}
+										>
+											{game}
+										</motion.div>
+									))}
+								</motion.div>
+							</motion.div>
 						)}
 
 						{/* Upcoming Games */}
 						{results.upcomingGames.length > 0 && (
-							<div className='mb-6'>
+							<motion.div
+								className='mb-6'
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.3, delay: 0.1 }}
+							>
 								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-								<div className='space-y-3'>
-									{results.upcomingGames}
-								</div>
-							</div>
+								<motion.div
+									className='space-y-3'
+									initial='hidden'
+									animate='visible'
+									variants={{
+										visible: {
+											transition: {
+												staggerChildren: 0.05
+											}
+										}
+									}}
+								>
+									{results.upcomingGames.map((game: any, index: number) => (
+										<motion.div
+											key={game.key || index}
+											variants={{
+												hidden: { opacity: 0, y: 10 },
+												visible: { opacity: 1, y: 0 }
+											}}
+										>
+											{game}
+										</motion.div>
+									))}
+								</motion.div>
+							</motion.div>
 						)}
 
 						{/* Past Games */}
 						{results.pastGames.length > 0 && (
-							<div className='mb-6'>
+							<motion.div
+								className='mb-6'
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ duration: 0.3, delay: 0.2 }}
+							>
 								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-								<div className='space-y-3'>
-									{results.pastGames}
-								</div>
-							</div>
+								<motion.div
+									className='space-y-3'
+									initial='hidden'
+									animate='visible'
+									variants={{
+										visible: {
+											transition: {
+												staggerChildren: 0.05
+											}
+										}
+									}}
+								>
+									{results.pastGames.map((game: any, index: number) => (
+										<motion.div
+											key={game.key || index}
+											variants={{
+												hidden: { opacity: 0, y: 10 },
+												visible: { opacity: 1, y: 0 }
+											}}
+										>
+											{game}
+										</motion.div>
+									))}
+								</motion.div>
+							</motion.div>
 						)}
 					</div>
 
@@ -575,24 +655,44 @@ export function Results() {
 					)}
 
 					{/* Weekly Summary */}
-					<div className='border-t border-primary/20 pt-6 mt-8'>
+					<motion.div
+						className='border-t border-primary/20 pt-6 mt-8'
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.4, delay: 0.3 }}
+					>
 						<div className={`grid gap-4 ${leagueMode === 'steve' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+							<motion.div
+								className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+								whileHover={{ scale: 1.02 }}
+							>
 								<p className='text-primary/80 text-sm font-medium'>Total Points</p>
-								<p className={`text-2xl font-bold ${getTextColor(results.totalPoints)}`}>{results.totalPoints}</p>
-							</div>
-							<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+								<p className={`text-2xl font-bold font-mono ${getTextColor(results.totalPoints)}`}>
+									<CountUp end={results.totalPoints} duration={1} preserveValue />
+								</p>
+							</motion.div>
+							<motion.div
+								className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+								whileHover={{ scale: 1.02 }}
+							>
 								<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
-								<p className={`text-2xl font-bold text-primary`}>{results.correctPicks}/5</p>
-							</div>
+								<p className={`text-2xl font-bold font-mono text-primary`}>
+									<CountUp end={results.correctPicks} duration={1} preserveValue />/5
+								</p>
+							</motion.div>
 							{leagueMode === 'steve' && (
-								<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+								<motion.div
+									className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+									whileHover={{ scale: 1.02 }}
+								>
 									<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
-									<p className={`text-2xl font-bold ${getTextColor(results.tfsPoints)}`}>{results.tfsPoints}</p>
-								</div>
+									<p className={`text-2xl font-bold font-mono ${getTextColor(results.tfsPoints)}`}>
+										<CountUp end={results.tfsPoints} duration={1} preserveValue />
+									</p>
+								</motion.div>
 							)}
 						</div>
-					</div>
+					</motion.div>
 				</div>
 			</CardContent>
 		</Card>
