@@ -295,8 +295,8 @@ export function Results() {
 	};
 
 	const getTextColor = (points: number) => {
-		if (points > 0) return 'text-[#22c55e]'; // Green
-		if (points < 0) return 'text-destructive';
+		if (points > 0) return 'text-green-500';
+		if (points < 0) return 'text-red-500';
 		return 'text-muted-foreground';
 	};
 
