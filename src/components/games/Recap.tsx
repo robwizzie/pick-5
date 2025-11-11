@@ -393,7 +393,12 @@ export function Recap() {
 												: 'bg-card border-2 border-primary/20 text-primary hover:border-primary/40'
 										}`}
 									>
-										Week {week}
+										<div className='flex flex-col items-center gap-0.5'>
+											<span>Week {week}</span>
+											{week === currentWeek && (
+												<span className='text-[10px] text-muted-foreground font-normal'>current week</span>
+											)}
+										</div>
 									</button>
 								))}
 							</div>
@@ -733,7 +738,7 @@ export function Recap() {
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.3, delay: 0.6 }}
 				>
-					<Card className='border-2 border-red-500/30 bg-red-500/10'>
+					<Card className='border-2 border-red-500/30 bg-red-500/5'>
 						<CardHeader>
 							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-red-400 flex items-center gap-2'>
 								<ThumbsDown className='h-5 w-5' />
