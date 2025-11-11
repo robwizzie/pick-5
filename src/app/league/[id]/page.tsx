@@ -59,25 +59,33 @@ export default function LeagueDetails() {
 		fetchLeague();
 	}, [id, router]);
 
-	// Check if recap data is available
+	// Check if recap data is available for ANY week
 	useEffect(() => {
 		const checkRecapAvailability = async () => {
 			if (!id) return;
 			try {
-				// Check if there's any recap data for any week
-				const response = await fetch(`/api/recap?week=1&leagueId=${id}`);
-				if (response.ok) {
-					const data = await response.json();
-					setHasRecapData(data.hasPicks && data.weekCompleted);
+				// Check recent weeks for any available recap data
+				let hasAnyRecap = false;
+				// Check last 5 weeks
+				for (let week = 1; week <= 18; week++) {
+					const response = await fetch(`/api/recap?week=${week}&leagueId=${id}`);
+					if (response.ok) {
+						const data = await response.json();
+						if (data.hasPicks && data.weekCompleted) {
+							hasAnyRecap = true;
+							break;
+						}
+					}
 				}
+				setHasRecapData(hasAnyRecap);
 			} catch {
 				setHasRecapData(false);
 			}
 		};
 
 		checkRecapAvailability();
-		// Re-check every minute in case week completes
-		const interval = setInterval(checkRecapAvailability, 60000);
+		// Re-check every 2 minutes in case week completes
+		const interval = setInterval(checkRecapAvailability, 120000);
 		return () => clearInterval(interval);
 	}, [id]);
 

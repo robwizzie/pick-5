@@ -25,22 +25,31 @@ export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
 
 	useEffect(() => {
 		// Initialize with current NFL week or stored value
-		if (typeof window !== 'undefined') {
-			// Always calculate the actual current NFL week
-			const nflWeek = NFLService.calculateCurrentWeek();
-			
-			const storedWeek = localStorage.getItem('currentWeek');
-			const storedSeason = localStorage.getItem('currentSeason');
-			
-			if (storedSeason && parseInt(storedSeason) === currentSeason && storedWeek) {
-				setCurrentWeek(parseInt(storedWeek, 10));
-			} else {
-				setCurrentWeek(nflWeek);
-				localStorage.setItem('currentWeek', nflWeek.toString());
-				localStorage.setItem('currentSeason', currentSeason.toString());
+		const initializeWeek = async () => {
+			if (typeof window !== 'undefined') {
+				// Always fetch the actual current NFL week from the API
+				const nflWeek = await NFLService.getCurrentWeek();
+
+				const storedWeek = localStorage.getItem('currentWeek');
+				const storedSeason = localStorage.getItem('currentSeason');
+
+				// If user has a stored week from this season, use it (unless it's behind the current week)
+				if (storedSeason && parseInt(storedSeason) === currentSeason && storedWeek) {
+					const stored = parseInt(storedWeek, 10);
+					// Use the greater of stored or actual current week (in case week advanced)
+					const weekToUse = Math.max(stored, nflWeek);
+					setCurrentWeek(weekToUse);
+					localStorage.setItem('currentWeek', weekToUse.toString());
+				} else {
+					setCurrentWeek(nflWeek);
+					localStorage.setItem('currentWeek', nflWeek.toString());
+					localStorage.setItem('currentSeason', currentSeason.toString());
+				}
+				setIsInitialized(true);
 			}
-			setIsInitialized(true);
-		}
+		};
+
+		initializeWeek();
 	}, [currentSeason]);
 
 	const handleSetCurrentWeek = useCallback((week: number) => {
