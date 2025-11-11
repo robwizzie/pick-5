@@ -90,14 +90,43 @@ export function WeeklyPicks() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [games, sessionStatus]);
 
+	// Auto-refresh live games with smart polling
+	useEffect(() => {
+		const hasLiveGames = games.some(g => g.status === 'in' || g.status === 'in_progress');
+
+		if (!hasLiveGames) {
+			return; // No polling needed when no games are live
+		}
+
+		console.log('[WeeklyPicks] Live games detected, enabling auto-refresh');
+
+		// Use dynamic polling interval based on game time
+		const pollingInterval = NFLService.getPollingInterval();
+
+		const pollTimer = setInterval(() => {
+			console.log('[WeeklyPicks] Auto-refreshing live game data...');
+			loadWeeklyGames();
+		}, pollingInterval);
+
+		return () => {
+			console.log('[WeeklyPicks] Clearing auto-refresh timer');
+			clearInterval(pollTimer);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [games]); // Re-evaluate when games change
+
 	const loadWeeklyGames = async () => {
 		if (sessionStatus === 'loading') return;
 
 		try {
 			setLoading(true);
 			console.log('[WeeklyPicks] Fetching games for week:', currentWeek);
-			const weeklyGames = await NFLService.getWeeklyGames(currentWeek);
+			let weeklyGames = await NFLService.getWeeklyGames(currentWeek);
 			console.log('[WeeklyPicks] Games fetched:', weeklyGames);
+
+			// Enrich live games with clock and period data
+			weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
+			console.log('[WeeklyPicks] Games enriched with live data');
 
 			// Fetch odds for Standard mode leagues
 			if (leagueMode === 'standard') {
