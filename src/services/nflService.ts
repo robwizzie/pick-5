@@ -114,13 +114,44 @@ export class NFLService {
 
 				if (response.ok) {
 					const data = await response.json();
-					return data.week?.number || this.calculateCurrentWeek();
+					const espnWeek = data.week?.number || this.calculateCurrentWeek();
+
+					// Check if all games in this week are completed
+					// If so, advance to next week (unless we're already at week 18)
+					if (data.events && data.events.length > 0) {
+						const allGamesCompleted = data.events.every((event: EspnEvent) => {
+							const status = event.status?.type?.state?.toLowerCase();
+							return status === 'post' || status === 'final';
+						});
+
+						if (allGamesCompleted && espnWeek < 18) {
+							console.log(`[NFLService] All Week ${espnWeek} games completed, advancing to Week ${espnWeek + 1}`);
+							return espnWeek + 1;
+						}
+					}
+
+					return espnWeek;
 				}
 			} else {
 				// On client, use proxy API
 				const url = '/api/nfl/scoreboard';
-				const data = await cachedFetch<{ week: { number: number } }>(url, {}, 10 * 60 * 1000);
-				return data.week?.number || this.calculateCurrentWeek();
+				const data = await cachedFetch<{ week: { number: number }, events: EspnEvent[] }>(url, {}, 10 * 60 * 1000);
+				const espnWeek = data.week?.number || this.calculateCurrentWeek();
+
+				// Check if all games in this week are completed
+				if (data.events && data.events.length > 0) {
+					const allGamesCompleted = data.events.every((event: EspnEvent) => {
+						const status = event.status?.type?.state?.toLowerCase();
+						return status === 'post' || status === 'final';
+					});
+
+					if (allGamesCompleted && espnWeek < 18) {
+						console.log(`[NFLService] All Week ${espnWeek} games completed, advancing to Week ${espnWeek + 1}`);
+						return espnWeek + 1;
+					}
+				}
+
+				return espnWeek;
 			}
 
 			// Fallback to calculation
