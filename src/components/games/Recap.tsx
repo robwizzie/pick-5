@@ -383,24 +383,34 @@ export function Recap() {
 						<div className='flex flex-col sm:flex-row sm:items-center gap-3'>
 							<span className='text-sm text-muted-foreground font-medium'>View Week:</span>
 							<div className='flex items-center gap-2 flex-wrap'>
-								{availableWeeks.map(week => (
-									<button
-										key={week}
-										onClick={() => setSelectedWeek(week)}
-										className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-											selectedWeek === week
-												? 'bg-primary text-black'
-												: 'bg-card border-2 border-primary/20 text-primary hover:border-primary/40'
-										}`}
-									>
-										<div className='flex flex-col items-center gap-0.5'>
-											<span>Week {week}</span>
-											{week === currentWeek && (
-												<span className='text-[10px] text-muted-foreground font-normal'>current week</span>
-											)}
-										</div>
-									</button>
-								))}
+								{availableWeeks.map(week => {
+									const getWeekLabel = () => {
+										if (week === currentWeek) return 'Current Week';
+										if (week === currentWeek - 1) return 'Last Week';
+										if (week === currentWeek + 1) return 'Next Week';
+										return null;
+									};
+									const weekLabel = getWeekLabel();
+
+									return (
+										<button
+											key={week}
+											onClick={() => setSelectedWeek(week)}
+											className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+												selectedWeek === week
+													? 'bg-primary text-black'
+													: 'bg-card border-2 border-primary/20 text-primary hover:border-primary/40'
+											}`}
+										>
+											<div className='flex flex-col items-center gap-0.5'>
+												<span>Week {week}</span>
+												{weekLabel && (
+													<span className='text-[10px] text-muted-foreground font-normal'>{weekLabel}</span>
+												)}
+											</div>
+										</button>
+									);
+								})}
 							</div>
 						</div>
 					</CardContent>
