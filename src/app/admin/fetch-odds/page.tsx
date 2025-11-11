@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -12,6 +13,7 @@ export default function FetchOddsPage() {
 	const [loading, setLoading] = useState(false);
 	const [result, setResult] = useState<any>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [weekInput, setWeekInput] = useState<string>('');
 
 	const handleFetchOdds = async () => {
 		setLoading(true);
@@ -19,8 +21,13 @@ export default function FetchOddsPage() {
 		setResult(null);
 
 		try {
+			const body = weekInput ? { week: parseInt(weekInput) } : {};
 			const response = await fetch('/api/admin/trigger-odds-fetch', {
-				method: 'POST'
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify(body)
 			});
 
 			const data = await response.json();
@@ -77,8 +84,25 @@ export default function FetchOddsPage() {
 						</AlertDescription>
 					</Alert>
 
+					<div className='space-y-2'>
+						<label htmlFor='week-input' className='text-sm font-medium'>
+							Week (optional)
+						</label>
+						<Input
+							id='week-input'
+							type='number'
+							min='1'
+							max='18'
+							placeholder='Leave empty for current week'
+							value={weekInput}
+							onChange={e => setWeekInput(e.target.value)}
+							disabled={loading}
+						/>
+						<p className='text-xs text-muted-foreground'>Enter a specific week number (1-18) or leave empty to fetch odds for the current week</p>
+					</div>
+
 					<Button onClick={handleFetchOdds} disabled={loading} className='w-full bg-primary text-black hover:bg-primary/90'>
-						{loading ? 'Fetching Odds...' : 'Fetch Odds Now'}
+						{loading ? 'Fetching Odds...' : weekInput ? `Fetch Odds for Week ${weekInput}` : 'Fetch Odds for Current Week'}
 					</Button>
 
 					{error && (

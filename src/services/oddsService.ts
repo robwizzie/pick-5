@@ -126,8 +126,9 @@ export class OddsService {
 	/**
 	 * Shared service to fetch and store odds snapshots
 	 * Can be called from cron jobs or admin endpoints
+	 * @param targetWeek - Optional week number to fetch odds for (defaults to current week)
 	 */
-	static async fetchAndStoreOdds(): Promise<OddsFetchResult> {
+	static async fetchAndStoreOdds(targetWeek?: number): Promise<OddsFetchResult> {
 		try {
 			console.log('[OddsService] Starting odds snapshot fetch...');
 
@@ -153,8 +154,9 @@ export class OddsService {
 			console.log(`[OddsService] Fetched odds for ${oddsData.length} games from API`);
 
 			// Get current week and season
-			const currentWeek = await NFLService.getCurrentWeek();
+			const currentWeek = targetWeek || (await NFLService.getCurrentWeek());
 			const currentSeason = new Date().getFullYear();
+			console.log(`[OddsService] Fetching odds for Week ${currentWeek}, Season ${currentSeason}`);
 
 			// Fetch weekly games from ESPN to match game IDs
 			const weeklyGames = await NFLService.getWeeklyGames(currentWeek);

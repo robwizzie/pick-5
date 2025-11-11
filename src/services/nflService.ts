@@ -1,6 +1,6 @@
 // src/services/nflService.ts
 import type { Game, TeamInfo } from '@/components/games/GameCard';
-import type { EspnEvent } from '@/types';
+import type { EspnEvent, EspnGameSummary } from '@/types';
 import { cachedFetch } from './cacheService';
 
 export class NFLService {
@@ -178,5 +178,123 @@ export class NFLService {
 				}
 			})
 			.filter(Boolean) as Game[];
+	}
+
+	/**
+	 * Fetch detailed game summary with live clock, period, and odds data
+	 * @param gameId ESPN game ID
+	 * @returns Enhanced game data with live info
+	 */
+	static async getGameSummary(gameId: string): Promise<Partial<Game> | null> {
+		try {
+			const espnUrl = `https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/summary?region=us&lang=en&contentorigin=espn&event=${gameId}`;
+
+			const response = await fetch(espnUrl, {
+				headers: {
+					'User-Agent': 'pick-5/1.0',
+					Accept: 'application/json'
+				},
+				next: { revalidate: 30 } // Cache for 30 seconds during live games
+			});
+
+			if (!response.ok) {
+				console.error(`ESPN Summary API error for game ${gameId}: ${response.status}`);
+				return null;
+			}
+
+			const data: EspnGameSummary = await response.json();
+
+			// Extract live game info
+			const competition = data.header?.competitions?.[0];
+			const status = competition?.status;
+			const period = status?.period?.number;
+			const clock = status?.clock?.displayValue;
+			const state = status?.type?.state;
+
+			// Get period display (Q1, Q2, Q3, Q4, OT, etc.)
+			const getPeriodDisplay = (periodNum?: number): string | undefined => {
+				if (!periodNum) return undefined;
+				if (periodNum <= 4) return `Q${periodNum}`;
+				return 'OT';
+			};
+
+			// Extract odds from pickcenter
+			const odds = data.pickcenter?.[0];
+			const homeOdds = odds?.homeTeamOdds?.moneyLine;
+			const awayOdds = odds?.awayTeamOdds?.moneyLine;
+
+			// Extract scores
+			const homeTeam = competition?.competitors?.find(team => team.homeAway === 'home');
+			const awayTeam = competition?.competitors?.find(team => team.homeAway === 'away');
+
+			return {
+				clock,
+				period,
+				periodDisplay: getPeriodDisplay(period),
+				status: state,
+				home: {
+					score: homeTeam?.score ? parseInt(homeTeam.score) : undefined,
+					odds: homeOdds,
+					team: homeTeam?.team?.displayName || '',
+					abbreviation: homeTeam?.team?.abbreviation || '',
+					logo: homeTeam?.team?.logo || '',
+					record: homeTeam?.records?.[0]?.summary || ''
+				},
+				away: {
+					score: awayTeam?.score ? parseInt(awayTeam.score) : undefined,
+					odds: awayOdds,
+					team: awayTeam?.team?.displayName || '',
+					abbreviation: awayTeam?.team?.abbreviation || '',
+					logo: awayTeam?.team?.logo || '',
+					record: awayTeam?.records?.[0]?.summary || ''
+				}
+			};
+		} catch (error) {
+			console.error(`Error fetching game summary for ${gameId}:`, error);
+			return null;
+		}
+	}
+
+	/**
+	 * Enrich existing games with live data from summary API
+	 * @param games Base game data from scoreboard
+	 * @returns Games enriched with live clock/period data
+	 */
+	static async enrichGamesWithLiveData(games: Game[]): Promise<Game[]> {
+		// Only fetch live data for in-progress games
+		const liveGames = games.filter(g => g.status === 'in' || g.status === 'in_progress');
+
+		if (liveGames.length === 0) {
+			return games;
+		}
+
+		// Fetch summaries in parallel
+		const summaries = await Promise.all(liveGames.map(game => this.getGameSummary(game.id)));
+
+		// Merge summary data into games
+		return games.map(game => {
+			const summaryIndex = liveGames.findIndex(g => g.id === game.id);
+			if (summaryIndex === -1) return game;
+
+			const summary = summaries[summaryIndex];
+			if (!summary) return game;
+
+			return {
+				...game,
+				clock: summary.clock,
+				period: summary.period,
+				periodDisplay: summary.periodDisplay,
+				home: {
+					...game.home,
+					score: summary.home?.score ?? game.home.score,
+					odds: summary.home?.odds ?? game.home.odds
+				},
+				away: {
+					...game.away,
+					score: summary.away?.score ?? game.away.score,
+					odds: summary.away?.odds ?? game.away.odds
+				}
+			};
+		});
 	}
 }
