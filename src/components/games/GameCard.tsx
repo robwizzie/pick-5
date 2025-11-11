@@ -177,10 +177,10 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		const baseStyle = `${fontWeight} !hover:bg-transparent !hover:border-current !active:scale-100 backdrop-blur-sm`;
 
 		if (!isTeamSelected) return `border-primary/20 text-white ${baseStyle}`;
-		// Correct pick: Green with glass effect and white text
-		if (isTeamCorrect === true) return `bg-green-500/90 text-white border-green-500 ${baseStyle}`;
-		// Incorrect pick: Red with glass effect and white text
-		if (isTeamCorrect === false) return `bg-red-500/90 text-white border-red-500 ${baseStyle}`;
+		// Correct pick: Green with white text
+		if (isTeamCorrect === true) return `bg-green-500 text-white border-green-500 ${baseStyle}`;
+		// Incorrect pick: Red with white text
+		if (isTeamCorrect === false) return `bg-red-500 text-white border-red-500 ${baseStyle}`;
 		// Selected but not graded yet
 		return `bg-primary text-black border-primary ${baseStyle}`;
 	};

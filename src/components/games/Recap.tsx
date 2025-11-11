@@ -146,8 +146,11 @@ export function Recap() {
 				}
 			}
 			setAvailableWeeks(weeks);
-			// Default to most recent completed week
-			if (weeks.length > 0) {
+			// Default to current week from context (not most recent completed week)
+			// Only fall back to most recent if current week doesn't have recap
+			if (weeks.includes(currentWeek)) {
+				setSelectedWeek(currentWeek);
+			} else if (weeks.length > 0) {
 				setSelectedWeek(weeks[weeks.length - 1]);
 			} else {
 				setSelectedWeek(0); // No weeks available
@@ -377,21 +380,23 @@ export function Recap() {
 			{availableWeeks.length > 1 && (
 				<Card>
 					<CardContent className='pt-6'>
-						<div className='flex items-center gap-2 flex-wrap'>
+						<div className='flex flex-col sm:flex-row sm:items-center gap-3'>
 							<span className='text-sm text-muted-foreground font-medium'>View Week:</span>
-							{availableWeeks.map(week => (
-								<button
-									key={week}
-									onClick={() => setSelectedWeek(week)}
-									className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-										selectedWeek === week
-											? 'bg-primary text-black'
-											: 'bg-card border-2 border-primary/20 text-primary hover:border-primary/40'
-									}`}
-								>
-									Week {week}
-								</button>
-							))}
+							<div className='flex items-center gap-2 flex-wrap'>
+								{availableWeeks.map(week => (
+									<button
+										key={week}
+										onClick={() => setSelectedWeek(week)}
+										className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+											selectedWeek === week
+												? 'bg-primary text-black'
+												: 'bg-card border-2 border-primary/20 text-primary hover:border-primary/40'
+										}`}
+									>
+										Week {week}
+									</button>
+								))}
+							</div>
 						</div>
 					</CardContent>
 				</Card>
