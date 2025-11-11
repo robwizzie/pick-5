@@ -200,12 +200,12 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		<motion.div
 			className='relative'
 			initial={{ opacity: 0, y: 10 }}
-			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.2 }}
-			whileHover={noHover ? {} : { scale: 1.01 }}
+			whileInView={{ opacity: 1, y: 0 }}
+			viewport={{ once: true, margin: "-50px" }}
+			transition={{ duration: 0.3 }}
 		>
 			{/* GameCard Container */}
-			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm border border-white/5 transition-all shadow-sm hover:shadow-md hover:border-primary/10'>
+			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md'>
 				<div className='flex flex-col xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>

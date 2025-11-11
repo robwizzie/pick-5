@@ -186,18 +186,7 @@ export function Leaderboard() {
 							{weeklyLeaderboard.length === 0 ? (
 								<div className='text-primary/80 text-center'>No users in this league yet.</div>
 							) : (
-								<motion.div
-									className='space-y-3'
-									initial='hidden'
-									animate='visible'
-									variants={{
-										visible: {
-											transition: {
-												staggerChildren: 0.05
-											}
-										}
-									}}
-								>
+								<div className='space-y-3'>
 									{weeklyLeaderboard.map((entry, index) => {
 										// Calculate actual rank considering ties
 										let rank = 1;
@@ -228,10 +217,10 @@ export function Leaderboard() {
 												key={entry.userId || index}
 												className={`flex items-start p-4 bg-card/80 backdrop-blur-sm border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()} ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg' : ''}`}
 												onClick={() => entry.hasPicks && handleUserClick(entry.userId)}
-												variants={{
-													hidden: { opacity: 0, y: 10 },
-													visible: { opacity: 1, y: 0 }
-												}}
+												initial={{ opacity: 0, y: 10 }}
+												whileInView={{ opacity: 1, y: 0 }}
+												viewport={{ once: true, margin: "-50px" }}
+												transition={{ duration: 0.3, delay: index * 0.05 }}
 												whileHover={entry.hasPicks ? { scale: 1.01 } : {}}
 											>
 												{/* Rank with crown */}
@@ -279,23 +268,12 @@ export function Leaderboard() {
 											</motion.div>
 										);
 									})}
-								</motion.div>
+								</div>
 							)}
 						</TabsContent>
 
 						<TabsContent value='season'>
-							<motion.div
-								className='space-y-3'
-								initial='hidden'
-								animate='visible'
-								variants={{
-									visible: {
-										transition: {
-											staggerChildren: 0.05
-										}
-									}
-								}}
-							>
+							<div className='space-y-3'>
 								{seasonLeaderboard.map((entry, index) => {
 									// Calculate actual rank considering ties
 									let rank = 1;
@@ -325,10 +303,10 @@ export function Leaderboard() {
 										<motion.div
 											key={index}
 											className={`flex items-start p-4 bg-card/80 backdrop-blur-sm border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()}`}
-											variants={{
-												hidden: { opacity: 0, y: 10 },
-												visible: { opacity: 1, y: 0 }
-											}}
+											initial={{ opacity: 0, y: 10 }}
+											whileInView={{ opacity: 1, y: 0 }}
+											viewport={{ once: true, margin: "-50px" }}
+											transition={{ duration: 0.3, delay: index * 0.05 }}
 											whileHover={{ scale: 1.01 }}
 										>
 											{/* Rank with crown */}
@@ -373,7 +351,7 @@ export function Leaderboard() {
 										</motion.div>
 									);
 								})}
-							</motion.div>
+							</div>
 						</TabsContent>
 					</Tabs>
 				)}
