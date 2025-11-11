@@ -4,6 +4,7 @@ import { StatsProvider } from '@/contexts/StatsContext';
 import { WeekProvider } from '@/contexts/WeekContext';
 import { LeagueProvider } from '@/contexts/LeagueContext';
 import { Nav } from '@/components/games/Nav';
+import { AnimatedBackground } from '@/components/ui/animated-background';
 import '../styles/globals.css';
 import '@fontsource/space-grotesk/400.css';
 import '@fontsource/space-grotesk/500.css';
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 				<link rel='apple-touch-icon' href='/icon-512.png' />
 			</head>
 			<body className='font-sans antialiased' style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', backgroundColor: '#141414' }}>
+				<AnimatedBackground />
 				<SessionProviderWrapper>
 					<StatsProvider>
 						<WeekProvider>
