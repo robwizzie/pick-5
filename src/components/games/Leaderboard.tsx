@@ -17,7 +17,7 @@ import { Crown } from 'lucide-react';
 export function Leaderboard() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
-	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean; pickedTeams?: string[] }>>([]);
+	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean; pickedTeams?: Array<{ team: string; abbreviation: string; logo: string }> }>>([]);
 	const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 	const [showUserPicks, setShowUserPicks] = useState(false);
 	const [seasonStats, setSeasonStats] = useState<
@@ -40,7 +40,6 @@ export function Leaderboard() {
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leagueMode, setLeagueMode] = useState<string>('');
-	const [games, setGames] = useState<Array<{ home: { team: string; logo: string; abbreviation: string }; away: { team: string; logo: string; abbreviation: string }; status?: string }>>([]);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -82,10 +81,6 @@ export function Leaderboard() {
 			setWeeklyResults(data.weeklyResults);
 			setSeasonStats(data.seasonStats);
 			setLastUpdated(new Date());
-
-			// Fetch games to get team logos
-			const gamesData = await NFLService.getWeeklyGames(currentWeek);
-			setGames(gamesData);
 		} catch (err) {
 			console.error('Failed to load leaderboard data:', err);
 			setError('Failed to load leaderboard data.');
@@ -155,31 +150,6 @@ export function Leaderboard() {
 		if (minutes < 60) return `${minutes}m ago`;
 		const hours = Math.floor(minutes / 60);
 		return `${hours}h ago`;
-	};
-
-	// Helper function to check if any games have started
-	const hasAnyGameStarted = () => {
-		return games.some(g => {
-			const status = g.status?.toLowerCase();
-			return status !== 'pre' && status !== 'scheduled';
-		});
-	};
-
-	// Helper function to get team logo from team name (matches by full name or abbreviation)
-	const getTeamLogo = (teamName: string) => {
-		const game = games.find(g =>
-			g.home.team === teamName ||
-			g.away.team === teamName ||
-			g.home.abbreviation === teamName ||
-			g.away.abbreviation === teamName
-		);
-		if (!game) return null;
-
-		// Check which team it is
-		if (game.home.team === teamName || game.home.abbreviation === teamName) {
-			return game.home.logo;
-		}
-		return game.away.logo;
 	};
 
 	return (
@@ -273,22 +243,19 @@ export function Leaderboard() {
 
 													{/* Status Badge or Team Logos */}
 													<div className='mb-2'>
-														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 && hasAnyGameStarted() ? (
+														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 ? (
 															<div className='flex flex-wrap items-center gap-1.5'>
-																{entry.pickedTeams.map((team, idx) => {
-																	const logo = getTeamLogo(team);
-																	return logo ? (
-																		<div key={idx} className='w-6 h-6 relative'>
-																			<Image
-																				src={logo}
-																				alt={team}
-																				width={24}
-																				height={24}
-																				className='rounded-sm'
-																			/>
-																		</div>
-																	) : null;
-																})}
+																{entry.pickedTeams.map((teamData, idx) => (
+																	<div key={idx} className='w-6 h-6 relative'>
+																		<Image
+																			src={teamData.logo}
+																			alt={teamData.abbreviation}
+																			width={24}
+																			height={24}
+																			className='rounded-sm'
+																		/>
+																	</div>
+																))}
 															</div>
 														) : (
 															<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>

@@ -69,15 +69,28 @@ export async function GET(req: Request) {
 				calculatePointsFromOdds
 			);
 
-			// Extract team names from picks
-			const pickedTeams = pick.picks.map((p: any) => p.team);
+			// Extract team names and logos from picks by matching with games
+			const pickedTeamsWithLogos = pick.picks.map((p: any) => {
+				const game = games.find(g => g.id === p.gameId);
+				if (!game) return null;
+
+				// Find which team was picked (home or away)
+				const isHome = p.isHome;
+				const teamData = isHome ? game.home : game.away;
+
+				return {
+					team: teamData.team,
+					abbreviation: teamData.abbreviation,
+					logo: teamData.logo
+				};
+			}).filter(Boolean); // Remove any nulls
 
 			weeklyResultsMap.set(userId, {
 				points: weeklyPoints,
 				correct: correctPicks,
 				tfsPoints: tfsPoints,
 				completedGames: completedGames,
-				pickedTeams: pickedTeams // Add the picked teams
+				pickedTeams: pickedTeamsWithLogos // Add the picked teams with logos
 			});
 		}
 
