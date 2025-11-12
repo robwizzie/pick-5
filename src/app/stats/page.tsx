@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { Trophy, Target, TrendingUp, Flame, Star, Award, Zap, Crown, Medal, Shield, Rocket, Crosshair, Calendar, Sparkles, Users } from 'lucide-react';
@@ -453,7 +454,6 @@ const StatsPage = () => {
 		const facts = [];
 
 		// Calculate interesting stats
-		const gamesPerWeek = allTimeStats.totalWeeksPlayed > 0 ? (allTimeStats.totalPicks / allTimeStats.totalWeeksPlayed).toFixed(1) : 0;
 		const pointsPerCorrectPick = allTimeStats.correctPicks > 0 ? (allTimeStats.totalPoints / allTimeStats.correctPicks).toFixed(1) : 0;
 
 		if (allTimeStats.winPercentage > 60) {
