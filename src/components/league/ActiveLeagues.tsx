@@ -9,6 +9,7 @@ import { NFLService } from '@/services/nflService';
 import { motion } from 'framer-motion';
 import { Skeleton } from '@/components/ui/skeleton';
 import CountUp from 'react-countup';
+import Image from 'next/image';
 
 interface League {
 	_id: string;
@@ -31,6 +32,8 @@ interface LeagueStats {
 	rank: number | null;
 	totalMembers: number;
 	seasonPoints: number;
+	pickedTeams?: string[];
+	tfsPoints?: number;
 }
 
 export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
@@ -38,12 +41,17 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 	const [copiedLeagueId, setCopiedLeagueId] = useState<string | null>(null);
 	const [leagueStats, setLeagueStats] = useState<Map<string, LeagueStats>>(new Map());
 	const [currentWeek, setCurrentWeek] = useState<number | null>(null);
+	const [games, setGames] = useState<Array<{ home: { team: string; logo: string }; away: { team: string; logo: string } }>>([]);
 	const isLoadingRef = useRef(false);
 
 	useEffect(() => {
 		const loadCurrentWeek = async () => {
 			const week = await NFLService.getCurrentWeek();
 			setCurrentWeek(week);
+
+			// Fetch games to get team logos
+			const gamesData = await NFLService.getWeeklyGames(week);
+			setGames(gamesData);
 		};
 		loadCurrentWeek();
 	}, []);
@@ -64,7 +72,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 						const data = await response.json();
 
 						// Find user's data in weekly results
-						const userWeeklyData = data.weeklyResults?.find((r: { userId?: string; player?: string; points?: number; hasPicks?: boolean }) => r.userId === userId);
+						const userWeeklyData = data.weeklyResults?.find((r: { userId?: string; player?: string; points?: number; hasPicks?: boolean; pickedTeams?: string[]; tfsPoints?: number }) => r.userId === userId);
 						const userSeasonData = data.seasonStats?.find((s: { player?: string; totalPoints?: number }) => s.player === userWeeklyData?.player);
 
 						// Calculate user's season rank (based on total season points)
@@ -76,7 +84,9 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 							currentWeekPoints: userWeeklyData?.points || 0,
 							rank: userRank > 0 ? userRank : null,
 							totalMembers: data.weeklyResults?.length || league.members?.length || 0,
-							seasonPoints: userSeasonData?.totalPoints || 0
+							seasonPoints: userSeasonData?.totalPoints || 0,
+							pickedTeams: userWeeklyData?.pickedTeams || [],
+							tfsPoints: userWeeklyData?.tfsPoints || 0
 						});
 					}
 				} catch (error) {
@@ -106,6 +116,13 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 
 	const handleDropdownClick = (e: React.MouseEvent) => {
 		e.stopPropagation();
+	};
+
+	// Helper function to get team logo from team name
+	const getTeamLogo = (teamName: string) => {
+		const game = games.find(g => g.home.team === teamName || g.away.team === teamName);
+		if (!game) return null;
+		return game.home.team === teamName ? game.home.logo : game.away.logo;
 	};
 
 	// Helper functions for top 3 styling
@@ -173,33 +190,61 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 											<Skeleton className='h-3.5 sm:h-4 w-16 sm:w-20' />
 										</div>
 									) : stats ? (
-										<div className='flex flex-wrap items-center gap-2.5 sm:gap-5 text-xs sm:text-sm'>
-											{/* Picks Status */}
-											<div className='flex items-center gap-1 sm:gap-1.5'>
-												{stats.hasPicks ? (
-													<>
-														<CheckCircle2 className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-400 flex-shrink-0' />
-														<span className='text-green-400 font-medium'>Picks In</span>
-													</>
-												) : (
-													<>
-														<Clock className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-400 flex-shrink-0' />
-														<span className='text-orange-400 font-medium'>Picks Needed</span>
-													</>
+										<div className='space-y-2'>
+											<div className='flex flex-wrap items-center gap-2.5 sm:gap-5 text-xs sm:text-sm'>
+												{/* Picks Status */}
+												<div className='flex items-center gap-1 sm:gap-1.5'>
+													{stats.hasPicks ? (
+														<>
+															<CheckCircle2 className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-400 flex-shrink-0' />
+															<span className='text-green-400 font-medium'>Picks In</span>
+														</>
+													) : (
+														<>
+															<Clock className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-400 flex-shrink-0' />
+															<span className='text-orange-400 font-medium'>Picks Needed</span>
+														</>
+													)}
+												</div>
+
+												{/* Rank & Members with special badges for top 3 */}
+												{stats.rank && (
+													<div className='flex items-center gap-1.5 sm:gap-2'>
+														{stats.rank === 1 && (
+															<Crown className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-400 animate-pulse flex-shrink-0' fill='currentColor' />
+														)}
+														{!isTop3 && <Trophy className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0' />}
+														<span className={`text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${getRankBadgeStyle(stats.rank)}`}>
+															#{stats.rank}
+														</span>
+														<span className='text-xs sm:text-sm text-muted-foreground whitespace-nowrap'>of {stats.totalMembers}</span>
+													</div>
 												)}
 											</div>
 
-											{/* Rank & Members with special badges for top 3 */}
-											{stats.rank && (
-												<div className='flex items-center gap-1.5 sm:gap-2'>
-													{stats.rank === 1 && (
-														<Crown className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-400 animate-pulse flex-shrink-0' fill='currentColor' />
+											{/* Team Logos and TFS (when picks are in) */}
+											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
+												<div className='flex flex-wrap items-center gap-2'>
+													{stats.pickedTeams.map((team, idx) => {
+														const logo = getTeamLogo(team);
+														return logo ? (
+															<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative'>
+																<Image
+																	src={logo}
+																	alt={team}
+																	width={28}
+																	height={28}
+																	className='rounded-sm'
+																/>
+															</div>
+														) : null;
+													})}
+													{/* TFS Badge for Steve mode */}
+													{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
+														<span className='text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold whitespace-nowrap'>
+															{stats.tfsPoints} TFS
+														</span>
 													)}
-													{!isTop3 && <Trophy className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0' />}
-													<span className={`text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${getRankBadgeStyle(stats.rank)}`}>
-														#{stats.rank}
-													</span>
-													<span className='text-xs sm:text-sm text-muted-foreground whitespace-nowrap'>of {stats.totalMembers}</span>
 												</div>
 											)}
 										</div>
