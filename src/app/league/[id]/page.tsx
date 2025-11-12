@@ -12,9 +12,10 @@ import { WeeklyPicks } from '@/components/games/WeeklyPicks';
 import { Results } from '@/components/games/Results';
 import { SeasonStats } from '@/components/games/SeasonStats';
 import { Leaderboard } from '@/components/games/Leaderboard';
+import { Recap } from '@/components/games/Recap';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
-import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp } from 'lucide-react';
+import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles } from 'lucide-react';
 
 interface League {
 	name: string;
@@ -36,7 +37,7 @@ export default function LeagueDetails() {
 	const [copied, setCopied] = useState(false);
 	const [loadingInvite, setLoadingInvite] = useState(false);
 	const [loadingLeave, setLoadingLeave] = useState(false);
-	const [mobileView, setMobileView] = useState<'picks' | 'results' | 'leaderboard' | 'stats'>('picks');
+	const [mobileView, setMobileView] = useState<'picks' | 'results' | 'leaderboard' | 'stats' | 'recap'>('picks');
 
 	// Fetch league details
 	useEffect(() => {
@@ -159,12 +160,15 @@ export default function LeagueDetails() {
 			<div className='hidden lg:grid grid-cols-1 lg:grid-cols-3 gap-8'>
 				<div className='lg:col-span-2 space-y-8'>
 					<Tabs defaultValue='picks'>
-						<TabsList className='w-full bg-muted grid grid-cols-2 p-1'>
+						<TabsList className='w-full bg-muted grid grid-cols-3 p-1'>
 							<TabsTrigger value='picks' className='data-[state=active]:bg-primary data-[state=active]:text-black font-oswald uppercase tracking-wide'>
 								Make Picks
 							</TabsTrigger>
 							<TabsTrigger value='results' className='data-[state=active]:bg-primary data-[state=active]:text-black font-oswald uppercase tracking-wide'>
 								View Results
+							</TabsTrigger>
+							<TabsTrigger value='recap' className='data-[state=active]:bg-primary data-[state=active]:text-black font-oswald uppercase tracking-wide'>
+								Week Recap
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value='picks'>
@@ -172,6 +176,9 @@ export default function LeagueDetails() {
 						</TabsContent>
 						<TabsContent value='results'>
 							<Results />
+						</TabsContent>
+						<TabsContent value='recap'>
+							<Recap />
 						</TabsContent>
 					</Tabs>
 				</div>
@@ -187,12 +194,13 @@ export default function LeagueDetails() {
 				{mobileView === 'results' && <Results />}
 				{mobileView === 'leaderboard' && <Leaderboard />}
 				{mobileView === 'stats' && <SeasonStats />}
+				{mobileView === 'recap' && <Recap />}
 			</div>
 
 			{/* Mobile Bottom Navigation Bar - Liquid Glass Segmented Control */}
 			<nav className='lg:hidden fixed bottom-4 left-4 right-4 z-50'>
-				<div className='mx-auto max-w-md bg-black/30 backdrop-blur-3xl border border-white/20 rounded-full p-2 shadow-2xl shadow-black/40'>
-					<div className='grid grid-cols-4 gap-1.5 relative'>
+				<div className='mx-auto max-w-2xl bg-black/30 backdrop-blur-3xl border border-white/20 rounded-full p-2 shadow-2xl shadow-black/40'>
+					<div className='grid grid-cols-5 gap-1.5 relative'>
 						<button
 							onClick={() => setMobileView('picks')}
 							className={`relative flex flex-col items-center justify-center py-3 px-2 rounded-full transition-all duration-300 ${
@@ -254,6 +262,22 @@ export default function LeagueDetails() {
 								mobileView === 'stats' ? 'text-black' : 'text-muted-foreground'
 							}`}>
 								Stats
+							</span>
+						</button>
+
+						<button
+							onClick={() => setMobileView('recap')}
+							className={`relative flex flex-col items-center justify-center py-3 px-2 rounded-full transition-all duration-300 ${
+								mobileView === 'recap'
+									? 'bg-primary/90 backdrop-blur-xl shadow-lg shadow-primary/30'
+									: 'hover:bg-white/10 active:scale-95'
+							}`}
+						>
+							<Sparkles className={`h-5 w-5 transition-all duration-300 ${mobileView === 'recap' ? 'text-black' : 'text-muted-foreground'}`} />
+							<span className={`text-[10px] font-bold mt-0.5 transition-all duration-300 ${
+								mobileView === 'recap' ? 'text-black' : 'text-muted-foreground'
+							}`}>
+								Recap
 							</span>
 						</button>
 					</div>

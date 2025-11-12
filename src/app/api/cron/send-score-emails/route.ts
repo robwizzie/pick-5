@@ -16,16 +16,6 @@ export const maxDuration = 300; // 5 minutes for cron job
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Helper to get current NFL week (same as in send-pick-reminders)
-function getCurrentNFLWeek(): number {
-	const seasonStart = new Date('2024-09-05');
-	const now = new Date();
-	const diffTime = Math.abs(now.getTime() - seasonStart.getTime());
-	const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-	const week = Math.min(Math.ceil(diffDays / 7), 18);
-	return week;
-}
-
 interface GameResult {
 	id: string;
 	homeScore: number;
@@ -67,9 +57,9 @@ export async function GET(req: Request) {
 		const now = new Date();
 		console.log(`[Score Emails] Running cron job at ${now.toISOString()}`);
 
-		// Get the previous week (since Monday games just finished)
-		const currentWeek = getCurrentNFLWeek();
-		// If it's early in the week, we want the previous week's scores
+		// Get the current week from NFLService (which auto-advances after all games complete)
+		const currentWeek = await NFLService.getCurrentWeek();
+		// Score the previous week (Monday Night Football just finished)
 		const weekToScore = currentWeek - 1;
 
 		if (weekToScore < 1) {
