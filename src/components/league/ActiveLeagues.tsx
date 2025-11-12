@@ -41,21 +41,12 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 	const [copiedLeagueId, setCopiedLeagueId] = useState<string | null>(null);
 	const [leagueStats, setLeagueStats] = useState<Map<string, LeagueStats>>(new Map());
 	const [currentWeek, setCurrentWeek] = useState<number | null>(null);
-	const [gamesStarted, setGamesStarted] = useState<boolean>(false);
 	const isLoadingRef = useRef(false);
 
 	useEffect(() => {
 		const loadCurrentWeek = async () => {
 			const week = await NFLService.getCurrentWeek();
 			setCurrentWeek(week);
-
-			// Check if any games have started this week
-			const games = await NFLService.getWeeklyGames(week);
-			const hasStarted = games.some(game => {
-				const status = game.status?.toLowerCase() || 'scheduled';
-				return status === 'in' || status === 'in_progress' || status === 'post' || status === 'final';
-			});
-			setGamesStarted(hasStarted);
 		};
 		loadCurrentWeek();
 	}, []);
@@ -219,8 +210,8 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 												)}
 											</div>
 
-											{/* Team Logos and TFS (when picks are in and games have started) */}
-											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && gamesStarted && (
+											{/* Team Logos and TFS (when picks are in) */}
+											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
 												<div className='flex flex-wrap items-center gap-2'>
 													{stats.pickedTeams.map((teamData, idx) => (
 														<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative bg-white/10 rounded-sm p-0.5 border border-white/20'>
