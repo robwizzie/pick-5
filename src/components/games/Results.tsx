@@ -45,6 +45,12 @@ interface LeaguePicksData {
 	};
 }
 
+interface SnapshotOdds {
+	id: string;
+	home?: { odds?: number };
+	away?: { odds?: number };
+}
+
 export function Results() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
@@ -134,14 +140,14 @@ export function Results() {
 					if (leagueMode === 'standard') {
 						try {
 							const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
-							let snapshotOdds = [];
+							let snapshotOdds: SnapshotOdds[] = [];
 							if (oddsResponse.ok) {
 								const data = await oddsResponse.json();
 								snapshotOdds = data.odds || [];
 							}
 
 							gamesWithOdds = weeklyGames.map(game => {
-								const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+								const snapshotGameOdds = snapshotOdds.find((o: SnapshotOdds) => o.id === game.id);
 								const homeOdds = snapshotGameOdds?.home?.odds;
 								const awayOdds = snapshotGameOdds?.away?.odds;
 
@@ -184,7 +190,7 @@ export function Results() {
 					try {
 						// Fetch odds from centralized snapshot
 						const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
-						let snapshotOdds = [];
+						let snapshotOdds: SnapshotOdds[] = [];
 						if (oddsResponse.ok) {
 							const data = await oddsResponse.json();
 							snapshotOdds = data.odds || [];
@@ -192,7 +198,7 @@ export function Results() {
 
 						// Match odds to games
 						gamesWithOdds = weeklyGames.map(game => {
-							const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+							const snapshotGameOdds = snapshotOdds.find((o: SnapshotOdds) => o.id === game.id);
 
 							const homeOdds = snapshotGameOdds?.home?.odds;
 							const awayOdds = snapshotGameOdds?.away?.odds;
@@ -245,7 +251,7 @@ export function Results() {
 		}, pollingInterval);
 
 		return () => clearInterval(pollInterval);
-	}, [currentWeek, sessionStatus, leagueId, selectedUserId]);
+	}, [currentWeek, sessionStatus, leagueId, selectedUserId, leagueMode]);
 
 	// Game score calculation utility
 	const getGameScore = (game: Game) => ({
@@ -360,27 +366,24 @@ export function Results() {
 					variant="results"
 				/>
 			);
-		}).filter(Boolean);
+		}).filter((element): element is React.ReactElement => element !== null);
 
 		// Organize games by status
-		const liveGames = allGameElements.filter((element: any) => {
-			if (!element) return false;
+		const liveGames = allGameElements.filter((element: React.ReactElement) => {
 			const game = games.find(g => g.id === element.key);
 			if (!game) return false;
 			const status = game.status?.toLowerCase();
 			return status === 'in' || status === 'in_progress';
 		});
 
-		const upcomingGames = allGameElements.filter((element: any) => {
-			if (!element) return false;
+		const upcomingGames = allGameElements.filter((element: React.ReactElement) => {
 			const game = games.find(g => g.id === element.key);
 			if (!game) return false;
 			const status = game.status?.toLowerCase();
 			return status === 'pre' || status === 'scheduled' || !status;
 		});
 
-		const pastGames = allGameElements.filter((element: any) => {
-			if (!element) return false;
+		const pastGames = allGameElements.filter((element: React.ReactElement) => {
 			const game = games.find(g => g.id === element.key);
 			if (!game) return false;
 			const status = game.status?.toLowerCase();
@@ -647,7 +650,7 @@ export function Results() {
 									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 								</div>
 								<div className='space-y-3'>
-									{results.liveGames.map((game: any, index: number) => (
+									{results.liveGames.map((game: React.ReactElement, index: number) => (
 										<motion.div
 											key={game.key || index}
 											initial={{ opacity: 0, y: 10 }}
@@ -667,7 +670,7 @@ export function Results() {
 							<div className='mb-6'>
 								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
 								<div className='space-y-3'>
-									{results.upcomingGames.map((game: any, index: number) => (
+									{results.upcomingGames.map((game: React.ReactElement, index: number) => (
 										<motion.div
 											key={game.key || index}
 											initial={{ opacity: 0, y: 10 }}
@@ -687,7 +690,7 @@ export function Results() {
 							<div className='mb-6'>
 								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
 								<div className='space-y-3'>
-									{results.pastGames.map((game: any, index: number) => (
+									{results.pastGames.map((game: React.ReactElement, index: number) => (
 										<motion.div
 											key={game.key || index}
 											initial={{ opacity: 0, y: 10 }}
