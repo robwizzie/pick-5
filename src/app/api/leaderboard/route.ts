@@ -69,11 +69,15 @@ export async function GET(req: Request) {
 				calculatePointsFromOdds
 			);
 
+			// Extract team names from picks
+			const pickedTeams = pick.picks.map((p: any) => p.team);
+
 			weeklyResultsMap.set(userId, {
 				points: weeklyPoints,
 				correct: correctPicks,
 				tfsPoints: tfsPoints,
-				completedGames: completedGames
+				completedGames: completedGames,
+				pickedTeams: pickedTeams // Add the picked teams
 			});
 		}
 
@@ -90,7 +94,8 @@ export async function GET(req: Request) {
 				points: result?.points || 0,
 				correct: result?.correct || 0,
 				tfsPoints: result?.tfsPoints || 0,
-				hasPicks
+				hasPicks,
+				pickedTeams: result?.pickedTeams || [] // Include picked teams
 			};
 		});
 
