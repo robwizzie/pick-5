@@ -96,7 +96,7 @@ export function Recap() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session } = useSession();
-	const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek - 1);
+	const [selectedWeek, setSelectedWeek] = useState<number>(0); // Will be set to most recent available week
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [recapData, setRecapData] = useState<RecapData | null>(null);
@@ -125,7 +125,8 @@ export function Recap() {
 		const determineAvailableWeeks = async () => {
 			if (!leagueId) return;
 			const weeks: number[] = [];
-			for (let w = 1; w < currentWeek; w++) {
+			// Check weeks up to and including current week (since current week might be completed)
+			for (let w = 1; w <= currentWeek; w++) {
 				// Check if recap is available (has picks and is completed)
 				const available = await isRecapAvailable(w, leagueId);
 				if (available) {
@@ -136,6 +137,8 @@ export function Recap() {
 			// Default to most recent completed week
 			if (weeks.length > 0) {
 				setSelectedWeek(weeks[weeks.length - 1]);
+			} else {
+				setSelectedWeek(0); // No weeks available
 			}
 		};
 		determineAvailableWeeks();
