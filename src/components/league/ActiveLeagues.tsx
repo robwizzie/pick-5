@@ -240,8 +240,8 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 												)}
 											</div>
 
-											{/* Team Logos and TFS (when picks are in and games started) */}
-											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && hasAnyGameStarted() && (
+											{/* Team Logos and TFS (when picks are in) */}
+											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
 												<div className='flex flex-wrap items-center gap-2'>
 													{stats.pickedTeams.map((team, idx) => {
 														const logo = getTeamLogo(team);

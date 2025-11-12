@@ -275,7 +275,6 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 							</div>
 							<div className='text-center'>
 								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.team}</div>
-								<div className={`text-[10px] ${selected === game.away.team ? 'font-bold text-black/70' : 'font-medium text-muted-foreground'}`}>{game.away.record}</div>
 								{showScores && game.away.score !== undefined && (
 									<div className={`text-lg mt-1 font-mono ${selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
 										<CountUp end={game.away.score} duration={0.8} preserveValue />
@@ -298,7 +297,6 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 							</div>
 							<div className='text-center'>
 								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.team}</div>
-								<div className={`text-[10px] ${selected === game.home.team ? 'font-bold text-black/70' : 'font-medium text-muted-foreground'}`}>{game.home.record}</div>
 								{showScores && game.home.score !== undefined && (
 									<div className={`text-lg mt-1 font-mono ${selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
 										<CountUp end={game.home.score} duration={0.8} preserveValue />
