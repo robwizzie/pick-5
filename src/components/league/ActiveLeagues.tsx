@@ -41,7 +41,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 	const [copiedLeagueId, setCopiedLeagueId] = useState<string | null>(null);
 	const [leagueStats, setLeagueStats] = useState<Map<string, LeagueStats>>(new Map());
 	const [currentWeek, setCurrentWeek] = useState<number | null>(null);
-	const [games, setGames] = useState<Array<{ home: { team: string; logo: string }; away: { team: string; logo: string } }>>([]);
+	const [games, setGames] = useState<Array<{ home: { team: string; logo: string; abbreviation: string }; away: { team: string; logo: string; abbreviation: string }; status?: string }>>([]);
 	const isLoadingRef = useRef(false);
 
 	useEffect(() => {
@@ -118,11 +118,29 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 		e.stopPropagation();
 	};
 
-	// Helper function to get team logo from team name
+	// Helper function to check if any games have started
+	const hasAnyGameStarted = () => {
+		return games.some(g => {
+			const status = g.status?.toLowerCase();
+			return status !== 'pre' && status !== 'scheduled';
+		});
+	};
+
+	// Helper function to get team logo from team name (matches by full name or abbreviation)
 	const getTeamLogo = (teamName: string) => {
-		const game = games.find(g => g.home.team === teamName || g.away.team === teamName);
+		const game = games.find(g =>
+			g.home.team === teamName ||
+			g.away.team === teamName ||
+			g.home.abbreviation === teamName ||
+			g.away.abbreviation === teamName
+		);
 		if (!game) return null;
-		return game.home.team === teamName ? game.home.logo : game.away.logo;
+
+		// Check which team it is
+		if (game.home.team === teamName || game.home.abbreviation === teamName) {
+			return game.home.logo;
+		}
+		return game.away.logo;
 	};
 
 	// Helper functions for top 3 styling
@@ -222,8 +240,8 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 												)}
 											</div>
 
-											{/* Team Logos and TFS (when picks are in) */}
-											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
+											{/* Team Logos and TFS (when picks are in and games started) */}
+											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && hasAnyGameStarted() && (
 												<div className='flex flex-wrap items-center gap-2'>
 													{stats.pickedTeams.map((team, idx) => {
 														const logo = getTeamLogo(team);

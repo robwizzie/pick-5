@@ -40,7 +40,7 @@ export function Leaderboard() {
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leagueMode, setLeagueMode] = useState<string>('');
-	const [games, setGames] = useState<Array<{ home: { team: string; logo: string }; away: { team: string; logo: string } }>>([]);
+	const [games, setGames] = useState<Array<{ home: { team: string; logo: string; abbreviation: string }; away: { team: string; logo: string; abbreviation: string }; status?: string }>>([]);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -157,11 +157,29 @@ export function Leaderboard() {
 		return `${hours}h ago`;
 	};
 
-	// Helper function to get team logo from team name
+	// Helper function to check if any games have started
+	const hasAnyGameStarted = () => {
+		return games.some(g => {
+			const status = g.status?.toLowerCase();
+			return status !== 'pre' && status !== 'scheduled';
+		});
+	};
+
+	// Helper function to get team logo from team name (matches by full name or abbreviation)
 	const getTeamLogo = (teamName: string) => {
-		const game = games.find(g => g.home.team === teamName || g.away.team === teamName);
+		const game = games.find(g =>
+			g.home.team === teamName ||
+			g.away.team === teamName ||
+			g.home.abbreviation === teamName ||
+			g.away.abbreviation === teamName
+		);
 		if (!game) return null;
-		return game.home.team === teamName ? game.home.logo : game.away.logo;
+
+		// Check which team it is
+		if (game.home.team === teamName || game.home.abbreviation === teamName) {
+			return game.home.logo;
+		}
+		return game.away.logo;
 	};
 
 	return (
@@ -255,7 +273,7 @@ export function Leaderboard() {
 
 													{/* Status Badge or Team Logos */}
 													<div className='mb-2'>
-														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 ? (
+														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 && hasAnyGameStarted() ? (
 															<div className='flex flex-wrap items-center gap-1.5'>
 																{entry.pickedTeams.map((team, idx) => {
 																	const logo = getTeamLogo(team);
