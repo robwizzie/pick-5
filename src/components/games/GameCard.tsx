@@ -278,13 +278,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`text-xs ${selected === game.away.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.away.record}</div>
 									{isStandardMode && game.away.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${selected === game.away.team && isCorrect !== null ? 'text-white/90' : selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-											<span className={`text-xs ${selected === game.away.team && isCorrect !== null ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.away.team && isCorrect !== null ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
+											<span className={`text-xs font-semibold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/90' : selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
+											<span className={`text-xs ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+											<span className={`text-xs font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 										</div>
 									)}
 									{showScores && game.away.score !== undefined && (
-										<div className={`text-lg mt-1 font-mono ${selected === game.away.team && isCorrect === null ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
+										<div className={`text-lg mt-1 font-mono ${selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
 											<CountUp end={game.away.score} duration={0.8} preserveValue />
 										</div>
 									)}
@@ -339,13 +339,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<div className={`text-xs ${selected === game.home.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.home.record}</div>
 									{isStandardMode && game.home.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold ${selected === game.home.team && isCorrect !== null ? 'text-white/90' : selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-											<span className={`text-xs ${selected === game.home.team && isCorrect !== null ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.home.team && isCorrect !== null ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
+											<span className={`text-xs font-semibold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/90' : selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
+											<span className={`text-xs ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+											<span className={`text-xs font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 										</div>
 									)}
 									{showScores && game.home.score !== undefined && (
-										<div className={`text-lg mt-1 font-mono ${selected === game.home.team && isCorrect === null ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
+										<div className={`text-lg mt-1 font-mono ${selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
 											<CountUp end={game.home.score} duration={0.8} preserveValue />
 										</div>
 									)}
