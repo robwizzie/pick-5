@@ -236,6 +236,35 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 			{/* GameCard Container */}
 			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md'>
+				{/* Mobile Date (shown only on mobile at the top) */}
+				<div className='xl:hidden mb-4'>
+					<div className='flex flex-col items-center gap-2'>
+						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
+							{(statusInfo as any).isLive && (
+								<span className='absolute -left-1 top-1/2 -translate-y-1/2 flex h-2 w-2'>
+									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'></span>
+									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
+								</span>
+							)}
+							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
+								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
+							</div>
+							<div className='text-[10px] text-muted-foreground mt-0.5'>
+								{statusInfo.isScheduled ? (
+									statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+								) : (statusInfo as any).isLive && (statusInfo as any).periodText ? (
+									<div className='flex flex-col items-center gap-0.5'>
+										<span className='text-green-400 font-semibold'>{(statusInfo as any).periodText}</span>
+										{(statusInfo as any).clockText && <span className='text-primary font-mono'>{(statusInfo as any).clockText}</span>}
+									</div>
+								) : (
+									`${statusInfo.dayText} ${statusInfo.timeText}`
+								)}
+							</div>
+						</div>
+					</div>
+				</div>
+
 				<div className='flex flex-col xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
@@ -245,8 +274,8 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
 								</div>
 								<div className='text-left flex-1'>
-									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.team}</div>
-									<div className={`text-xs ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.record}</div>
+									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.team}</div>
+									<div className={`text-xs ${selected === game.away.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.away.record}</div>
 									{isStandardMode && game.away.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
 											<span className={`text-xs font-semibold ${selected === game.away.team && isCorrect !== null ? 'text-white/90' : selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
@@ -255,7 +284,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										</div>
 									)}
 									{showScores && game.away.score !== undefined && (
-										<div className={`text-lg mt-1 font-mono ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
+										<div className={`text-lg mt-1 font-mono ${selected === game.away.team && isCorrect === null ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
 											<CountUp end={game.away.score} duration={0.8} preserveValue />
 										</div>
 									)}
@@ -265,8 +294,8 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 						</Button>
 					</div>
 
-					{/* Center Section - Game Status & Time */}
-					<div className='flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[120px] gap-2'>
+					{/* Center Section - Game Status & Time (Desktop only) */}
+					<div className='hidden xl:flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[120px] gap-2'>
 						<span className='text-sm font-medium text-accent'>@</span>
 						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
 							{(statusInfo as any).isLive && (
@@ -293,6 +322,11 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 						</div>
 					</div>
 
+					{/* Mobile @ symbol (between teams on mobile) */}
+					<div className='xl:hidden flex justify-center my-3'>
+						<span className='text-sm font-medium text-accent'>@</span>
+					</div>
+
 					{/* Home Team */}
 					<div className='flex-1 xl:ml-4'>
 						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
@@ -301,8 +335,8 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
 								</div>
 								<div className='text-left flex-1'>
-									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.team}</div>
-									<div className={`text-xs ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.record}</div>
+									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.team}</div>
+									<div className={`text-xs ${selected === game.home.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.home.record}</div>
 									{isStandardMode && game.home.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
 											<span className={`text-xs font-semibold ${selected === game.home.team && isCorrect !== null ? 'text-white/90' : selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
@@ -311,7 +345,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										</div>
 									)}
 									{showScores && game.home.score !== undefined && (
-										<div className={`text-lg mt-1 font-mono ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
+										<div className={`text-lg mt-1 font-mono ${selected === game.home.team && isCorrect === null ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
 											<CountUp end={game.home.score} duration={0.8} preserveValue />
 										</div>
 									)}
