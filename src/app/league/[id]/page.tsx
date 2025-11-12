@@ -8,7 +8,6 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { WeeklyPicks } from '@/components/games/WeeklyPicks';
 import { Results } from '@/components/games/Results';
 import { SeasonStats } from '@/components/games/SeasonStats';
@@ -348,7 +347,7 @@ export default function LeagueDetails() {
 							</TabsTrigger>
 							{hasRecapData && (
 								<TabsTrigger value='recap' className='data-[state=active]:bg-primary data-[state=active]:text-black font-oswald uppercase tracking-wide'>
-									Last Week's Recap
+									Last Week&apos;s Recap
 								</TabsTrigger>
 							)}
 						</TabsList>
