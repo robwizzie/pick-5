@@ -196,6 +196,23 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				disabled
 		  };
 
+	// Determine winner if game is finished and scores are shown
+	const isGameFinished = statusInfo.text === 'FINAL';
+	const awayWon = showScores && isGameFinished && (game.away.score ?? 0) > (game.home.score ?? 0);
+	const homeWon = showScores && isGameFinished && (game.home.score ?? 0) > (game.away.score ?? 0);
+
+	// Check if this is an upset (underdog with +250 or worse odds won)
+	const isUpset = isGameFinished && (
+		(awayWon && (game.away.odds ?? 0) >= 250) ||
+		(homeWon && (game.home.odds ?? 0) >= 250)
+	);
+
+	// Helper to get winner styling
+	const getWinnerStyle = (isWinner: boolean | undefined) => {
+		if (!isWinner || !showScores || !isGameFinished) return '';
+		return 'border-green-500 bg-green-500/10';
+	};
+
 	return (
 		<motion.div
 			className='relative'
@@ -204,12 +221,19 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			viewport={{ once: true, margin: "-50px" }}
 			transition={{ duration: 0.3 }}
 		>
+			{/* Upset Badge */}
+			{isUpset && (
+				<div className='absolute -top-2 -right-2 z-10 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse'>
+					🔥 UPSET
+				</div>
+			)}
+
 			{/* GameCard Container */}
 			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md'>
 				<div className='flex flex-col xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
-						<Button {...buttonProps} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null)}`}>
+						<Button {...buttonProps} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null)} ${getWinnerStyle(awayWon)}`}>
 							<div className='flex items-center space-x-3 w-full'>
 								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
 									<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
@@ -265,7 +289,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 					{/* Home Team */}
 					<div className='flex-1 xl:ml-4'>
-						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null)}`}>
+						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null)} ${getWinnerStyle(homeWon)}`}>
 							<div className='flex items-center space-x-3 w-full'>
 								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
 									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
