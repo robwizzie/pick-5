@@ -17,6 +17,13 @@ interface TeamPick {
 	gameStatus: 'scheduled' | 'in_progress' | 'final';
 }
 
+interface League {
+	_id: string;
+	id: string;
+	name: string;
+	description?: string;
+}
+
 interface RecentActivity {
 	type: 'pick' | 'league_join';
 	message: string;
@@ -30,7 +37,7 @@ interface RecentActivity {
 const Dashboard = () => {
 	const router = useRouter();
 	const { data: session, status } = useSession();
-	const [leagues, setLeagues] = useState([]);
+	const [leagues, setLeagues] = useState<League[]>([]);
 	const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
 
 	useEffect(() => {
@@ -78,7 +85,7 @@ const Dashboard = () => {
 				// Fetch recent picks from all leagues
 				for (const league of leagues) {
 					try {
-						const response = await fetch(`/api/picks/user?leagueId=${(league as any).id}`);
+						const response = await fetch(`/api/picks/user?leagueId=${league.id}`);
 						if (response.ok) {
 							const picks = await response.json();
 							// Get all picks and add them to activities
@@ -91,7 +98,7 @@ const Dashboard = () => {
 
 										// Match picks with games to get logos and status
 										if (pick.picks && Array.isArray(pick.picks)) {
-											pick.picks.forEach((p: any) => {
+											pick.picks.forEach((p: { gameId: string; team: string; isCorrect?: boolean | null }) => {
 												const game = games.find(g => g.id === p.gameId);
 												if (game) {
 													const teamData = p.team === game.home.team ? game.home : game.away;
@@ -107,7 +114,7 @@ const Dashboard = () => {
 													teamPicks.push({
 														team: p.team,
 														logo: teamData.logo,
-														isCorrect: p.isCorrect,
+														isCorrect: p.isCorrect ?? null,
 														gameStatus
 													});
 												}
@@ -120,8 +127,8 @@ const Dashboard = () => {
 											type: 'pick',
 											message: `Made picks for Week ${pick.week}`,
 											timestamp: new Date(timestamp),
-											leagueId: (league as any).id,
-											leagueName: (league as any).name,
+											leagueId: league.id,
+											leagueName: league.name,
 											teamPicks,
 											week: pick.week
 										});
