@@ -770,7 +770,7 @@ export default function LeagueDetails() {
 
 			{/* League Settings Modal */}
 			<Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-2xl max-h-[80vh] overflow-y-auto mx-4 sm:mx-auto'>
+				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-2xl max-h-[80vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:w-full sm:max-w-2xl'>
 					<DialogHeader>
 						<DialogTitle className='text-2xl font-bold text-primary'>League Settings</DialogTitle>
 						<DialogDescription className='text-muted-foreground'>
