@@ -520,7 +520,7 @@ export function Results() {
 									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
 									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 								</div>
-								<div className='space-y-6'>
+								<div className='space-y-3'>
 									{liveGames.map((game, index) => (
 										<motion.div
 											key={game.id}
@@ -528,7 +528,7 @@ export function Results() {
 											whileInView={{ opacity: 1, y: 0 }}
 											viewport={{ once: true, margin: "-50px" }}
 											transition={{ duration: 0.3, delay: index * 0.05 }}
-											className='pb-6 border-b border-primary/10 last:border-b-0 last:pb-0'
+											className='rounded-lg overflow-hidden border-2 border-primary/20 bg-card'
 										>
 											<GameCard
 												game={game}
@@ -548,7 +548,7 @@ export function Results() {
 						{upcomingGames.length > 0 && (
 							<div>
 								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-								<div className='space-y-6'>
+								<div className='space-y-3'>
 									{upcomingGames.map((game, index) => (
 										<motion.div
 											key={game.id}
@@ -556,7 +556,7 @@ export function Results() {
 											whileInView={{ opacity: 1, y: 0 }}
 											viewport={{ once: true, margin: "-50px" }}
 											transition={{ duration: 0.3, delay: index * 0.05 }}
-											className='pb-6 border-b border-primary/10 last:border-b-0 last:pb-0'
+											className='rounded-lg overflow-hidden border-2 border-primary/20 bg-card'
 										>
 											<GameCard
 												game={game}
@@ -576,7 +576,7 @@ export function Results() {
 						{finalGames.length > 0 && (
 							<div>
 								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-								<div className='space-y-6'>
+								<div className='space-y-3'>
 									{finalGames.map((game, index) => (
 										<motion.div
 											key={game.id}
@@ -584,7 +584,7 @@ export function Results() {
 											whileInView={{ opacity: 1, y: 0 }}
 											viewport={{ once: true, margin: "-50px" }}
 											transition={{ duration: 0.3, delay: index * 0.05 }}
-											className='pb-6 border-b border-primary/10 last:border-b-0 last:pb-0'
+											className='rounded-lg overflow-hidden border-2 border-primary/20 bg-card'
 										>
 											<GameCard
 												game={game}
