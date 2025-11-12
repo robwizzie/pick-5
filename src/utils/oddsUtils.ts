@@ -62,6 +62,17 @@ export function getOddsColorClass(odds: number): string {
 }
 
 /**
+ * Get badge background color class based on odds
+ */
+export function getOddsBadgeClass(odds: number): string {
+	if (odds < -150) return 'bg-blue-400 text-white'; // Heavy favorite
+	if (odds < 0) return 'bg-blue-300 text-white'; // Slight favorite
+	if (odds <= 150) return 'bg-yellow-400 text-black'; // Slight underdog
+	if (odds <= 300) return 'bg-orange-400 text-white'; // Medium underdog
+	return 'bg-red-400 text-white'; // Big underdog
+}
+
+/**
  * Get descriptive label for odds risk level
  */
 export function getOddsRiskLabel(odds: number): string {

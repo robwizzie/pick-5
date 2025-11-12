@@ -18,6 +18,7 @@ import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
 import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles, Settings, UserMinus, Eye, EyeOff } from 'lucide-react';
 import { useWeek } from '@/contexts/WeekContext';
+import { NFLService } from '@/services/nflService';
 
 interface League {
 	name: string;
@@ -56,6 +57,8 @@ export default function LeagueDetails() {
 	const [settingsTab, setSettingsTab] = useState<'general' | 'members'>('general');
 	const [mobileView, setMobileView] = useState<'picks' | 'results' | 'leaderboard' | 'stats' | 'recap'>('picks');
 	const [hasRecapData, setHasRecapData] = useState(false);
+	const [actualCurrentWeek, setActualCurrentWeek] = useState<number | null>(null);
+	const [recapWeekToShow, setRecapWeekToShow] = useState<number | null>(null);
 
 	// Fetch league details
 	useEffect(() => {
@@ -76,20 +79,52 @@ export default function LeagueDetails() {
 		fetchLeague();
 	}, [id, router]);
 
-	// Check if recap data is available for the CURRENT week being viewed
+	// Get actual NFL current week
+	useEffect(() => {
+		const fetchActualWeek = async () => {
+			try {
+				const week = await NFLService.getCurrentWeek();
+				setActualCurrentWeek(week);
+			} catch (error) {
+				console.error('Error fetching current week:', error);
+			}
+		};
+		fetchActualWeek();
+	}, []);
+
+	// Check if "Last Week's Recap" should be shown
+	// Show it when viewing the ACTUAL current week AND previous week has recap data
 	useEffect(() => {
 		const checkRecapAvailability = async () => {
-			if (!id || !currentWeek) return;
-			try {
-				const response = await fetch(`/api/recap?week=${currentWeek}&leagueId=${id}`, { cache: 'no-store' });
-				if (response.ok) {
-					const data = await response.json();
-					setHasRecapData(data.hasPicks && data.weekCompleted);
-				} else {
+			if (!id || !currentWeek || !actualCurrentWeek) return;
+
+			// Are we viewing the actual current NFL week?
+			const viewingCurrentWeek = currentWeek === actualCurrentWeek;
+
+			if (viewingCurrentWeek && currentWeek > 1) {
+				// Check if last week has recap data
+				const previousWeek = currentWeek - 1;
+				try {
+					const response = await fetch(`/api/recap?week=${previousWeek}&leagueId=${id}`, { cache: 'no-store' });
+					if (response.ok) {
+						const data = await response.json();
+						const hasData = data.hasPicks && data.weekCompleted;
+						setHasRecapData(hasData);
+						if (hasData) {
+							setRecapWeekToShow(previousWeek);
+						}
+					} else {
+						setHasRecapData(false);
+						setRecapWeekToShow(null);
+					}
+				} catch {
 					setHasRecapData(false);
+					setRecapWeekToShow(null);
 				}
-			} catch {
+			} else {
+				// Not viewing current week, don't show recap
 				setHasRecapData(false);
+				setRecapWeekToShow(null);
 			}
 		};
 
@@ -97,7 +132,7 @@ export default function LeagueDetails() {
 		// Re-check every 2 minutes in case week completes
 		const interval = setInterval(checkRecapAvailability, 120000);
 		return () => clearInterval(interval);
-	}, [id, currentWeek]);
+	}, [id, currentWeek, actualCurrentWeek]);
 
 	const handleGetInviteLink = async () => {
 		try {
@@ -313,7 +348,7 @@ export default function LeagueDetails() {
 							</TabsTrigger>
 							{hasRecapData && (
 								<TabsTrigger value='recap' className='data-[state=active]:bg-primary data-[state=active]:text-black font-oswald uppercase tracking-wide'>
-									Week Recap
+									Last Week's Recap
 								</TabsTrigger>
 							)}
 						</TabsList>
@@ -323,9 +358,9 @@ export default function LeagueDetails() {
 						<TabsContent value='results'>
 							<Results />
 						</TabsContent>
-						{hasRecapData && (
+						{hasRecapData && recapWeekToShow && (
 							<TabsContent value='recap'>
-								<Recap />
+								<Recap weekOverride={recapWeekToShow} />
 							</TabsContent>
 						)}
 					</Tabs>
@@ -342,7 +377,7 @@ export default function LeagueDetails() {
 				{mobileView === 'results' && <Results />}
 				{mobileView === 'leaderboard' && <Leaderboard />}
 				{mobileView === 'stats' && <SeasonStats />}
-				{hasRecapData && mobileView === 'recap' && <Recap />}
+				{hasRecapData && recapWeekToShow && mobileView === 'recap' && <Recap weekOverride={recapWeekToShow} />}
 			</div>
 
 			{/* Mobile Bottom Navigation Bar - Liquid Glass Segmented Control */}
