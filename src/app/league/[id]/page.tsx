@@ -264,16 +264,16 @@ export default function LeagueDetails() {
 						<div className='relative w-16 h-16 md:w-24 md:h-24 flex-shrink-0'>
 							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' fill sizes='(max-width: 768px) 64px, 96px' className='object-contain' priority />
 						</div>
-						<div className='flex items-center gap-2'>
-							<div>
+						<div>
+							<div className='flex items-center gap-2'>
 								<h1 className='text-xl md:text-2xl font-oswald uppercase tracking-wide text-primary'>{league.name}</h1>
-								<p className='text-sm md:text-base text-primary/80 font-medium mt-1'>{league.sport}</p>
+								{isCommissioner && (
+									<Button onClick={handleOpenSettings} variant='ghost' size='sm' className='h-8 w-8 p-0 hover:bg-primary/10' title='League Settings'>
+										<Settings className='h-4 w-4 text-primary' />
+									</Button>
+								)}
 							</div>
-							{isCommissioner && (
-								<Button onClick={handleOpenSettings} variant='ghost' size='sm' className='h-8 w-8 p-0 hover:bg-primary/10' title='League Settings'>
-									<Settings className='h-4 w-4 text-primary' />
-								</Button>
-							)}
+							<p className='text-sm md:text-base text-primary/80 font-medium mt-1'>{league.sport}</p>
 						</div>
 					</div>
 					<div className='flex items-center gap-2 flex-shrink-0'>
@@ -770,7 +770,7 @@ export default function LeagueDetails() {
 
 			{/* League Settings Modal */}
 			<Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-2xl max-h-[80vh] overflow-y-auto'>
+				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-2xl max-h-[80vh] overflow-y-auto mx-4 sm:mx-auto'>
 					<DialogHeader>
 						<DialogTitle className='text-2xl font-bold text-primary'>League Settings</DialogTitle>
 						<DialogDescription className='text-muted-foreground'>
