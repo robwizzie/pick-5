@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
@@ -36,6 +38,24 @@ export function Leaderboard() {
 	const [key, setKey] = useState(0); // Force rerender mechanism
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+	const [leagueMode, setLeagueMode] = useState<string>('');
+
+	// Fetch league details to get the mode
+	useEffect(() => {
+		const fetchLeagueDetails = async () => {
+			if (!leagueId) return;
+			try {
+				const response = await fetch(`/api/league/${leagueId}`);
+				if (response.ok) {
+					const data = await response.json();
+					setLeagueMode(data.mode || 'standard');
+				}
+			} catch (error) {
+				console.error('[Leaderboard] Error fetching league details:', error);
+			}
+		};
+		fetchLeagueDetails();
+	}, [leagueId]);
 
 	// Fetch leaderboard data
 	const fetchLeaderboard = async (isPolling = false) => {
@@ -166,7 +186,18 @@ export function Leaderboard() {
 							{weeklyLeaderboard.length === 0 ? (
 								<div className='text-primary/80 text-center'>No users in this league yet.</div>
 							) : (
-								<div className='space-y-3'>
+								<motion.div
+									className='space-y-3'
+									initial='hidden'
+									animate='visible'
+									variants={{
+										visible: {
+											transition: {
+												staggerChildren: 0.05
+											}
+										}
+									}}
+								>
 									{weeklyLeaderboard.map((entry, index) => {
 										// Calculate actual rank considering ties
 										let rank = 1;
@@ -193,7 +224,16 @@ export function Leaderboard() {
 										};
 
 										return (
-											<div key={entry.userId || index} className={`flex items-start p-4 bg-card border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()} ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg' : ''}`} onClick={() => entry.hasPicks && handleUserClick(entry.userId)}>
+											<motion.div
+												key={entry.userId || index}
+												className={`flex items-start p-4 bg-card/80 backdrop-blur-sm border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()} ${entry.hasPicks ? 'cursor-pointer hover:border-primary/50 hover:shadow-lg' : ''}`}
+												onClick={() => entry.hasPicks && handleUserClick(entry.userId)}
+												variants={{
+													hidden: { opacity: 0, y: 10 },
+													visible: { opacity: 1, y: 0 }
+												}}
+												whileHover={entry.hasPicks ? { scale: 1.01 } : {}}
+											>
 												{/* Rank with crown */}
 												<div className='flex flex-col items-center gap-1 pt-1'>
 													{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
@@ -222,23 +262,40 @@ export function Leaderboard() {
 													<div className='flex gap-6'>
 														<div>
 															<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Points</p>
-															<p className='text-2xl font-bold text-primary'>{entry.points}</p>
+															<p className='text-2xl font-bold font-mono text-primary'>
+																<CountUp end={entry.points} duration={0.8} preserveValue />
+															</p>
 														</div>
-														<div>
-															<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>TFS</p>
-															<p className='text-2xl font-bold text-accent'>{entry.tfsPoints}</p>
-														</div>
+														{leagueMode === 'steve' && (
+															<div>
+																<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>TFS</p>
+																<p className='text-2xl font-bold font-mono text-accent'>
+																	<CountUp end={entry.tfsPoints} duration={0.8} preserveValue />
+																</p>
+															</div>
+														)}
 													</div>
 												</div>
-											</div>
+											</motion.div>
 										);
 									})}
-								</div>
+								</motion.div>
 							)}
 						</TabsContent>
 
 						<TabsContent value='season'>
-							<div className='space-y-3'>
+							<motion.div
+								className='space-y-3'
+								initial='hidden'
+								animate='visible'
+								variants={{
+									visible: {
+										transition: {
+											staggerChildren: 0.05
+										}
+									}
+								}}
+							>
 								{seasonLeaderboard.map((entry, index) => {
 									// Calculate actual rank considering ties
 									let rank = 1;
@@ -265,7 +322,15 @@ export function Leaderboard() {
 									};
 
 									return (
-										<div key={index} className={`flex items-start p-4 bg-card border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()}`}>
+										<motion.div
+											key={index}
+											className={`flex items-start p-4 bg-card/80 backdrop-blur-sm border-2 rounded-lg gap-3 transition-all duration-300 ${getTop3Style()}`}
+											variants={{
+												hidden: { opacity: 0, y: 10 },
+												visible: { opacity: 1, y: 0 }
+											}}
+											whileHover={{ scale: 1.01 }}
+										>
 											{/* Rank with crown */}
 											<div className='flex flex-col items-center gap-1 pt-1'>
 												{isFirstPlace && <Crown className='w-5 h-5 text-yellow-400 animate-pulse' fill='currentColor' />}
@@ -287,22 +352,28 @@ export function Leaderboard() {
 												<div className='flex gap-6'>
 													<div>
 														<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Total Points</p>
-														<p className='text-2xl font-bold text-primary'>{entry.totalPoints}</p>
+														<p className='text-2xl font-bold font-mono text-primary'>
+															<CountUp end={entry.totalPoints} duration={0.8} preserveValue />
+														</p>
 													</div>
 													<div>
 														<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Win %</p>
-														<p className='text-2xl font-bold text-accent'>{Math.round(entry.winPercentage)}%</p>
+														<p className='text-2xl font-bold font-mono text-accent'>
+															<CountUp end={Math.round(entry.winPercentage)} duration={0.8} preserveValue />%
+														</p>
 													</div>
 													<div>
 														<p className='text-xs text-primary/60 uppercase tracking-wide mb-1'>Record</p>
-														<p className='text-lg font-bold text-muted-foreground'>{entry.correctPicks}-{entry.totalPicks - entry.correctPicks}</p>
+														<p className='text-lg font-bold font-mono text-muted-foreground'>
+															<CountUp end={entry.correctPicks} duration={0.8} preserveValue />-<CountUp end={entry.totalPicks - entry.correctPicks} duration={0.8} preserveValue />
+														</p>
 													</div>
 												</div>
 											</div>
-										</div>
+										</motion.div>
 									);
 								})}
-							</div>
+							</motion.div>
 						</TabsContent>
 					</Tabs>
 				)}

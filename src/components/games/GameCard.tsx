@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
@@ -18,6 +20,9 @@ interface Game {
 	away: TeamInfo;
 	date: Date;
 	status?: string;
+	clock?: string; // Time remaining (e.g., "12:34")
+	period?: number; // Quarter/period number (1-4)
+	periodDisplay?: string; // e.g., "1st", "2nd", "3rd", "4th", "OT"
 }
 
 interface UserPick {
@@ -137,10 +142,16 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		}
 
 		if (status === 'in' || status === 'in_progress') {
+			const periodText = game.periodDisplay || (game.period ? `Q${game.period}` : '');
+			const clockText = game.clock || '';
+
 			return {
 				text: 'LIVE',
 				color: 'text-green-400',
-				bgColor: 'bg-green-500/20',
+				bgColor: 'bg-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.2)]',
+				isLive: true,
+				periodText,
+				clockText,
 				dayText,
 				timeText,
 				fullDate
@@ -186,9 +197,15 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 		  };
 
 	return (
-		<div className='relative'>
+		<motion.div
+			className='relative'
+			initial={{ opacity: 0, y: 10 }}
+			animate={{ opacity: 1, y: 0 }}
+			transition={{ duration: 0.2 }}
+			whileHover={noHover ? {} : { scale: 1.01 }}
+		>
 			{/* GameCard Container */}
-			<div className='rounded-lg p-4 bg-card transition-all'>
+			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm border border-white/5 transition-all shadow-sm hover:shadow-md hover:border-primary/10'>
 				<div className='flex flex-col xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
@@ -207,7 +224,11 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 											<span className={`text-xs font-bold ${selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 										</div>
 									)}
-									{showScores && game.away.score !== undefined && <div className={`text-lg mt-1 ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>{game.away.score}</div>}
+									{showScores && game.away.score !== undefined && (
+										<div className={`text-lg mt-1 font-mono ${selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
+											<CountUp end={game.away.score} duration={0.8} preserveValue />
+										</div>
+									)}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 								</div>
 							</div>
@@ -217,15 +238,27 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					{/* Center Section - Game Status & Time */}
 					<div className='flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[120px] gap-2'>
 						<span className='text-sm font-medium text-accent'>@</span>
-						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor}`}>
+						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
+							{(statusInfo as any).isLive && (
+								<span className='absolute -left-1 top-1/2 -translate-y-1/2 flex h-2 w-2'>
+									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'></span>
+									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
+								</span>
+							)}
 							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
 								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
 							</div>
 							<div className='text-[10px] text-muted-foreground mt-0.5'>
-								{statusInfo.isScheduled
-									? statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-									: `${statusInfo.dayText} ${statusInfo.timeText}`
-								}
+								{statusInfo.isScheduled ? (
+									statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+								) : (statusInfo as any).isLive && (statusInfo as any).periodText ? (
+									<div className='flex flex-col items-center gap-0.5'>
+										<span className='text-green-400 font-semibold'>{(statusInfo as any).periodText}</span>
+										{(statusInfo as any).clockText && <span className='text-primary font-mono'>{(statusInfo as any).clockText}</span>}
+									</div>
+								) : (
+									`${statusInfo.dayText} ${statusInfo.timeText}`
+								)}
 							</div>
 						</div>
 					</div>
@@ -247,7 +280,11 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 											<span className={`text-xs font-bold ${selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 										</div>
 									)}
-									{showScores && game.home.score !== undefined && <div className={`text-lg mt-1 ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>{game.home.score}</div>}
+									{showScores && game.home.score !== undefined && (
+										<div className={`text-lg mt-1 font-mono ${selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
+											<CountUp end={game.home.score} duration={0.8} preserveValue />
+										</div>
+									)}
 									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 								</div>
 							</div>
@@ -255,7 +292,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					</div>
 				</div>
 			</div>
-		</div>
+		</motion.div>
 	);
 }
 

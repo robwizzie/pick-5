@@ -17,10 +17,14 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
 		}
 
-		console.log(`[Admin Trigger] ${session.user?.email} manually triggering odds fetch`);
+		// Parse request body for optional week parameter
+		const body = await req.json().catch(() => ({}));
+		const targetWeek = body.week ? parseInt(body.week) : undefined;
+
+		console.log(`[Admin Trigger] ${session.user?.email} manually triggering odds fetch${targetWeek ? ` for week ${targetWeek}` : ''}`);
 
 		// Call the shared service function directly
-		const result = await OddsService.fetchAndStoreOdds();
+		const result = await OddsService.fetchAndStoreOdds(targetWeek);
 
 		if (!result.success) {
 			return NextResponse.json(
