@@ -237,7 +237,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			{/* GameCard Container */}
 			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md'>
 				{/* Mobile Date (shown only on mobile at the top) */}
-				<div className='xl:hidden mb-4'>
+				<div className='xl:hidden mb-3'>
 					<div className='flex flex-col items-center gap-2'>
 						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
 							{(statusInfo as any).isLive && (
@@ -265,7 +265,68 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					</div>
 				</div>
 
-				<div className='flex flex-col xl:flex-row xl:justify-between xl:items-center'>
+				{/* Mobile Horizontal Layout */}
+				<div className='xl:hidden flex items-center justify-between gap-2'>
+					{/* Away Team - Mobile Compact */}
+					<Button {...buttonProps} className={`${buttonProps.className} flex-1 h-auto py-3 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
+						<div className='flex flex-col items-center gap-1 w-full'>
+							<div className='relative w-10 h-10 flex-shrink-0'>
+								<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
+							</div>
+							<div className='text-center'>
+								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.team}</div>
+								<div className={`text-[10px] ${selected === game.away.team ? 'font-bold text-black/70' : 'font-medium text-muted-foreground'}`}>{game.away.record}</div>
+								{showScores && game.away.score !== undefined && (
+									<div className={`text-lg mt-1 font-mono ${selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
+										<CountUp end={game.away.score} duration={0.8} preserveValue />
+									</div>
+								)}
+							</div>
+						</div>
+					</Button>
+
+					{/* VS Symbol */}
+					<div className='flex-shrink-0 px-1'>
+						<span className='text-xs font-medium text-accent'>@</span>
+					</div>
+
+					{/* Home Team - Mobile Compact */}
+					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 h-auto py-3 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
+						<div className='flex flex-col items-center gap-1 w-full'>
+							<div className='relative w-10 h-10 flex-shrink-0'>
+								<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
+							</div>
+							<div className='text-center'>
+								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.team}</div>
+								<div className={`text-[10px] ${selected === game.home.team ? 'font-bold text-black/70' : 'font-medium text-muted-foreground'}`}>{game.home.record}</div>
+								{showScores && game.home.score !== undefined && (
+									<div className={`text-lg mt-1 font-mono ${selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
+										<CountUp end={game.home.score} duration={0.8} preserveValue />
+									</div>
+								)}
+							</div>
+						</div>
+					</Button>
+				</div>
+
+				{/* Mobile Odds/Points (below teams) */}
+				{isStandardMode && (
+					<div className='xl:hidden flex justify-center gap-4 mt-2 text-xs'>
+						{game.away.odds !== undefined && (
+							<div className={`${selected === game.away.team ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
+								{game.away.team}: {formatOdds(game.away.odds)} ({calculatePointsFromOdds(game.away.odds)} pts)
+							</div>
+						)}
+						{game.home.odds !== undefined && (
+							<div className={`${selected === game.home.team ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
+								{game.home.team}: {formatOdds(game.home.odds)} ({calculatePointsFromOdds(game.home.odds)} pts)
+							</div>
+						)}
+					</div>
+				)}
+
+				{/* Desktop Layout (unchanged) */}
+				<div className='hidden xl:flex xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
 						<Button {...buttonProps} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
@@ -320,11 +381,6 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								)}
 							</div>
 						</div>
-					</div>
-
-					{/* Mobile @ symbol (between teams on mobile) */}
-					<div className='xl:hidden flex justify-center my-3'>
-						<span className='text-sm font-medium text-accent'>@</span>
 					</div>
 
 					{/* Home Team */}
