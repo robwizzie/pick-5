@@ -448,17 +448,7 @@ export function Results() {
 
 	// Handle "All Games" view
 	if (selectedUserId === 'all-games') {
-		// Organize games by status
-		const liveGames = games.filter(g => {
-			const status = g.status?.toLowerCase();
-			return status === 'in' || status === 'in_progress';
-		});
-
-		const upcomingGames = games.filter(g => {
-			const status = g.status?.toLowerCase();
-			return status === 'pre' || status === 'scheduled' || !status;
-		});
-
+		// Only show final games (Results = games that are over)
 		const finalGames = games.filter(g => {
 			const status = g.status?.toLowerCase();
 			return status === 'post' || status === 'final';
@@ -468,7 +458,7 @@ export function Results() {
 			<Card className='bg-card border-primary/20'>
 				<CardHeader>
 					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
-						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} - All Games</CardTitle>
+						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
 						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
 							<SelectTrigger className='w-full sm:w-[200px]'>
 								<SelectValue placeholder='Select user' />
@@ -512,94 +502,33 @@ export function Results() {
 					</div>
 				</CardHeader>
 				<CardContent>
-					<div className='space-y-6'>
-						{/* Live Games */}
-						{liveGames.length > 0 && (
-							<div>
-								<div className='flex items-center gap-2 mb-3'>
-									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
-									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
-								</div>
-								<div className='space-y-3'>
-									{liveGames.map((game, index) => (
-										<motion.div
-											key={game.id}
-											initial={{ opacity: 0, y: 10 }}
-											whileInView={{ opacity: 1, y: 0 }}
-											viewport={{ once: true, margin: "-50px" }}
-											transition={{ duration: 0.3, delay: index * 0.05 }}
-											className='rounded-lg overflow-hidden border-2 border-primary/20 bg-card'
-										>
-											<GameCard
-												game={game}
-												showScores={true}
-												disabled={true}
-												noHover={true}
-												leaguePicks={leaguePicks[game.id]}
-												leagueMode={leagueMode}
-											/>
-										</motion.div>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Upcoming Games */}
-						{upcomingGames.length > 0 && (
-							<div>
-								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-								<div className='space-y-3'>
-									{upcomingGames.map((game, index) => (
-										<motion.div
-											key={game.id}
-											initial={{ opacity: 0, y: 10 }}
-											whileInView={{ opacity: 1, y: 0 }}
-											viewport={{ once: true, margin: "-50px" }}
-											transition={{ duration: 0.3, delay: index * 0.05 }}
-											className='rounded-lg overflow-hidden border-2 border-primary/20 bg-card'
-										>
-											<GameCard
-												game={game}
-												showScores={false}
-												disabled={true}
-												noHover={true}
-												leaguePicks={leaguePicks[game.id]}
-												leagueMode={leagueMode}
-											/>
-										</motion.div>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Final Games */}
-						{finalGames.length > 0 && (
-							<div>
-								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-								<div className='space-y-3'>
-									{finalGames.map((game, index) => (
-										<motion.div
-											key={game.id}
-											initial={{ opacity: 0, y: 10 }}
-											whileInView={{ opacity: 1, y: 0 }}
-											viewport={{ once: true, margin: "-50px" }}
-											transition={{ duration: 0.3, delay: index * 0.05 }}
-											className='rounded-lg overflow-hidden border-2 border-primary/20 bg-card'
-										>
-											<GameCard
-												game={game}
-												showScores={true}
-												disabled={true}
-												noHover={true}
-												leaguePicks={leaguePicks[game.id]}
-												leagueMode={leagueMode}
-											/>
-										</motion.div>
-									))}
-								</div>
-							</div>
-						)}
-					</div>
+					{finalGames.length > 0 ? (
+						<div className='space-y-3'>
+							{finalGames.map((game, index) => (
+								<motion.div
+									key={game.id}
+									initial={{ opacity: 0, y: 10 }}
+									whileInView={{ opacity: 1, y: 0 }}
+									viewport={{ once: true, margin: "-50px" }}
+									transition={{ duration: 0.3, delay: index * 0.05 }}
+									className='rounded-lg border-2 border-primary/20 bg-card'
+								>
+									<GameCard
+										game={game}
+										showScores={true}
+										disabled={true}
+										noHover={true}
+										leaguePicks={leaguePicks[game.id]}
+										leagueMode={leagueMode}
+									/>
+								</motion.div>
+							))}
+						</div>
+					) : (
+						<div className='text-center py-12 text-muted-foreground'>
+							No completed games yet this week.
+						</div>
+					)}
 				</CardContent>
 			</Card>
 		);
