@@ -22,6 +22,11 @@ interface League {
 	id: string;
 	name: string;
 	description?: string;
+	sport: string;
+	creatorId?: string;
+	inviteCode?: string;
+	mode?: string;
+	members?: string[];
 }
 
 interface RecentActivity {
