@@ -280,6 +280,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<CountUp end={game.away.score} duration={0.8} preserveValue />
 									</div>
 								)}
+								{isStandardMode && game.away.odds !== undefined && (
+									<div className='flex items-center justify-center gap-1 mt-1'>
+										<span className={`text-[10px] font-semibold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/90' : selected === game.away.team ? 'text-black/80' : getOddsColorClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
+										<span className={`text-[10px] ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+										<span className={`text-[10px] font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
+									</div>
+								)}
 							</div>
 						</div>
 					</Button>
@@ -302,26 +309,17 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<CountUp end={game.home.score} duration={0.8} preserveValue />
 									</div>
 								)}
+								{isStandardMode && game.home.odds !== undefined && (
+									<div className='flex items-center justify-center gap-1 mt-1'>
+										<span className={`text-[10px] font-semibold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/90' : selected === game.home.team ? 'text-black/80' : getOddsColorClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
+										<span className={`text-[10px] ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
+										<span className={`text-[10px] font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
+									</div>
+								)}
 							</div>
 						</div>
 					</Button>
 				</div>
-
-				{/* Mobile Odds/Points (below teams) */}
-				{isStandardMode && (
-					<div className='xl:hidden flex justify-center gap-4 mt-2 text-xs'>
-						{game.away.odds !== undefined && (
-							<div className={`${selected === game.away.team ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
-								{game.away.team}: {formatOdds(game.away.odds)} ({calculatePointsFromOdds(game.away.odds)} pts)
-							</div>
-						)}
-						{game.home.odds !== undefined && (
-							<div className={`${selected === game.home.team ? 'font-bold text-primary' : 'text-muted-foreground'}`}>
-								{game.home.team}: {formatOdds(game.home.odds)} ({calculatePointsFromOdds(game.home.odds)} pts)
-							</div>
-						)}
-					</div>
-				)}
 
 				{/* Desktop Layout (unchanged) */}
 				<div className='hidden xl:flex xl:flex-row xl:justify-between xl:items-center'>
