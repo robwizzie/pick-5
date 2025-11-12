@@ -7,6 +7,15 @@ import { Button } from '@/components/ui/button';
 import { Plus, LogIn, BarChart3, Users, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
+import { NFLService } from '@/services/nflService';
+import Image from 'next/image';
+
+interface TeamPick {
+	team: string;
+	logo: string;
+	isCorrect: boolean | null;
+	gameStatus: 'scheduled' | 'in_progress' | 'final';
+}
 
 interface RecentActivity {
 	type: 'pick' | 'league_join';
@@ -14,6 +23,8 @@ interface RecentActivity {
 	timestamp: Date;
 	leagueId?: string;
 	leagueName?: string;
+	teamPicks?: TeamPick[];
+	week?: number;
 }
 
 const Dashboard = () => {
@@ -72,17 +83,52 @@ const Dashboard = () => {
 							const picks = await response.json();
 							// Get all picks and add them to activities
 							if (Array.isArray(picks) && picks.length > 0) {
-								picks.forEach((pick: any) => {
-									// Use updatedAt, createdAt, or ObjectID timestamp as fallback
-									const timestamp = pick.updatedAt || pick.createdAt || new Date(parseInt(pick._id.toString().substring(0, 8), 16) * 1000);
-									activities.push({
-										type: 'pick',
-										message: `Made picks for Week ${pick.week}`,
-										timestamp: new Date(timestamp),
-										leagueId: (league as any).id,
-										leagueName: (league as any).name
-									});
-								});
+								// Fetch game data for each week to get logos and statuses
+								for (const pick of picks) {
+									try {
+										const games = await NFLService.getWeeklyGames(pick.week);
+										const teamPicks: TeamPick[] = [];
+
+										// Match picks with games to get logos and status
+										if (pick.picks && Array.isArray(pick.picks)) {
+											pick.picks.forEach((p: any) => {
+												const game = games.find(g => g.id === p.gameId);
+												if (game) {
+													const teamData = p.team === game.home.team ? game.home : game.away;
+													const status = game.status?.toLowerCase() || 'scheduled';
+													let gameStatus: 'scheduled' | 'in_progress' | 'final' = 'scheduled';
+
+													if (status === 'in' || status === 'in_progress') {
+														gameStatus = 'in_progress';
+													} else if (status === 'post' || status === 'final') {
+														gameStatus = 'final';
+													}
+
+													teamPicks.push({
+														team: p.team,
+														logo: teamData.logo,
+														isCorrect: p.isCorrect,
+														gameStatus
+													});
+												}
+											});
+										}
+
+										// Use updatedAt, createdAt, or ObjectID timestamp as fallback
+										const timestamp = pick.updatedAt || pick.createdAt || new Date(parseInt(pick._id.toString().substring(0, 8), 16) * 1000);
+										activities.push({
+											type: 'pick',
+											message: `Made picks for Week ${pick.week}`,
+											timestamp: new Date(timestamp),
+											leagueId: (league as any).id,
+											leagueName: (league as any).name,
+											teamPicks,
+											week: pick.week
+										});
+									} catch (error) {
+										console.error('Error fetching game data for pick:', error);
+									}
+								}
 							}
 						}
 					} catch (error) {
@@ -225,6 +271,39 @@ const Dashboard = () => {
 											<div className='flex-1 min-w-0'>
 												<p className='text-sm text-foreground'>{activity.message}</p>
 												{activity.leagueName && <p className='text-xs text-muted-foreground truncate'>{activity.leagueName}</p>}
+												{activity.teamPicks && activity.teamPicks.length > 0 && (
+													<div className='flex items-center gap-1.5 mt-2 flex-wrap'>
+														{activity.teamPicks.map((pick, pickIndex) => {
+															// Determine background color based on game status and result
+															let bgClass = 'bg-white/10 border-white/20';
+															if (pick.gameStatus === 'in_progress') {
+																bgClass = 'bg-blue-400/30 border-blue-400/50';
+															} else if (pick.gameStatus === 'final') {
+																if (pick.isCorrect === true) {
+																	bgClass = 'bg-green-500/30 border-green-500/50';
+																} else if (pick.isCorrect === false) {
+																	bgClass = 'bg-red-500/30 border-red-500/50';
+																}
+															}
+
+															return (
+																<div
+																	key={pickIndex}
+																	className={`w-6 h-6 sm:w-7 sm:h-7 relative rounded-sm p-0.5 border ${bgClass}`}
+																>
+																	<Image
+																		src={pick.logo}
+																		alt={pick.team}
+																		width={28}
+																		height={28}
+																		className='rounded-sm object-contain'
+																		unoptimized
+																	/>
+																</div>
+															);
+														})}
+													</div>
+												)}
 												<p className='text-xs text-muted-foreground mt-1'>{new Date(activity.timestamp).toLocaleDateString()}</p>
 											</div>
 										</div>
