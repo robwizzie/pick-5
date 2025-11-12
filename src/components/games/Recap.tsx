@@ -41,6 +41,10 @@ interface RecapData {
 		points: number;
 		pickCount: number;
 		correctPickers: Array<{ userId: string; name: string; image: string | null }>;
+		leaguePicks: {
+			away: Array<{ userId: string; name: string; image: string | null }>;
+			home: Array<{ userId: string; name: string; image: string | null }>;
+		};
 	}>;
 	// Most picked correct games
 	mostPickedCorrect: Array<{
@@ -51,6 +55,10 @@ interface RecapData {
 		pickCount: number;
 		totalPicks: number;
 		pickers: Array<{ userId: string; name: string; image: string | null }>;
+		leaguePicks: {
+			away: Array<{ userId: string; name: string; image: string | null }>;
+			home: Array<{ userId: string; name: string; image: string | null }>;
+		};
 	}>;
 	// Most picked incorrect games
 	mostPickedIncorrect: Array<{
@@ -61,6 +69,10 @@ interface RecapData {
 		pickCount: number;
 		totalPicks: number;
 		pickers: Array<{ userId: string; name: string; image: string | null }>;
+		leaguePicks: {
+			away: Array<{ userId: string; name: string; image: string | null }>;
+			home: Array<{ userId: string; name: string; image: string | null }>;
+		};
 	}>;
 	// Perfect week users
 	perfectWeek: Array<{
@@ -83,7 +95,7 @@ interface RecapData {
 // Helper function to check if recap is available for a week
 export async function isRecapAvailable(week: number, leagueId: string): Promise<boolean> {
 	try {
-		const response = await fetch(`/api/recap?week=${week}&leagueId=${leagueId}`);
+		const response = await fetch(`/api/recap?week=${week}&leagueId=${leagueId}`, { cache: 'no-store' });
 		if (!response.ok) return false;
 		const data = await response.json();
 		return data.hasPicks && data.weekCompleted;
@@ -108,7 +120,7 @@ export function Recap() {
 		const fetchLeagueDetails = async () => {
 			if (!leagueId) return;
 			try {
-				const response = await fetch(`/api/league/${leagueId}`);
+				const response = await fetch(`/api/league/${leagueId}`, { cache: 'no-store' });
 				if (response.ok) {
 					const data = await response.json();
 					setLeagueMode(data.mode || 'standard');
@@ -157,8 +169,8 @@ export function Recap() {
 
 				// Fetch both leaderboard data and recap analytics in parallel
 				const [leaderboardResponse, recapResponse] = await Promise.all([
-					fetch(`/api/leaderboard?week=${selectedWeek}&leagueId=${leagueId}`),
-					fetch(`/api/recap?week=${selectedWeek}&leagueId=${leagueId}`)
+					fetch(`/api/leaderboard?week=${selectedWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
+					fetch(`/api/recap?week=${selectedWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
 				]);
 
 				if (!leaderboardResponse.ok || !recapResponse.ok) {
@@ -180,7 +192,7 @@ export function Recap() {
 				let previousWeekResults: Array<{ userId: string; points: number }> = [];
 				if (selectedWeek > 1) {
 					try {
-						const prevResponse = await fetch(`/api/leaderboard?week=${selectedWeek - 1}&leagueId=${leagueId}`);
+						const prevResponse = await fetch(`/api/leaderboard?week=${selectedWeek - 1}&leagueId=${leagueId}`, { cache: 'no-store' });
 						if (prevResponse.ok) {
 							const prevData = await prevResponse.json();
 							previousWeekResults = prevData.weeklyResults;
@@ -649,6 +661,7 @@ export function Recap() {
 											disabled={true}
 											noHover={true}
 											leagueMode={leagueMode}
+											leaguePicks={upset.leaguePicks}
 										/>
 									</motion.div>
 								))}
@@ -698,6 +711,7 @@ export function Recap() {
 											disabled={true}
 											noHover={true}
 											leagueMode={leagueMode}
+											leaguePicks={pick.leaguePicks}
 										/>
 									</motion.div>
 								))}
@@ -714,7 +728,7 @@ export function Recap() {
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.3, delay: 0.6 }}
 				>
-					<Card className='border-2 border-red-500/30 bg-red-500/5'>
+					<Card className='border-2 border-red-500/30 bg-red-500/10'>
 						<CardHeader>
 							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-red-400 flex items-center gap-2'>
 								<ThumbsDown className='h-5 w-5' />
@@ -747,6 +761,7 @@ export function Recap() {
 											disabled={true}
 											noHover={true}
 											leagueMode={leagueMode}
+											leaguePicks={pick.leaguePicks}
 										/>
 									</motion.div>
 								))}
