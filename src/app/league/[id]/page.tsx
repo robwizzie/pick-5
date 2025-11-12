@@ -15,7 +15,7 @@ import { Leaderboard } from '@/components/games/Leaderboard';
 import { Recap } from '@/components/games/Recap';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
-import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles } from 'lucide-react';
+import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles, Settings } from 'lucide-react';
 import { useWeek } from '@/contexts/WeekContext';
 
 interface League {
@@ -35,10 +35,13 @@ export default function LeagueDetails() {
 	const [showInviteModal, setShowInviteModal] = useState(false);
 	const [showRulesModal, setShowRulesModal] = useState(false);
 	const [showLeaveModal, setShowLeaveModal] = useState(false);
+	const [showSettingsModal, setShowSettingsModal] = useState(false);
 	const [inviteUrl, setInviteUrl] = useState('');
 	const [copied, setCopied] = useState(false);
 	const [loadingInvite, setLoadingInvite] = useState(false);
 	const [loadingLeave, setLoadingLeave] = useState(false);
+	const [loadingSettings, setLoadingSettings] = useState(false);
+	const [newLeagueName, setNewLeagueName] = useState('');
 	const [mobileView, setMobileView] = useState<'picks' | 'results' | 'leaderboard' | 'stats' | 'recap'>('picks');
 	const [hasRecapData, setHasRecapData] = useState(false);
 
@@ -134,6 +137,36 @@ export default function LeagueDetails() {
 		}
 	};
 
+	const handleOpenSettings = () => {
+		setNewLeagueName(league?.name || '');
+		setShowSettingsModal(true);
+	};
+
+	const handleSaveSettings = async () => {
+		try {
+			setLoadingSettings(true);
+			const response = await fetch(`/api/league/${id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: newLeagueName })
+			});
+
+			if (response.ok) {
+				const data = await response.json();
+				setLeague(data.league);
+				setShowSettingsModal(false);
+			} else {
+				const data = await response.json();
+				alert(data.error || 'Failed to update league settings');
+			}
+		} catch (error) {
+			console.error('Error updating league settings:', error);
+			alert('Failed to update league settings');
+		} finally {
+			setLoadingSettings(false);
+		}
+	};
+
 	// Check if current user is the commissioner
 	const isCommissioner = league && session?.user?.id && league.creatorId === session.user.id;
 
@@ -153,9 +186,16 @@ export default function LeagueDetails() {
 						<div className='relative w-16 h-16 md:w-24 md:h-24 flex-shrink-0'>
 							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' fill sizes='(max-width: 768px) 64px, 96px' className='object-contain' priority />
 						</div>
-						<div>
-							<h1 className='text-xl md:text-2xl font-oswald uppercase tracking-wide text-primary'>{league.name}</h1>
-							<p className='text-sm md:text-base text-primary/80 font-medium mt-1'>{league.sport}</p>
+						<div className='flex items-center gap-2'>
+							<div>
+								<h1 className='text-xl md:text-2xl font-oswald uppercase tracking-wide text-primary'>{league.name}</h1>
+								<p className='text-sm md:text-base text-primary/80 font-medium mt-1'>{league.sport}</p>
+							</div>
+							{isCommissioner && (
+								<Button onClick={handleOpenSettings} variant='ghost' size='sm' className='h-8 w-8 p-0 hover:bg-primary/10' title='League Settings'>
+									<Settings className='h-4 w-4 text-primary' />
+								</Button>
+							)}
 						</div>
 					</div>
 					<div className='flex items-center gap-2 flex-shrink-0'>
@@ -644,6 +684,55 @@ export default function LeagueDetails() {
 								className='flex-1 bg-red-500 hover:bg-red-600 text-white'
 								disabled={loadingLeave}>
 								{loadingLeave ? 'Leaving...' : 'Leave League'}
+							</Button>
+						</div>
+					</div>
+				</DialogContent>
+			</Dialog>
+
+			{/* League Settings Modal */}
+			<Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
+				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-md'>
+					<DialogHeader>
+						<DialogTitle className='text-2xl font-bold text-primary'>League Settings</DialogTitle>
+						<DialogDescription className='text-muted-foreground'>
+							Update your league settings. Only commissioners can modify these settings.
+						</DialogDescription>
+					</DialogHeader>
+					<div className='space-y-4 py-4'>
+						<div className='space-y-2'>
+							<label className='text-sm font-medium text-foreground'>League Name</label>
+							<Input
+								value={newLeagueName}
+								onChange={(e) => setNewLeagueName(e.target.value)}
+								placeholder='Enter league name'
+								className='glass border-white/10 bg-background/50'
+								maxLength={100}
+							/>
+							<p className='text-xs text-muted-foreground'>{newLeagueName.length}/100 characters</p>
+						</div>
+
+						<div className='space-y-2'>
+							<label className='text-sm font-medium text-foreground'>League Mode</label>
+							<div className='p-3 rounded-lg bg-card border border-primary/20'>
+								<p className='text-sm text-foreground font-semibold'>{league.mode === 'steve' ? 'Steve Mode' : 'Standard Mode'}</p>
+								<p className='text-xs text-muted-foreground mt-1'>League mode cannot be changed after creation</p>
+							</div>
+						</div>
+
+						<div className='flex gap-3 pt-4'>
+							<Button
+								onClick={() => setShowSettingsModal(false)}
+								variant='outline'
+								className='flex-1'
+								disabled={loadingSettings}>
+								Cancel
+							</Button>
+							<Button
+								onClick={handleSaveSettings}
+								className='flex-1 bg-primary hover:bg-primary/90 text-black'
+								disabled={loadingSettings || !newLeagueName.trim()}>
+								{loadingSettings ? 'Saving...' : 'Save Changes'}
 							</Button>
 						</div>
 					</div>
