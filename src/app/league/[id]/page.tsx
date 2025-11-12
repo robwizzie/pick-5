@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { WeeklyPicks } from '@/components/games/WeeklyPicks';
 import { Results } from '@/components/games/Results';
 import { SeasonStats } from '@/components/games/SeasonStats';
@@ -15,7 +16,7 @@ import { Leaderboard } from '@/components/games/Leaderboard';
 import { Recap } from '@/components/games/Recap';
 import { Spinner } from '@/components/ui/spinner';
 import Image from 'next/image';
-import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles, Settings } from 'lucide-react';
+import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles, Settings, UserMinus, Eye, EyeOff } from 'lucide-react';
 import { useWeek } from '@/contexts/WeekContext';
 
 interface League {
@@ -23,6 +24,12 @@ interface League {
 	sport: string;
 	mode: string;
 	creatorId?: string;
+}
+
+interface Member {
+	_id: string;
+	name: string;
+	image: string | null;
 }
 
 export default function LeagueDetails() {
@@ -42,6 +49,11 @@ export default function LeagueDetails() {
 	const [loadingLeave, setLoadingLeave] = useState(false);
 	const [loadingSettings, setLoadingSettings] = useState(false);
 	const [newLeagueName, setNewLeagueName] = useState('');
+	const [newPassword, setNewPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
+	const [members, setMembers] = useState<Member[]>([]);
+	const [loadingMembers, setLoadingMembers] = useState(false);
+	const [settingsTab, setSettingsTab] = useState<'general' | 'members'>('general');
 	const [mobileView, setMobileView] = useState<'picks' | 'results' | 'leaderboard' | 'stats' | 'recap'>('picks');
 	const [hasRecapData, setHasRecapData] = useState(false);
 
@@ -137,24 +149,90 @@ export default function LeagueDetails() {
 		}
 	};
 
-	const handleOpenSettings = () => {
+	const handleOpenSettings = async () => {
 		setNewLeagueName(league?.name || '');
+		setNewPassword('');
+		setShowPassword(false);
+		setSettingsTab('general');
 		setShowSettingsModal(true);
+
+		// Fetch members
+		await fetchMembers();
+	};
+
+	const fetchMembers = async () => {
+		try {
+			setLoadingMembers(true);
+			const response = await fetch(`/api/league/${id}/members`);
+			if (response.ok) {
+				const data = await response.json();
+				setMembers(data);
+			}
+		} catch (error) {
+			console.error('Error fetching members:', error);
+		} finally {
+			setLoadingMembers(false);
+		}
+	};
+
+	const handleRemoveMember = async (userId: string) => {
+		if (!confirm('Are you sure you want to remove this member? This will delete all their picks in this league.')) {
+			return;
+		}
+
+		try {
+			const response = await fetch(`/api/league/${id}/members`, {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ userId })
+			});
+
+			if (response.ok) {
+				// Refresh members list
+				await fetchMembers();
+			} else {
+				const data = await response.json();
+				alert(data.error || 'Failed to remove member');
+			}
+		} catch (error) {
+			console.error('Error removing member:', error);
+			alert('Failed to remove member');
+		}
 	};
 
 	const handleSaveSettings = async () => {
 		try {
 			setLoadingSettings(true);
+
+			const updateData: { name?: string; password?: string } = {};
+
+			if (newLeagueName !== league?.name) {
+				updateData.name = newLeagueName;
+			}
+
+			if (newPassword.trim()) {
+				updateData.password = newPassword;
+			}
+
+			// Only make request if there are changes
+			if (Object.keys(updateData).length === 0) {
+				setShowSettingsModal(false);
+				return;
+			}
+
 			const response = await fetch(`/api/league/${id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: newLeagueName })
+				body: JSON.stringify(updateData)
 			});
 
 			if (response.ok) {
 				const data = await response.json();
 				setLeague(data.league);
 				setShowSettingsModal(false);
+				if (newPassword.trim()) {
+					alert('League settings updated successfully! New password is now active.');
+				}
 			} else {
 				const data = await response.json();
 				alert(data.error || 'Failed to update league settings');
@@ -692,50 +770,153 @@ export default function LeagueDetails() {
 
 			{/* League Settings Modal */}
 			<Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-md'>
+				<DialogContent className='glass border-white/10 backdrop-blur-xl sm:max-w-2xl max-h-[80vh] overflow-y-auto'>
 					<DialogHeader>
 						<DialogTitle className='text-2xl font-bold text-primary'>League Settings</DialogTitle>
 						<DialogDescription className='text-muted-foreground'>
-							Update your league settings. Only commissioners can modify these settings.
+							Manage your league settings and members. Only commissioners can modify these settings.
 						</DialogDescription>
 					</DialogHeader>
-					<div className='space-y-4 py-4'>
-						<div className='space-y-2'>
-							<label className='text-sm font-medium text-foreground'>League Name</label>
-							<Input
-								value={newLeagueName}
-								onChange={(e) => setNewLeagueName(e.target.value)}
-								placeholder='Enter league name'
-								className='glass border-white/10 bg-background/50'
-								maxLength={100}
-							/>
-							<p className='text-xs text-muted-foreground'>{newLeagueName.length}/100 characters</p>
-						</div>
 
-						<div className='space-y-2'>
-							<label className='text-sm font-medium text-foreground'>League Mode</label>
-							<div className='p-3 rounded-lg bg-card border border-primary/20'>
-								<p className='text-sm text-foreground font-semibold'>{league.mode === 'steve' ? 'Steve Mode' : 'Standard Mode'}</p>
-								<p className='text-xs text-muted-foreground mt-1'>League mode cannot be changed after creation</p>
+					<Tabs value={settingsTab} onValueChange={(value) => setSettingsTab(value as 'general' | 'members')} className='w-full'>
+						<TabsList className='grid w-full grid-cols-2 mb-4'>
+							<TabsTrigger value='general'>General</TabsTrigger>
+							<TabsTrigger value='members'>Members ({members.length})</TabsTrigger>
+						</TabsList>
+
+						<TabsContent value='general' className='space-y-4'>
+							<div className='space-y-2'>
+								<label className='text-sm font-medium text-foreground'>League Name</label>
+								<Input
+									value={newLeagueName}
+									onChange={(e) => setNewLeagueName(e.target.value)}
+									placeholder='Enter league name'
+									className='glass border-white/10 bg-background/50'
+									maxLength={100}
+								/>
+								<p className='text-xs text-muted-foreground'>{newLeagueName.length}/100 characters</p>
 							</div>
-						</div>
 
-						<div className='flex gap-3 pt-4'>
-							<Button
-								onClick={() => setShowSettingsModal(false)}
-								variant='outline'
-								className='flex-1'
-								disabled={loadingSettings}>
-								Cancel
-							</Button>
-							<Button
-								onClick={handleSaveSettings}
-								className='flex-1 bg-primary hover:bg-primary/90 text-black'
-								disabled={loadingSettings || !newLeagueName.trim()}>
-								{loadingSettings ? 'Saving...' : 'Save Changes'}
-							</Button>
-						</div>
-					</div>
+							<div className='space-y-2'>
+								<label className='text-sm font-medium text-foreground'>League Password</label>
+								<div className='relative'>
+									<Input
+										type={showPassword ? 'text' : 'password'}
+										value={newPassword}
+										onChange={(e) => setNewPassword(e.target.value)}
+										placeholder='Enter new password (leave empty to keep current)'
+										className='glass border-white/10 bg-background/50 pr-10'
+										maxLength={50}
+									/>
+									<Button
+										type='button'
+										variant='ghost'
+										size='sm'
+										className='absolute right-0 top-0 h-full px-3 hover:bg-transparent'
+										onClick={() => setShowPassword(!showPassword)}>
+										{showPassword ? <EyeOff className='h-4 w-4 text-muted-foreground' /> : <Eye className='h-4 w-4 text-muted-foreground' />}
+									</Button>
+								</div>
+								<p className='text-xs text-muted-foreground'>
+									{newPassword ? `${newPassword.length}/50 characters - Password must be at least 4 characters` : 'Leave empty to keep current password'}
+								</p>
+							</div>
+
+							<div className='space-y-2'>
+								<label className='text-sm font-medium text-foreground'>League Mode</label>
+								<div className='p-3 rounded-lg bg-card border border-primary/20'>
+									<p className='text-sm text-foreground font-semibold'>{league.mode === 'steve' ? 'Steve Mode' : 'Standard Mode'}</p>
+									<p className='text-xs text-muted-foreground mt-1'>League mode cannot be changed after creation</p>
+								</div>
+							</div>
+
+							<div className='flex gap-3 pt-4'>
+								<Button
+									onClick={() => setShowSettingsModal(false)}
+									variant='outline'
+									className='flex-1'
+									disabled={loadingSettings}>
+									Cancel
+								</Button>
+								<Button
+									onClick={handleSaveSettings}
+									className='flex-1 bg-primary hover:bg-primary/90 text-black'
+									disabled={loadingSettings || !newLeagueName.trim() || (newPassword.trim() && newPassword.trim().length < 4)}>
+									{loadingSettings ? 'Saving...' : 'Save Changes'}
+								</Button>
+							</div>
+						</TabsContent>
+
+						<TabsContent value='members' className='space-y-4'>
+							{loadingMembers ? (
+								<div className='flex justify-center py-8'>
+									<Spinner />
+								</div>
+							) : (
+								<>
+									<div className='p-3 rounded-lg bg-card border border-primary/20'>
+										<p className='text-sm text-foreground'>
+											<strong>Total Members:</strong> {members.length}
+										</p>
+										<p className='text-xs text-muted-foreground mt-1'>
+											Remove members to clean up inactive users. Their picks will be permanently deleted.
+										</p>
+									</div>
+
+									<div className='space-y-2 max-h-96 overflow-y-auto'>
+										{members.map((member) => {
+											const isCommissionerMember = member._id === league.creatorId;
+											return (
+												<div key={member._id} className='flex items-center justify-between p-3 rounded-lg bg-card/50 border border-primary/10'>
+													<div className='flex items-center gap-3'>
+														<div className='relative w-10 h-10 rounded-full overflow-hidden bg-primary/20'>
+															{member.image ? (
+																<Image
+																	src={member.image}
+																	alt={member.name}
+																	fill
+																	className='object-cover'
+																/>
+															) : (
+																<div className='w-full h-full flex items-center justify-center text-primary font-semibold'>
+																	{member.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+																</div>
+															)}
+														</div>
+														<div>
+															<p className='text-sm font-medium text-foreground flex items-center gap-2'>
+																{member.name}
+																{isCommissionerMember && (
+																	<span className='text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-semibold'>
+																		Commissioner
+																	</span>
+																)}
+															</p>
+														</div>
+													</div>
+													{!isCommissionerMember && (
+														<Button
+															onClick={() => handleRemoveMember(member._id)}
+															variant='ghost'
+															size='sm'
+															className='text-red-500 hover:text-red-600 hover:bg-red-500/10'>
+															<UserMinus className='h-4 w-4' />
+														</Button>
+													)}
+												</div>
+											);
+										})}
+									</div>
+
+									<div className='flex justify-end pt-4'>
+										<Button onClick={() => setShowSettingsModal(false)} variant='outline'>
+											Close
+										</Button>
+									</div>
+								</>
+							)}
+						</TabsContent>
+					</Tabs>
 				</DialogContent>
 			</Dialog>
 		</div>

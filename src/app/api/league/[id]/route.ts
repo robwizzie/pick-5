@@ -75,7 +75,7 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
 
 		// Get update data from request body
 		const body = await req.json();
-		const { name } = body;
+		const { name, password } = body;
 
 		// Validate and update fields
 		if (name !== undefined) {
@@ -86,6 +86,20 @@ export async function PATCH(req: Request, context: { params: { id: string } }) {
 				return NextResponse.json({ error: 'League name is too long (max 100 characters)' }, { status: 400 });
 			}
 			league.name = name.trim();
+		}
+
+		if (password !== undefined) {
+			if (typeof password !== 'string' || password.trim().length === 0) {
+				return NextResponse.json({ error: 'Password cannot be empty' }, { status: 400 });
+			}
+			if (password.trim().length < 4) {
+				return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 });
+			}
+			if (password.trim().length > 50) {
+				return NextResponse.json({ error: 'Password is too long (max 50 characters)' }, { status: 400 });
+			}
+			// Password will be automatically hashed by the pre-save hook
+			league.password = password.trim();
 		}
 
 		// Save the updated league
