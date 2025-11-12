@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
+import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Spinner } from '@/components/ui/spinner';
@@ -16,7 +17,7 @@ import { Crown } from 'lucide-react';
 export function Leaderboard() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
-	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean }>>([]);
+	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean; pickedTeams?: string[] }>>([]);
 	const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 	const [showUserPicks, setShowUserPicks] = useState(false);
 	const [seasonStats, setSeasonStats] = useState<
@@ -39,6 +40,7 @@ export function Leaderboard() {
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leagueMode, setLeagueMode] = useState<string>('');
+	const [games, setGames] = useState<Array<{ home: { team: string; logo: string }; away: { team: string; logo: string } }>>([]);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -80,6 +82,10 @@ export function Leaderboard() {
 			setWeeklyResults(data.weeklyResults);
 			setSeasonStats(data.seasonStats);
 			setLastUpdated(new Date());
+
+			// Fetch games to get team logos
+			const gamesData = await NFLService.getWeeklyGames(currentWeek);
+			setGames(gamesData);
 		} catch (err) {
 			console.error('Failed to load leaderboard data:', err);
 			setError('Failed to load leaderboard data.');
@@ -149,6 +155,13 @@ export function Leaderboard() {
 		if (minutes < 60) return `${minutes}m ago`;
 		const hours = Math.floor(minutes / 60);
 		return `${hours}h ago`;
+	};
+
+	// Helper function to get team logo from team name
+	const getTeamLogo = (teamName: string) => {
+		const game = games.find(g => g.home.team === teamName || g.away.team === teamName);
+		if (!game) return null;
+		return game.home.team === teamName ? game.home.logo : game.away.logo;
 	};
 
 	return (
@@ -240,11 +253,30 @@ export function Leaderboard() {
 														<span className='text-primary font-semibold truncate'>{entry.player}</span>
 													</div>
 
-													{/* Status Badge */}
+													{/* Status Badge or Team Logos */}
 													<div className='mb-2'>
-														<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-															{entry.hasPicks ? 'Picks In' : 'Needs Pick'}
-														</span>
+														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 ? (
+															<div className='flex flex-wrap items-center gap-1.5'>
+																{entry.pickedTeams.map((team, idx) => {
+																	const logo = getTeamLogo(team);
+																	return logo ? (
+																		<div key={idx} className='w-6 h-6 relative'>
+																			<Image
+																				src={logo}
+																				alt={team}
+																				width={24}
+																				height={24}
+																				className='rounded-sm'
+																			/>
+																		</div>
+																	) : null;
+																})}
+															</div>
+														) : (
+															<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+																{entry.hasPicks ? 'Picks In' : 'Needs Pick'}
+															</span>
+														)}
 													</div>
 
 													{/* Points and TFS */}

@@ -77,16 +77,24 @@ export function Nav() {
 					{/* Left side - Week navigation for league pages */}
 					<div className='flex items-center space-x-4'>
 						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
-							<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
-								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
-									<ChevronLeft className='h-4 w-4' />
+							<div className='flex items-center space-x-2'>
+								{/* Dashboard button - always visible on league pages */}
+								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors mr-2'>
+									<Home className='h-4 w-4' />
+									<span className='hidden sm:inline font-medium'>Dashboard</span>
 								</Button>
-								<button onClick={() => setIsWeekSelectorOpen(true)} className='text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[80px] text-center hover:bg-primary/10 px-2 py-1 rounded transition-colors cursor-pointer'>
-									Week {currentWeek}
-								</button>
-								<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full'>
-									<ChevronRight className='h-4 w-4' />
-								</Button>
+								{/* Week navigation */}
+								<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
+									<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
+										<ChevronLeft className='h-4 w-4' />
+									</Button>
+									<button onClick={() => setIsWeekSelectorOpen(true)} className='text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[80px] text-center hover:bg-primary/10 px-2 py-1 rounded transition-colors cursor-pointer'>
+										Week {currentWeek}
+									</button>
+									<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full'>
+										<ChevronRight className='h-4 w-4' />
+									</Button>
+								</div>
 							</div>
 						) : !isDashboard ? (
 							<div className='flex items-center space-x-2'>
