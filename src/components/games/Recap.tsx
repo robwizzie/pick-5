@@ -424,7 +424,9 @@ export function Recap() {
 											<div className='flex flex-col items-center gap-0.5'>
 												<span>Week {week}</span>
 												{weekLabel && (
-													<span className='text-[10px] text-muted-foreground font-normal'>{weekLabel}</span>
+													<span className={`text-[11px] font-normal ${selectedWeek === week ? 'text-black/60' : 'text-muted-foreground'}`}>
+														{weekLabel}
+													</span>
 												)}
 											</div>
 										</button>
