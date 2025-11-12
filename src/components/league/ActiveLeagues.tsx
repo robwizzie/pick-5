@@ -214,13 +214,14 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
 												<div className='flex flex-wrap items-center gap-2'>
 													{stats.pickedTeams.map((teamData, idx) => (
-														<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative'>
+														<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative bg-white/10 rounded-sm p-0.5 border border-white/20'>
 															<Image
 																src={teamData.logo}
 																alt={teamData.abbreviation}
 																width={28}
 																height={28}
-																className='rounded-sm'
+																className='rounded-sm object-contain'
+																unoptimized
 															/>
 														</div>
 													))}

@@ -246,13 +246,14 @@ export function Leaderboard() {
 														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 ? (
 															<div className='flex flex-wrap items-center gap-1.5'>
 																{entry.pickedTeams.map((teamData, idx) => (
-																	<div key={idx} className='w-6 h-6 relative'>
+																	<div key={idx} className='w-6 h-6 relative bg-white/10 rounded-sm p-0.5 border border-white/20'>
 																		<Image
 																			src={teamData.logo}
 																			alt={teamData.abbreviation}
 																			width={24}
 																			height={24}
-																			className='rounded-sm'
+																			className='rounded-sm object-contain'
+																			unoptimized
 																		/>
 																	</div>
 																))}
