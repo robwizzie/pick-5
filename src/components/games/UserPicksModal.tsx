@@ -29,6 +29,12 @@ interface UserPick {
 	odds?: number;
 }
 
+interface SnapshotOdds {
+	id: string;
+	home?: { odds?: number };
+	away?: { odds?: number };
+}
+
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: UserPicksModalProps) {
 	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
@@ -76,7 +82,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 				if (fetchedLeagueMode === 'standard') {
 					try {
 						const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}`);
-						let snapshotOdds = [];
+						let snapshotOdds: SnapshotOdds[] = [];
 						if (oddsResponse.ok) {
 							const data = await oddsResponse.json();
 							snapshotOdds = data.odds || [];
@@ -84,7 +90,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 
 						// Match odds to games
 						gamesWithOdds = weeklyGames.map(game => {
-							const snapshotGameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+							const snapshotGameOdds = snapshotOdds.find((o: SnapshotOdds) => o.id === game.id);
 
 							const homeOdds = snapshotGameOdds?.home?.odds;
 							const awayOdds = snapshotGameOdds?.away?.odds;
