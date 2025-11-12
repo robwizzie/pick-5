@@ -79,7 +79,7 @@ export function getOddsRiskLabel(odds: number): string {
 	if (odds <= -300) return 'Heavy Favorite';
 	if (odds <= -150) return 'Favorite';
 	if (odds < -100) return 'Slight Favorite';
-	if (odds >= -100 && odds <= 100) return 'Pick \'em';
+	if (odds >= -100 && odds <= 100) return "Pick 'em";
 	if (odds <= 200) return 'Underdog';
 	if (odds <= 400) return 'Big Underdog';
 	return 'Longshot';
