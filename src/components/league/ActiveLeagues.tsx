@@ -32,7 +32,7 @@ interface LeagueStats {
 	rank: number | null;
 	totalMembers: number;
 	seasonPoints: number;
-	pickedTeams?: string[];
+	pickedTeams?: Array<{ team: string; abbreviation: string; logo: string }>;
 	tfsPoints?: number;
 }
 
@@ -41,17 +41,12 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 	const [copiedLeagueId, setCopiedLeagueId] = useState<string | null>(null);
 	const [leagueStats, setLeagueStats] = useState<Map<string, LeagueStats>>(new Map());
 	const [currentWeek, setCurrentWeek] = useState<number | null>(null);
-	const [games, setGames] = useState<Array<{ home: { team: string; logo: string; abbreviation: string }; away: { team: string; logo: string; abbreviation: string }; status?: string }>>([]);
 	const isLoadingRef = useRef(false);
 
 	useEffect(() => {
 		const loadCurrentWeek = async () => {
 			const week = await NFLService.getCurrentWeek();
 			setCurrentWeek(week);
-
-			// Fetch games to get team logos
-			const gamesData = await NFLService.getWeeklyGames(week);
-			setGames(gamesData);
 		};
 		loadCurrentWeek();
 	}, []);
@@ -116,31 +111,6 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 
 	const handleDropdownClick = (e: React.MouseEvent) => {
 		e.stopPropagation();
-	};
-
-	// Helper function to check if any games have started
-	const hasAnyGameStarted = () => {
-		return games.some(g => {
-			const status = g.status?.toLowerCase();
-			return status !== 'pre' && status !== 'scheduled';
-		});
-	};
-
-	// Helper function to get team logo from team name (matches by full name or abbreviation)
-	const getTeamLogo = (teamName: string) => {
-		const game = games.find(g =>
-			g.home.team === teamName ||
-			g.away.team === teamName ||
-			g.home.abbreviation === teamName ||
-			g.away.abbreviation === teamName
-		);
-		if (!game) return null;
-
-		// Check which team it is
-		if (game.home.team === teamName || game.home.abbreviation === teamName) {
-			return game.home.logo;
-		}
-		return game.away.logo;
 	};
 
 	// Helper functions for top 3 styling
@@ -243,20 +213,17 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 											{/* Team Logos and TFS (when picks are in) */}
 											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
 												<div className='flex flex-wrap items-center gap-2'>
-													{stats.pickedTeams.map((team, idx) => {
-														const logo = getTeamLogo(team);
-														return logo ? (
-															<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative'>
-																<Image
-																	src={logo}
-																	alt={team}
-																	width={28}
-																	height={28}
-																	className='rounded-sm'
-																/>
-															</div>
-														) : null;
-													})}
+													{stats.pickedTeams.map((teamData, idx) => (
+														<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative'>
+															<Image
+																src={teamData.logo}
+																alt={teamData.abbreviation}
+																width={28}
+																height={28}
+																className='rounded-sm'
+															/>
+														</div>
+													))}
 													{/* TFS Badge for Steve mode */}
 													{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
 														<span className='text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold whitespace-nowrap'>

@@ -274,7 +274,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
 							</div>
 							<div className='text-center'>
-								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.team}</div>
+								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.abbreviation}</div>
 								{showScores && game.away.score !== undefined && (
 									<div className={`text-lg mt-1 font-mono ${selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
 										<CountUp end={game.away.score} duration={0.8} preserveValue />
@@ -296,7 +296,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
 							</div>
 							<div className='text-center'>
-								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.team}</div>
+								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.abbreviation}</div>
 								{showScores && game.home.score !== undefined && (
 									<div className={`text-lg mt-1 font-mono ${selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
 										<CountUp end={game.home.score} duration={0.8} preserveValue />
