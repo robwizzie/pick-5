@@ -841,7 +841,7 @@ export default function LeagueDetails() {
 								<Button
 									onClick={handleSaveSettings}
 									className='flex-1 bg-primary hover:bg-primary/90 text-black'
-									disabled={loadingSettings || !newLeagueName.trim() || (newPassword.trim() && newPassword.trim().length < 4)}>
+									disabled={loadingSettings || !newLeagueName.trim() || (newPassword.trim().length > 0 && newPassword.trim().length < 4)}>
 									{loadingSettings ? 'Saving...' : 'Save Changes'}
 								</Button>
 							</div>
