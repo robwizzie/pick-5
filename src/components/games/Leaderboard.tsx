@@ -10,6 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
+import { NFLService } from '@/services/nflService';
 import { UserPicksModal } from './UserPicksModal';
 import { Crown } from 'lucide-react';
 
