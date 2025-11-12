@@ -58,7 +58,7 @@ export function Results() {
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
 	const [leagueMembers, setLeagueMembers] = useState<UserPick[]>([]);
-	const [selectedUserId, setSelectedUserId] = useState<string>('');
+	const [selectedUserId, setSelectedUserId] = useState<string>('all-games');
 
 	// Fetch league mode
 	useEffect(() => {
@@ -89,10 +89,7 @@ export function Results() {
 				if (response.ok) {
 					const members = await response.json();
 					setLeagueMembers(members);
-					// Set current user as default selected
-					if (session?.user?.id && !selectedUserId) {
-						setSelectedUserId(session.user.id);
-					}
+					// Default to 'all-games' view - no need to set selectedUserId
 				}
 			} catch (error) {
 				console.error('Error fetching league members:', error);
@@ -523,7 +520,7 @@ export function Results() {
 									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
 									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
 								</div>
-								<div className='space-y-3'>
+								<div className='space-y-6'>
 									{liveGames.map((game, index) => (
 										<motion.div
 											key={game.id}
@@ -531,6 +528,7 @@ export function Results() {
 											whileInView={{ opacity: 1, y: 0 }}
 											viewport={{ once: true, margin: "-50px" }}
 											transition={{ duration: 0.3, delay: index * 0.05 }}
+											className='pb-6 border-b border-primary/10 last:border-b-0 last:pb-0'
 										>
 											<GameCard
 												game={game}
@@ -550,7 +548,7 @@ export function Results() {
 						{upcomingGames.length > 0 && (
 							<div>
 								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-								<div className='space-y-3'>
+								<div className='space-y-6'>
 									{upcomingGames.map((game, index) => (
 										<motion.div
 											key={game.id}
@@ -558,6 +556,7 @@ export function Results() {
 											whileInView={{ opacity: 1, y: 0 }}
 											viewport={{ once: true, margin: "-50px" }}
 											transition={{ duration: 0.3, delay: index * 0.05 }}
+											className='pb-6 border-b border-primary/10 last:border-b-0 last:pb-0'
 										>
 											<GameCard
 												game={game}
@@ -577,7 +576,7 @@ export function Results() {
 						{finalGames.length > 0 && (
 							<div>
 								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-								<div className='space-y-3'>
+								<div className='space-y-6'>
 									{finalGames.map((game, index) => (
 										<motion.div
 											key={game.id}
@@ -585,6 +584,7 @@ export function Results() {
 											whileInView={{ opacity: 1, y: 0 }}
 											viewport={{ once: true, margin: "-50px" }}
 											transition={{ duration: 0.3, delay: index * 0.05 }}
+											className='pb-6 border-b border-primary/10 last:border-b-0 last:pb-0'
 										>
 											<GameCard
 												game={game}
