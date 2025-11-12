@@ -4,8 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import { User } from '@/models/User';
+import { Pick } from '@/models/Pick';
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, context: { params: { id: string } }) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user) {
@@ -14,7 +15,10 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
 		await connectDB();
 
-		const league = await League.findById(params.id);
+		const resolvedParams = await context.params;
+		const { id } = resolvedParams;
+
+		const league = await League.findById(id);
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
@@ -33,6 +37,61 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 		return NextResponse.json(users);
 	} catch (error) {
 		console.error('Error fetching league members:', error);
+		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+	}
+}
+
+export async function DELETE(req: Request, context: { params: { id: string } }) {
+	try {
+		const session = await getServerSession(authOptions);
+		if (!session?.user?.id) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		await connectDB();
+
+		const resolvedParams = await context.params;
+		const { id } = resolvedParams;
+
+		const league = await League.findById(id);
+		if (!league) {
+			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+		}
+
+		// Only commissioner can remove members
+		if (league.creatorId !== session.user.id) {
+			return NextResponse.json({ error: 'Only the commissioner can remove members' }, { status: 403 });
+		}
+
+		// Get userId to remove from request body
+		const body = await req.json();
+		const { userId } = body;
+
+		if (!userId) {
+			return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+		}
+
+		// Cannot remove the commissioner
+		if (userId === league.creatorId) {
+			return NextResponse.json({ error: 'Cannot remove the commissioner from the league' }, { status: 400 });
+		}
+
+		// Check if user is actually a member
+		const memberIndex = league.members.indexOf(userId);
+		if (memberIndex === -1) {
+			return NextResponse.json({ error: 'User is not a member of this league' }, { status: 404 });
+		}
+
+		// Remove user from league members
+		league.members.splice(memberIndex, 1);
+		await league.save();
+
+		// Delete all picks by this user in this league
+		await Pick.deleteMany({ userId, leagueId: id });
+
+		return NextResponse.json({ success: true, message: 'Member removed successfully' });
+	} catch (error) {
+		console.error('Error removing league member:', error);
 		return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 	}
 }

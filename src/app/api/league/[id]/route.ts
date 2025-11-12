@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 
@@ -38,5 +40,74 @@ export async function GET(req: Request, context: { params: { id: string } }) {
 	} catch (error) {
 		console.error('[API Debug] Error fetching league:', error);
 		return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
+	}
+}
+
+export async function PATCH(req: Request, context: { params: { id: string } }) {
+	try {
+		// Check authentication
+		const session = await getServerSession(authOptions);
+		if (!session?.user?.id) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
+		// Connect to the database
+		await connectDB();
+
+		// Ensure params is resolved before use
+		const resolvedParams = await context.params;
+		const { id } = resolvedParams;
+
+		if (!id) {
+			return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
+		}
+
+		// Find the league
+		const league = await League.findById(id);
+		if (!league) {
+			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+		}
+
+		// Check if user is the commissioner
+		if (league.creatorId !== session.user.id) {
+			return NextResponse.json({ error: 'Only the commissioner can update league settings' }, { status: 403 });
+		}
+
+		// Get update data from request body
+		const body = await req.json();
+		const { name, password } = body;
+
+		// Validate and update fields
+		if (name !== undefined) {
+			if (typeof name !== 'string' || name.trim().length === 0) {
+				return NextResponse.json({ error: 'League name cannot be empty' }, { status: 400 });
+			}
+			if (name.trim().length > 100) {
+				return NextResponse.json({ error: 'League name is too long (max 100 characters)' }, { status: 400 });
+			}
+			league.name = name.trim();
+		}
+
+		if (password !== undefined) {
+			if (typeof password !== 'string' || password.trim().length === 0) {
+				return NextResponse.json({ error: 'Password cannot be empty' }, { status: 400 });
+			}
+			if (password.trim().length < 4) {
+				return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 });
+			}
+			if (password.trim().length > 50) {
+				return NextResponse.json({ error: 'Password is too long (max 50 characters)' }, { status: 400 });
+			}
+			// Password will be automatically hashed by the pre-save hook
+			league.password = password.trim();
+		}
+
+		// Save the updated league
+		await league.save();
+
+		return NextResponse.json({ success: true, league });
+	} catch (error) {
+		console.error('[API Debug] Error updating league:', error);
+		return NextResponse.json({ error: 'Failed to update league' }, { status: 500 });
 	}
 }
