@@ -40,6 +40,7 @@ export function Leaderboard() {
 	const [isUpdating, setIsUpdating] = useState(false);
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leagueMode, setLeagueMode] = useState<string>('');
+	const [gamesStarted, setGamesStarted] = useState<boolean>(false);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -81,6 +82,14 @@ export function Leaderboard() {
 			setWeeklyResults(data.weeklyResults);
 			setSeasonStats(data.seasonStats);
 			setLastUpdated(new Date());
+
+			// Check if any games have started this week
+			const games = await NFLService.getWeeklyGames(currentWeek);
+			const hasStarted = games.some(game => {
+				const status = game.status?.toLowerCase() || 'scheduled';
+				return status === 'in' || status === 'in_progress' || status === 'post' || status === 'final';
+			});
+			setGamesStarted(hasStarted);
 		} catch (err) {
 			console.error('Failed to load leaderboard data:', err);
 			setError('Failed to load leaderboard data.');
@@ -243,7 +252,7 @@ export function Leaderboard() {
 
 													{/* Status Badge or Team Logos */}
 													<div className='mb-2'>
-														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 ? (
+														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 && gamesStarted ? (
 															<div className='flex flex-wrap items-center gap-1.5'>
 																{entry.pickedTeams.map((teamData, idx) => (
 																	<div key={idx} className='w-6 h-6 relative bg-white/10 rounded-sm p-0.5 border border-white/20'>
