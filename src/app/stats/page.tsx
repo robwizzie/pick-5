@@ -447,77 +447,148 @@ const StatsPage = () => {
 
 	const achievements = getAchievements();
 
+	// Generate cool stat facts
+	const getStatFacts = () => {
+		if (!allTimeStats) return [];
+		const facts = [];
+
+		// Calculate interesting stats
+		const gamesPerWeek = allTimeStats.totalWeeksPlayed > 0 ? (allTimeStats.totalPicks / allTimeStats.totalWeeksPlayed).toFixed(1) : 0;
+		const pointsPerCorrectPick = allTimeStats.correctPicks > 0 ? (allTimeStats.totalPoints / allTimeStats.correctPicks).toFixed(1) : 0;
+
+		if (allTimeStats.winPercentage > 60) {
+			facts.push(`You're beating the house! ${Math.round(allTimeStats.winPercentage)}% win rate crushes the typical 50% mark`);
+		}
+		if (allTimeStats.bestWeekPoints >= 15) {
+			facts.push(`Your best week earned ${allTimeStats.bestWeekPoints} points - that's ${(allTimeStats.bestWeekPoints / (allTimeStats.avgPointsPerWeek || 1)).toFixed(1)}x your average!`);
+		}
+		if (allTimeStats.perfectWeeks > 0) {
+			facts.push(`Perfect weeks are rare - you've achieved ${allTimeStats.perfectWeeks} of them!`);
+		}
+		if (allTimeStats.currentStreak >= 3) {
+			facts.push(`You're on fire! ${allTimeStats.currentStreak} weeks in a row with 60%+ accuracy`);
+		}
+		if (allTimeStats.totalTFSPoints >= 20) {
+			facts.push(`Your TFS predictions have earned ${allTimeStats.totalTFSPoints} bonus points!`);
+		}
+		if (allTimeStats.totalWeeksPlayed >= 10) {
+			facts.push(`${allTimeStats.totalWeeksPlayed} weeks of dedication - you're in for the long haul!`);
+		}
+		if (pointsPerCorrectPick) {
+			facts.push(`Each correct pick earns you ${pointsPerCorrectPick} points on average`);
+		}
+
+		return facts.length > 0 ? facts : ['Keep making picks to unlock interesting stats!'];
+	};
+
+	const statFacts = getStatFacts();
+
 	return (
 		<div className='min-h-screen p-4 pt-8'>
 			<div className='max-w-7xl mx-auto space-y-8'>
-				{/* Header */}
-				<div className='text-center space-y-4 animate-fade-in'>
+				{/* Header with Animation */}
+				<motion.div
+					className='text-center space-y-4'
+					initial={{ opacity: 0, y: -20 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.5 }}
+				>
 					<h1 className='text-4xl lg:text-5xl font-display font-bold gradient-text'>Your Performance</h1>
 					<p className='text-xl text-muted-foreground max-w-2xl mx-auto'>Tracking your picks, wins, and domination</p>
-				</div>
+					{statFacts.length > 0 && (
+						<motion.div
+							className='inline-block px-6 py-3 rounded-full glass border border-primary/30 bg-gradient-to-r from-primary/10 to-accent/10'
+							initial={{ opacity: 0, scale: 0.9 }}
+							animate={{ opacity: 1, scale: 1 }}
+							transition={{ delay: 0.2, duration: 0.4 }}
+						>
+							<p className='text-sm font-medium text-primary flex items-center gap-2'>
+								<Sparkles className='h-4 w-4' />
+								{statFacts[Math.floor(Math.random() * statFacts.length)]}
+							</p>
+						</motion.div>
+					)}
+				</motion.div>
 
-				{/* Achievements Banner */}
+				{/* Achievements Banner with Animation */}
 				{achievements.length > 0 && (
-					<Card className='glass border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5'>
-						<CardContent className='p-6'>
-							<h3 className='text-lg font-semibold mb-4 flex items-center gap-2'>
-								<Award className='h-5 w-5 text-primary' />
-								<span>Achievements Unlocked</span>
-							</h3>
-							<div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4'>
-								{achievements.map((achievement, i) => (
-									<div key={i} className='text-center p-3 rounded-lg bg-card/50 border border-white/10 hover:border-primary/50 transition-all group cursor-default'>
-										<achievement.icon className={`h-8 w-8 mx-auto mb-2 ${achievement.color}`} />
-										<p className='text-xs font-semibold text-foreground'>{achievement.label}</p>
-										<p className='text-sm font-bold text-primary'>{achievement.value}</p>
-										<p className='text-[10px] text-muted-foreground mt-1 leading-tight'>{achievement.description}</p>
-									</div>
-								))}
-							</div>
-						</CardContent>
-					</Card>
+					<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
+						<Card className='glass border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5'>
+							<CardContent className='p-6'>
+								<h3 className='text-lg font-semibold mb-4 flex items-center gap-2'>
+									<Award className='h-5 w-5 text-primary' />
+									<span>Achievements Unlocked</span>
+								</h3>
+								<div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4'>
+									{achievements.map((achievement, i) => (
+										<motion.div
+											key={i}
+											className='text-center p-3 rounded-lg bg-card/50 border border-white/10 hover:border-primary/50 transition-all group cursor-default'
+											initial={{ opacity: 0, scale: 0.8 }}
+											animate={{ opacity: 1, scale: 1 }}
+											transition={{ delay: 0.4 + i * 0.05, duration: 0.3 }}
+											whileHover={{ scale: 1.05 }}
+										>
+											<achievement.icon className={`h-8 w-8 mx-auto mb-2 ${achievement.color}`} />
+											<p className='text-xs font-semibold text-foreground'>{achievement.label}</p>
+											<p className='text-sm font-bold text-primary'>{achievement.value}</p>
+											<p className='text-[10px] text-muted-foreground mt-1 leading-tight'>{achievement.description}</p>
+										</motion.div>
+									))}
+								</div>
+							</CardContent>
+						</Card>
+					</motion.div>
 				)}
 
-				{/* Key Stats Grid */}
+				{/* Key Stats Grid with Staggered Animation */}
 				{allTimeStats && (
 					<div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-						<Card className='glass border-white/10 hover:border-primary/50 transition-all'>
-							<CardContent className='p-6 text-center space-y-2'>
-								<div className='relative'>
-									<Trophy className='h-10 w-10 text-yellow-400 mx-auto' />
-									<Flame className='h-4 w-4 text-orange-400 absolute top-0 right-1/3 animate-pulse' />
-								</div>
-								<p className='text-4xl font-bold text-foreground'>{allTimeStats.totalPoints}</p>
-								<p className='text-sm text-muted-foreground'>Total Points</p>
-							</CardContent>
-						</Card>
+						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.4 }}>
+							<Card className='glass border-white/10 hover:border-primary/50 transition-all card-hover'>
+								<CardContent className='p-6 text-center space-y-2'>
+									<div className='relative'>
+										<Trophy className='h-10 w-10 text-yellow-400 mx-auto' />
+										<Flame className='h-4 w-4 text-orange-400 absolute top-0 right-1/3 animate-pulse' />
+									</div>
+									<p className='text-4xl font-bold text-foreground'>{allTimeStats.totalPoints}</p>
+									<p className='text-sm text-muted-foreground'>Total Points</p>
+								</CardContent>
+							</Card>
+						</motion.div>
 
-						<Card className='glass border-white/10 hover:border-green-500/50 transition-all'>
-							<CardContent className='p-6 text-center space-y-2'>
-								<Target className='h-10 w-10 text-green-400 mx-auto' />
-								<p className='text-4xl font-bold text-green-400'>{Math.round(allTimeStats.winPercentage)}%</p>
-								<p className='text-sm text-muted-foreground'>Win Rate</p>
-								<div className='w-full bg-muted/30 rounded-full h-2 mt-2'>
-									<div className='bg-green-400 h-2 rounded-full transition-all' style={{ width: `${allTimeStats.winPercentage}%` }} />
-								</div>
-							</CardContent>
-						</Card>
+						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }}>
+							<Card className='glass border-white/10 hover:border-green-500/50 transition-all card-hover'>
+								<CardContent className='p-6 text-center space-y-2'>
+									<Target className='h-10 w-10 text-green-400 mx-auto' />
+									<p className='text-4xl font-bold text-green-400'>{Math.round(allTimeStats.winPercentage)}%</p>
+									<p className='text-sm text-muted-foreground'>Win Rate</p>
+									<motion.div className='w-full bg-muted/30 rounded-full h-2 mt-2' initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ delay: 0.8, duration: 0.6 }}>
+										<motion.div className='bg-green-400 h-2 rounded-full' initial={{ width: 0 }} animate={{ width: `${allTimeStats.winPercentage}%` }} transition={{ delay: 1, duration: 1 }} />
+									</motion.div>
+								</CardContent>
+							</Card>
+						</motion.div>
 
-						<Card className='glass border-white/10 hover:border-accent/50 transition-all'>
-							<CardContent className='p-6 text-center space-y-2'>
-								<TrendingUp className='h-10 w-10 text-accent mx-auto' />
-								<p className='text-4xl font-bold text-foreground'>{allTimeStats.avgPointsPerWeek.toFixed(1)}</p>
-								<p className='text-sm text-muted-foreground'>Avg/Week</p>
-							</CardContent>
-						</Card>
+						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.4 }}>
+							<Card className='glass border-white/10 hover:border-accent/50 transition-all card-hover'>
+								<CardContent className='p-6 text-center space-y-2'>
+									<TrendingUp className='h-10 w-10 text-accent mx-auto' />
+									<p className='text-4xl font-bold text-foreground'>{allTimeStats.avgPointsPerWeek.toFixed(1)}</p>
+									<p className='text-sm text-muted-foreground'>Avg/Week</p>
+								</CardContent>
+							</Card>
+						</motion.div>
 
-						<Card className='glass border-white/10 hover:border-purple-500/50 transition-all'>
-							<CardContent className='p-6 text-center space-y-2'>
-								<Zap className='h-10 w-10 text-purple-400 mx-auto' />
-								<p className='text-4xl font-bold text-purple-400'>{allTimeStats.totalTFSPoints}</p>
-								<p className='text-sm text-muted-foreground'>TFS Bonus</p>
-							</CardContent>
-						</Card>
+						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.4 }}>
+							<Card className='glass border-white/10 hover:border-purple-500/50 transition-all card-hover'>
+								<CardContent className='p-6 text-center space-y-2'>
+									<Zap className='h-10 w-10 text-purple-400 mx-auto' />
+									<p className='text-4xl font-bold text-purple-400'>{allTimeStats.totalTFSPoints}</p>
+									<p className='text-sm text-muted-foreground'>TFS Bonus</p>
+								</CardContent>
+							</Card>
+						</motion.div>
 					</div>
 				)}
 

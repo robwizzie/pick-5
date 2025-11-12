@@ -110,10 +110,12 @@ export async function isRecapAvailable(week: number, leagueId: string): Promise<
 	}
 }
 
-export function Recap() {
+export function Recap({ weekOverride }: { weekOverride?: number }) {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session } = useSession();
+	// Use weekOverride if provided, otherwise use currentWeek from context
+	const weekToDisplay = weekOverride || currentWeek;
 	const [selectedWeek, setSelectedWeek] = useState<number>(0); // Will be set to most recent available week
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -143,8 +145,8 @@ export function Recap() {
 		const determineAvailableWeeks = async () => {
 			if (!leagueId) return;
 			const weeks: number[] = [];
-			// Check weeks up to and including current week (since current week might be completed)
-			for (let w = 1; w <= currentWeek; w++) {
+			// Check weeks up to and including weekToDisplay (since that week might be completed)
+			for (let w = 1; w <= weekToDisplay; w++) {
 				// Check if recap is available (has picks and is completed)
 				const available = await isRecapAvailable(w, leagueId);
 				if (available) {
@@ -152,10 +154,12 @@ export function Recap() {
 				}
 			}
 			setAvailableWeeks(weeks);
-			// Default to current week from context (not most recent completed week)
-			// Only fall back to most recent if current week doesn't have recap
-			if (weeks.includes(currentWeek)) {
-				setSelectedWeek(currentWeek);
+			// If weekOverride is provided, default to that week
+			// Otherwise, default to weekToDisplay from context
+			if (weekOverride && weeks.includes(weekOverride)) {
+				setSelectedWeek(weekOverride);
+			} else if (weeks.includes(weekToDisplay)) {
+				setSelectedWeek(weekToDisplay);
 			} else if (weeks.length > 0) {
 				setSelectedWeek(weeks[weeks.length - 1]);
 			} else {
@@ -163,7 +167,7 @@ export function Recap() {
 			}
 		};
 		determineAvailableWeeks();
-	}, [currentWeek, leagueId]);
+	}, [weekToDisplay, leagueId, weekOverride]);
 
 	// Fetch and calculate recap data
 	useEffect(() => {
