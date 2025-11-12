@@ -1,6 +1,9 @@
 'use client';
 
+import { motion } from 'framer-motion';
+import CountUp from 'react-countup';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { useEffect, useState } from 'react';
@@ -100,7 +103,24 @@ export function SeasonStats() {
 		return `${hours}h ago`;
 	};
 
-	if (loading) return <div>Loading stats...</div>;
+	if (loading) {
+		return (
+			<Card>
+				<CardHeader>
+					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Season Statistics</CardTitle>
+				</CardHeader>
+				<CardContent>
+					<div className='grid grid-cols-2 gap-4 mb-6'>
+						{[...Array(4)].map((_, i) => (
+							<Skeleton key={i} className='h-24 rounded-lg' shimmer />
+						))}
+					</div>
+					<Skeleton className='h-48 rounded-lg' shimmer />
+				</CardContent>
+			</Card>
+		);
+	}
+
 	if (error) return <div className='text-destructive'>{error}</div>;
 
 	return (
@@ -126,24 +146,58 @@ export function SeasonStats() {
 			</CardHeader>
 			<CardContent>
 				<div className='grid grid-cols-2 gap-4 mb-6'>
-					<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+					<motion.div
+						className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+						initial={{ opacity: 0, y: 10 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true, margin: "-50px" }}
+						transition={{ duration: 0.3, delay: 0 }}
+						whileHover={{ scale: 1.02 }}
+					>
 						<p className='text-primary/80 text-sm font-medium'>Total Points</p>
-						<p className='text-2xl font-bold text-primary'>{stats.totalPoints}</p>
-					</div>
-					<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
-						<p className='text-primary/80 text-sm font-medium'>Win Percentage</p>
-						<p className='text-2xl font-bold text-primary'>{winPercentage}%</p>
-					</div>
-					<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
-						<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
-						<p className='text-2xl font-bold text-primary'>
-							{stats.correctPicks}/{stats.totalPicks}
+						<p className='text-2xl font-bold font-mono text-primary'>
+							<CountUp end={stats.totalPoints} duration={1} preserveValue />
 						</p>
-					</div>
-					<div className='bg-card rounded-lg p-4 text-center border-2 border-primary/20'>
+					</motion.div>
+					<motion.div
+						className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+						initial={{ opacity: 0, y: 10 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true, margin: "-50px" }}
+						transition={{ duration: 0.3, delay: 0.05 }}
+						whileHover={{ scale: 1.02 }}
+					>
+						<p className='text-primary/80 text-sm font-medium'>Win Percentage</p>
+						<p className='text-2xl font-bold font-mono text-primary'>
+							<CountUp end={parseFloat(winPercentage)} duration={1} preserveValue />%
+						</p>
+					</motion.div>
+					<motion.div
+						className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+						initial={{ opacity: 0, y: 10 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true, margin: "-50px" }}
+						transition={{ duration: 0.3, delay: 0.1 }}
+						whileHover={{ scale: 1.02 }}
+					>
+						<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
+						<p className='text-2xl font-bold font-mono text-primary'>
+							<CountUp end={stats.correctPicks} duration={1} preserveValue />/<CountUp end={stats.totalPicks} duration={1} preserveValue />
+						</p>
+					</motion.div>
+					<motion.div
+						className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
+						initial={{ opacity: 0, y: 10 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true, margin: "-50px" }}
+						transition={{ duration: 0.3, delay: 0.15 }}
+						whileHover={{ scale: 1.02 }}
+					>
 						<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
-						<p className='text-2xl font-bold text-primary'>{stats.totalTFSPoints}</p>
-					</div>
+						<p className='text-2xl font-bold font-mono text-primary'>
+							<CountUp end={stats.totalTFSPoints} duration={1} preserveValue />
+						</p>
+					</motion.div>
 				</div>
 
 				<div>
@@ -152,11 +206,23 @@ export function SeasonStats() {
 						{stats.weeklyStats &&
 							Object.entries(stats.weeklyStats)
 								.sort(([weekA], [weekB]) => parseInt(weekA) - parseInt(weekB))
-								.map(([week, weeklyStat]) => (
-									<div key={week} className='bg-card border-2 border-primary/20 p-2 rounded text-center cursor-pointer hover:bg-primary/10 transition' onClick={() => handleWeekClick(week)}>
+								.map(([week, weeklyStat], index) => (
+									<motion.div
+										key={week}
+										className='bg-card/80 backdrop-blur-sm border-2 border-primary/20 p-2 rounded text-center cursor-pointer hover:bg-primary/10 hover:border-primary/30 transition-all'
+										onClick={() => handleWeekClick(week)}
+										initial={{ opacity: 0, scale: 0.9 }}
+										whileInView={{ opacity: 1, scale: 1 }}
+										viewport={{ once: true, margin: "-50px" }}
+										transition={{ duration: 0.2, delay: index * 0.03 }}
+										whileHover={{ scale: 1.05 }}
+										whileTap={{ scale: 0.95 }}
+									>
 										<p className='text-primary/80 text-xs font-medium'>Week {week}</p>
-										<p className='font-bold text-primary'>{weeklyStat.weeklyPoints}</p>
-									</div>
+										<p className='font-bold font-mono text-primary'>
+											<CountUp end={weeklyStat.weeklyPoints} duration={0.8} preserveValue />
+										</p>
+									</motion.div>
 								))}
 					</div>
 				</div>
