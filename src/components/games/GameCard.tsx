@@ -270,7 +270,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					{/* Away Team - Mobile Compact */}
 					<Button {...buttonProps} className={`${buttonProps.className} flex-1 h-auto py-3 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
 						<div className='flex flex-col items-center gap-1 w-full'>
-							<div className='relative w-10 h-10 flex-shrink-0'>
+							<div className='relative w-10 h-10 flex-shrink-0 bg-white rounded-sm p-1'>
 								<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
 							</div>
 							<div className='text-center'>
@@ -299,7 +299,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					{/* Home Team - Mobile Compact */}
 					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 h-auto py-3 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
 						<div className='flex flex-col items-center gap-1 w-full'>
-							<div className='relative w-10 h-10 flex-shrink-0'>
+							<div className='relative w-10 h-10 flex-shrink-0 bg-white rounded-sm p-1'>
 								<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
 							</div>
 							<div className='text-center'>
@@ -327,7 +327,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					<div className='flex-1 xl:mr-4'>
 						<Button {...buttonProps} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
 							<div className='flex items-center space-x-3 w-full'>
-								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
+								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0 bg-white rounded-sm p-0.5 xl:p-1'>
 									<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
 								</div>
 								<div className='text-left flex-1'>
@@ -383,7 +383,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					<div className='flex-1 xl:ml-4'>
 						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
 							<div className='flex items-center space-x-3 w-full'>
-								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0'>
+								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0 bg-white rounded-sm p-0.5 xl:p-1'>
 									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
 								</div>
 								<div className='text-left flex-1'>
