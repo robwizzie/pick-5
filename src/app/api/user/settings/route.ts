@@ -27,10 +27,13 @@ export async function GET() {
 				pickReminders: true,
 				thursdayReminder: true,
 				saturdayReminder: true,
-				thursdayReminderTime: '13:00',
-				saturdayReminderTime: '12:00'
+				weeklyScoreEmail: true
 			},
-			pushNotificationsEnabled: user.pushNotificationsEnabled || false
+			pushNotificationsEnabled: user.pushNotificationsEnabled || false,
+			pushNotificationPreferences: user.pushNotificationPreferences || {
+				gameResults: true,
+				weeklyRecap: true
+			}
 		});
 	} catch (error: unknown) {
 		console.error('Error fetching user settings:', error);
@@ -54,7 +57,7 @@ export async function POST(req: Request) {
 		}
 
 		const body = await req.json();
-		const { emailPreferences, pushNotificationsEnabled } = body;
+		const { emailPreferences, pushNotificationsEnabled, pushNotificationPreferences } = body;
 
 		await connectDB();
 
@@ -77,13 +80,22 @@ export async function POST(req: Request) {
 			user.pushNotificationsEnabled = pushNotificationsEnabled;
 		}
 
+		// Update push notification preferences if provided
+		if (pushNotificationPreferences) {
+			user.pushNotificationPreferences = {
+				...user.pushNotificationPreferences,
+				...pushNotificationPreferences
+			};
+		}
+
 		await user.save();
 
 		return NextResponse.json({
 			success: true,
 			message: 'Settings updated successfully',
 			emailPreferences: user.emailPreferences,
-			pushNotificationsEnabled: user.pushNotificationsEnabled
+			pushNotificationsEnabled: user.pushNotificationsEnabled,
+			pushNotificationPreferences: user.pushNotificationPreferences
 		});
 	} catch (error: unknown) {
 		console.error('Error updating user settings:', error);
