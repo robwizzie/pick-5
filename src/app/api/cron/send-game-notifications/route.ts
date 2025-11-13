@@ -25,7 +25,7 @@ interface GameResult {
 	awayTeam: string;
 	homeScore: number;
 	awayScore: number;
-	winner: string;
+	winner: string | null; // null for ties
 }
 
 interface UserGamePick {
@@ -75,7 +75,8 @@ export async function GET(req: Request) {
 			.map(game => {
 				const homeScore = game.home.score || 0;
 				const awayScore = game.away.score || 0;
-				const winner = homeScore > awayScore ? game.home.team : game.away.team;
+				// Handle ties - no winner if scores are equal
+				const winner = homeScore > awayScore ? game.home.team : homeScore < awayScore ? game.away.team : null;
 
 				return {
 					gameId: game.id,
@@ -182,7 +183,7 @@ export async function GET(req: Request) {
 		const errors: string[] = [];
 
 		// Send grouped notifications
-		for (const [key, userGames] of groupedNotifications.entries()) {
+		for (const [_key, userGames] of Array.from(groupedNotifications.entries())) {
 			const firstGame = userGames[0];
 			const userId = firstGame.userId;
 			const leagueName = firstGame.leagueName;
