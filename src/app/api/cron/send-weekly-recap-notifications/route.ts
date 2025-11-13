@@ -83,7 +83,7 @@ export async function GET(req: Request) {
 				// Find all leagues user is a member of
 				const userLeagues = await League.find({
 					members: user._id.toString()
-				}).lean();
+				});
 
 				if (userLeagues.length === 0) continue;
 
