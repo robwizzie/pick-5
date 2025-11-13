@@ -3,6 +3,16 @@ import type { Config } from 'tailwindcss';
 export default {
 	darkMode: ['class'],
 	content: ['./src/pages/**/*.{js,ts,jsx,tsx,mdx}', './src/components/**/*.{js,ts,jsx,tsx,mdx}', './src/app/**/*.{js,ts,jsx,tsx,mdx}'],
+	safelist: [
+		// Badge colors for odds display
+		'bg-blue-400',
+		'bg-blue-300',
+		'bg-yellow-400',
+		'bg-orange-400',
+		'bg-red-400',
+		'text-white',
+		'text-black'
+	],
 	theme: {
 		extend: {
 			fontFamily: {
