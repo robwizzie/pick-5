@@ -94,6 +94,16 @@ export async function GET(req: Request) {
 
 				if (subscriptions.length === 0) continue;
 
+				// Cache for game results by week to avoid repeated API calls
+				const gameResultsCache = new Map<number, Array<{
+					id: string;
+					homeScore: number;
+					awayScore: number;
+					homeTeam: string;
+					awayTeam: string;
+					status: string;
+				}>>();
+
 				// Process each league
 				for (const league of userLeagues) {
 					try {
@@ -154,15 +164,21 @@ export async function GET(req: Request) {
 							let seasonPoints = 0;
 							for (const weekPick of allUserPicks) {
 								const weekNum = weekPick.week;
-								const weekGames = await NFLService.getWeeklyGames(weekNum);
-								const weekGameResults = weekGames.map(g => ({
-									id: g.id,
-									homeScore: g.home.score || 0,
-									awayScore: g.away.score || 0,
-									homeTeam: g.home.team,
-									awayTeam: g.away.team,
-									status: g.status || 'Unknown'
-								}));
+
+								// Check cache first, fetch if not cached
+								let weekGameResults = gameResultsCache.get(weekNum);
+								if (!weekGameResults) {
+									const weekGames = await NFLService.getWeeklyGames(weekNum);
+									weekGameResults = weekGames.map(g => ({
+										id: g.id,
+										homeScore: g.home.score || 0,
+										awayScore: g.away.score || 0,
+										homeTeam: g.home.team,
+										awayTeam: g.away.team,
+										status: g.status || 'Unknown'
+									}));
+									gameResultsCache.set(weekNum, weekGameResults);
+								}
 
 								const { weeklyPoints: pts } = ScoringService.calculateWeekScore(
 									weekPick.picks,
