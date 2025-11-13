@@ -55,11 +55,11 @@ export async function GET(req: Request) {
 			status: game.status || 'Unknown'
 		}));
 
-		// Get all users with weekly recap enabled
+		// Get all users with push notifications enabled
+		// We'll check weeklyRecap preference later (defaulting to true if not set)
 		const users = await User.find({
-			pushNotificationsEnabled: true,
-			'pushNotificationPreferences.weeklyRecap': true
-		}).lean();
+			pushNotificationsEnabled: true
+		});
 
 		console.log(`[Weekly Recap Notifications] Found ${users.length} users with weekly recap enabled`);
 
@@ -69,6 +69,12 @@ export async function GET(req: Request) {
 		// Process each user
 		for (const user of users) {
 			try {
+				// Check if user has weekly recap enabled (default to true if not set)
+				const weeklyRecapEnabled = user.pushNotificationPreferences?.weeklyRecap !== false;
+				if (!weeklyRecapEnabled) {
+					continue;
+				}
+
 				// Find all leagues user is a member of
 				const userLeagues = await League.find({
 					members: user._id.toString()
