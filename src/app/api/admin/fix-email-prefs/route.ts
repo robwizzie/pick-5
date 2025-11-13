@@ -44,9 +44,11 @@ export async function GET() {
 								'emailPreferences.pickReminders': true,
 								'emailPreferences.thursdayReminder': true,
 								'emailPreferences.saturdayReminder': true,
-								'emailPreferences.weeklyScoreEmail': true,
-								'emailPreferences.thursdayReminderTime': '13:00',
-								'emailPreferences.saturdayReminderTime': '12:00'
+								'emailPreferences.weeklyScoreEmail': true
+							},
+							$unset: {
+								'emailPreferences.thursdayReminderTime': '',
+								'emailPreferences.saturdayReminderTime': ''
 							}
 						}
 					);
