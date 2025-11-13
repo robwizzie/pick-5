@@ -102,8 +102,14 @@ export async function GET(req: Request) {
 		const notificationsToSend: UserGamePick[] = [];
 
 		for (const pick of allPicks) {
-			const user = await User.findById(pick.userId).lean();
-			if (!user || !user.pushNotificationsEnabled || !user.pushNotificationPreferences?.gameResults) {
+			const user = await User.findById(pick.userId);
+			if (!user || !user.pushNotificationsEnabled) {
+				continue;
+			}
+
+			// Check if user has game results enabled (default to true if not set)
+			const gameResultsEnabled = user.pushNotificationPreferences?.gameResults !== false;
+			if (!gameResultsEnabled) {
 				continue;
 			}
 
