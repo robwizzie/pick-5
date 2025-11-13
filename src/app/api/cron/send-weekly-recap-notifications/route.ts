@@ -24,8 +24,13 @@ export async function GET(req: Request) {
 	try {
 		// Verify the request is from Vercel Cron
 		const authHeader = req.headers.get('authorization');
-		if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		const cronSecret = process.env.CRON_SECRET;
+
+		// In development, allow without auth. In production, require cron secret
+		if (process.env.NODE_ENV === 'production') {
+			if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+				return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+			}
 		}
 
 		await connectDB();
@@ -235,7 +240,7 @@ export async function GET(req: Request) {
 							});
 						} catch (e) {
 							// Ignore duplicate key errors
-							if (!(e as any).code === 11000) {
+							if ((e as any).code !== 11000) {
 								console.error('[Weekly Recap Notifications] Error marking notification:', e);
 							}
 						}
