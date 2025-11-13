@@ -45,8 +45,13 @@ export async function GET(req: Request) {
 	try {
 		// Verify the request is from Vercel Cron
 		const authHeader = req.headers.get('authorization');
-		if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		const cronSecret = process.env.CRON_SECRET;
+
+		// In development, allow without auth. In production, require cron secret
+		if (process.env.NODE_ENV === 'production') {
+			if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+				return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+			}
 		}
 
 		await connectDB();
@@ -113,7 +118,7 @@ export async function GET(req: Request) {
 				continue;
 			}
 
-			const league = await League.findById(pick.leagueId).lean();
+			const league = await League.findById(pick.leagueId);
 			if (!league) continue;
 
 			// Check each game pick
@@ -265,7 +270,7 @@ export async function GET(req: Request) {
 						});
 					} catch (e) {
 						// Ignore duplicate key errors (already marked)
-						if (!(e as any).code === 11000) {
+						if ((e as any).code !== 11000) {
 							console.error('[Game Notifications] Error marking notification:', e);
 						}
 					}
