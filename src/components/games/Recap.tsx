@@ -8,7 +8,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
-import { NFLService } from '@/services/nflService';
 import { Crown, Trophy, TrendingUp, Target, Zap, Users, BarChart3, Flame, Award, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { GameCard } from './GameCard';
