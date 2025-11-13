@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { GET as sendPickReminders } from '../send-pick-reminders/route';
+import { GET as sendScoreEmailsHandler } from '../send-score-emails/route';
+import { GET as fetchOddsHandler } from '../fetch-odds/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,12 +32,14 @@ export async function GET(req: Request) {
 		// Tuesday (2): Send score emails and fetch odds
 		if (dayOfWeek === 2) {
 			console.log('[Master Cron] Tuesday - Sending score emails');
-			const scoreEmailResult = await sendScoreEmails(req);
+			const scoreEmailResponse = await sendScoreEmailsHandler(req);
+			const scoreEmailResult = await scoreEmailResponse.json();
 			console.log('[Master Cron] Score email result:', JSON.stringify(scoreEmailResult, null, 2));
 			results.push({ task: 'send-score-emails', day: 'Tuesday', result: scoreEmailResult });
 
 			console.log('[Master Cron] Tuesday - Fetching odds');
-			const oddsResult = await fetchOdds(req);
+			const oddsResponse = await fetchOddsHandler(req);
+			const oddsResult = await oddsResponse.json();
 			console.log('[Master Cron] Odds fetch result:', JSON.stringify(oddsResult, null, 2));
 			results.push({ task: 'fetch-odds', day: 'Tuesday', result: oddsResult });
 		}
@@ -42,7 +47,8 @@ export async function GET(req: Request) {
 		// Thursday (4): Send reminders
 		if (dayOfWeek === 4) {
 			console.log('[Master Cron] Thursday - Sending pick reminders');
-			const reminderResult = await sendReminders(req);
+			const reminderResponse = await sendPickReminders(req);
+			const reminderResult = await reminderResponse.json();
 			console.log('[Master Cron] Thursday reminder result:', JSON.stringify(reminderResult, null, 2));
 			results.push({ task: 'send-reminders', day: 'Thursday', result: reminderResult });
 		}
@@ -50,14 +56,16 @@ export async function GET(req: Request) {
 		// Friday (5): Fetch odds
 		if (dayOfWeek === 5) {
 			console.log('[Master Cron] Friday - Fetching odds');
-			const oddsResult = await fetchOdds(req);
+			const oddsResponse = await fetchOddsHandler(req);
+			const oddsResult = await oddsResponse.json();
 			results.push({ task: 'fetch-odds', day: 'Friday', result: oddsResult });
 		}
 
 		// Saturday (6): Send reminders
 		if (dayOfWeek === 6) {
 			console.log('[Master Cron] Saturday - Sending pick reminders');
-			const reminderResult = await sendReminders(req);
+			const reminderResponse = await sendPickReminders(req);
+			const reminderResult = await reminderResponse.json();
 			console.log('[Master Cron] Saturday reminder result:', JSON.stringify(reminderResult, null, 2));
 			results.push({ task: 'send-reminders', day: 'Saturday', result: reminderResult });
 		}
@@ -65,7 +73,8 @@ export async function GET(req: Request) {
 		// Sunday (0): Fetch odds
 		if (dayOfWeek === 0) {
 			console.log('[Master Cron] Sunday - Fetching odds');
-			const oddsResult = await fetchOdds(req);
+			const oddsResponse = await fetchOddsHandler(req);
+			const oddsResult = await oddsResponse.json();
 			results.push({ task: 'fetch-odds', day: 'Sunday', result: oddsResult });
 		}
 
@@ -84,95 +93,5 @@ export async function GET(req: Request) {
 			},
 			{ status: 500 }
 		);
-	}
-}
-
-/**
- * Fetch and store odds snapshots
- */
-async function fetchOdds(req: Request): Promise<any> {
-	try {
-		const baseUrl = process.env.VERCEL_URL
-			? `https://${process.env.VERCEL_URL}`
-			: 'http://localhost:3000';
-
-		const response = await fetch(`${baseUrl}/api/cron/fetch-odds`, {
-			method: 'GET',
-			headers: {
-				'authorization': req.headers.get('authorization') || ''
-			}
-		});
-
-		if (!response.ok) {
-			const error = await response.text();
-			return { success: false, error };
-		}
-
-		return await response.json();
-	} catch (error) {
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : 'Unknown error'
-		};
-	}
-}
-
-/**
- * Send pick reminder emails
- */
-async function sendReminders(req: Request): Promise<any> {
-	try {
-		const baseUrl = process.env.VERCEL_URL
-			? `https://${process.env.VERCEL_URL}`
-			: 'http://localhost:3000';
-
-		const response = await fetch(`${baseUrl}/api/cron/send-pick-reminders`, {
-			method: 'GET',
-			headers: {
-				'authorization': req.headers.get('authorization') || ''
-			}
-		});
-
-		if (!response.ok) {
-			const error = await response.text();
-			return { success: false, error };
-		}
-
-		return await response.json();
-	} catch (error) {
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : 'Unknown error'
-		};
-	}
-}
-
-/**
- * Send weekly score emails
- */
-async function sendScoreEmails(req: Request): Promise<any> {
-	try {
-		const baseUrl = process.env.VERCEL_URL
-			? `https://${process.env.VERCEL_URL}`
-			: 'http://localhost:3000';
-
-		const response = await fetch(`${baseUrl}/api/cron/send-score-emails`, {
-			method: 'GET',
-			headers: {
-				'authorization': req.headers.get('authorization') || ''
-			}
-		});
-
-		if (!response.ok) {
-			const error = await response.text();
-			return { success: false, error };
-		}
-
-		return await response.json();
-	} catch (error) {
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : 'Unknown error'
-		};
 	}
 }
