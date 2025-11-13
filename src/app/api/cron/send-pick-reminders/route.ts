@@ -78,9 +78,10 @@ export async function GET(req: Request) {
 
 		console.log(`[Pick Reminders] Running cron job - Day: ${dayOfWeek}, Hour: ${currentHour}`);
 
-		// Get current NFL week from NFLService
-		const currentWeek = await NFLService.getCurrentWeek();
-		console.log(`[Pick Reminders] Current NFL week: ${currentWeek}`);
+		// Get current NFL week from NFLService (without auto-advance)
+		// We want the ACTUAL current week for pick reminders, not the next week
+		const currentWeek = await NFLService.getCurrentWeek(false);
+		console.log(`[Pick Reminders] Current NFL week (for picks): ${currentWeek}`);
 
 		// Determine if this is Thursday or Saturday reminder
 		const isThursday = dayOfWeek === 4;

@@ -97,7 +97,7 @@ export class NFLService {
 		}
 	}
 
-	static async getCurrentWeek(): Promise<number> {
+	static async getCurrentWeek(autoAdvance: boolean = true): Promise<number> {
 		try {
 			// If on server, call ESPN directly
 			if (this.isServer()) {
@@ -116,9 +116,8 @@ export class NFLService {
 					const data = await response.json();
 					const espnWeek = data.week?.number || this.calculateCurrentWeek();
 
-					// Check if all games in this week are completed
-					// If so, advance to next week (unless we're already at week 18)
-					if (data.events && data.events.length > 0) {
+					// Only auto-advance if requested (for scoring, not for pick reminders)
+					if (autoAdvance && data.events && data.events.length > 0) {
 						const allGamesCompleted = data.events.every((event: EspnEvent) => {
 							const status = event.status?.type?.state?.toLowerCase();
 							return status === 'post' || status === 'final';
@@ -138,8 +137,8 @@ export class NFLService {
 				const data = await cachedFetch<{ week: { number: number }, events: EspnEvent[] }>(url, {}, 10 * 60 * 1000);
 				const espnWeek = data.week?.number || this.calculateCurrentWeek();
 
-				// Check if all games in this week are completed
-				if (data.events && data.events.length > 0) {
+				// Only auto-advance if requested
+				if (autoAdvance && data.events && data.events.length > 0) {
 					const allGamesCompleted = data.events.every((event: EspnEvent) => {
 						const status = event.status?.type?.state?.toLowerCase();
 						return status === 'post' || status === 'final';
