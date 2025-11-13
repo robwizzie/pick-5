@@ -22,6 +22,11 @@ export class ScoringService {
 			return false;
 		}
 
+		// Ties are losses for both teams
+		if (gameResult.homeScore === gameResult.awayScore) {
+			return false;
+		}
+
 		const homeWon = gameResult.homeScore > gameResult.awayScore;
 		const pickedHome = pick.team === gameResult.homeTeam;
 
