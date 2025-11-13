@@ -30,10 +30,12 @@ export async function GET(req: Request) {
 		if (dayOfWeek === 2) {
 			console.log('[Master Cron] Tuesday - Sending score emails');
 			const scoreEmailResult = await sendScoreEmails(req);
+			console.log('[Master Cron] Score email result:', JSON.stringify(scoreEmailResult, null, 2));
 			results.push({ task: 'send-score-emails', day: 'Tuesday', result: scoreEmailResult });
 
 			console.log('[Master Cron] Tuesday - Fetching odds');
 			const oddsResult = await fetchOdds(req);
+			console.log('[Master Cron] Odds fetch result:', JSON.stringify(oddsResult, null, 2));
 			results.push({ task: 'fetch-odds', day: 'Tuesday', result: oddsResult });
 		}
 
@@ -41,6 +43,7 @@ export async function GET(req: Request) {
 		if (dayOfWeek === 4) {
 			console.log('[Master Cron] Thursday - Sending pick reminders');
 			const reminderResult = await sendReminders(req);
+			console.log('[Master Cron] Thursday reminder result:', JSON.stringify(reminderResult, null, 2));
 			results.push({ task: 'send-reminders', day: 'Thursday', result: reminderResult });
 		}
 
@@ -55,6 +58,7 @@ export async function GET(req: Request) {
 		if (dayOfWeek === 6) {
 			console.log('[Master Cron] Saturday - Sending pick reminders');
 			const reminderResult = await sendReminders(req);
+			console.log('[Master Cron] Saturday reminder result:', JSON.stringify(reminderResult, null, 2));
 			results.push({ task: 'send-reminders', day: 'Saturday', result: reminderResult });
 		}
 
