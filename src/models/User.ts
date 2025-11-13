@@ -51,6 +51,16 @@ const UserSchema = new mongoose.Schema({
 		type: Boolean,
 		default: false
 	},
+	pushNotificationPreferences: {
+		gameResults: {
+			type: Boolean,
+			default: true
+		},
+		weeklyRecap: {
+			type: Boolean,
+			default: true
+		}
+	},
 	// Unsubscribe token for one-click email unsubscribe
 	unsubscribeToken: {
 		type: String,
