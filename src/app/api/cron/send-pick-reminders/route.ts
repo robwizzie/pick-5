@@ -24,13 +24,39 @@ webPush.setVapidDetails(
 );
 
 
-// Helper to get Thursday night game (you'll need to fetch from your games data)
+// Helper to get Thursday night game from actual NFL data
 async function getThursdayNightGame(week: number) {
-	// This is a placeholder. You should fetch from your actual games data source
-	// For now, returning mock data
+	try {
+		const games = await NFLService.getWeeklyGames(week);
+		// Find the Thursday night game (day of week = 4)
+		const thursdayGame = games.find(game => {
+			const gameDate = new Date(game.date);
+			return gameDate.getDay() === 4;
+		});
+
+		if (thursdayGame) {
+			const gameDate = new Date(thursdayGame.date);
+			const timeString = gameDate.toLocaleTimeString('en-US', {
+				hour: 'numeric',
+				minute: '2-digit',
+				timeZone: 'America/New_York',
+				timeZoneName: 'short'
+			});
+
+			return {
+				awayTeam: thursdayGame.away.team,
+				homeTeam: thursdayGame.home.team,
+				gameTime: timeString
+			};
+		}
+	} catch (error) {
+		console.error('[Pick Reminders] Error fetching Thursday night game:', error);
+	}
+
+	// Fallback if no Thursday game found
 	return {
-		awayTeam: 'Away Team',
-		homeTeam: 'Home Team',
+		awayTeam: 'Thursday Night Football',
+		homeTeam: '',
 		gameTime: '8:15 PM ET'
 	};
 }
@@ -122,7 +148,7 @@ export async function GET(req: Request) {
 
 				console.log(`[Pick Reminders] User ${user.email} needs reminders for ${leaguesWithoutPicks.length} leagues`);
 
-				// Send email
+				// Send email (one email per user listing all leagues)
 				try {
 					if (user.emailPreferences?.pickReminders) {
 						const emailHtml = await render(
@@ -140,7 +166,7 @@ export async function GET(req: Request) {
 									})
 						);
 
-						await resend.emails.send({
+						const emailResult = await resend.emails.send({
 							from: 'Pick 5 <noreply@sportspick5.com>',
 							to: user.email,
 							subject: isThursday
@@ -149,12 +175,17 @@ export async function GET(req: Request) {
 							html: emailHtml
 						});
 
-						emailsSent++;
-						console.log(`[Pick Reminders] Email sent to ${user.email}`);
+						if (emailResult.error) {
+							console.error(`[Pick Reminders] Resend API error for ${user.email}:`, emailResult.error);
+							errors.push(`Email failed for ${user.email}: ${emailResult.error.message}`);
+						} else {
+							emailsSent++;
+							console.log(`[Pick Reminders] Email sent to ${user.email} (ID: ${emailResult.data?.id})`);
+						}
 					}
 				} catch (emailError) {
 					console.error(`[Pick Reminders] Failed to send email to ${user.email}:`, emailError);
-					errors.push(`Email failed for ${user.email}`);
+					errors.push(`Email failed for ${user.email}: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`);
 				}
 
 				// Send push notification
@@ -166,11 +197,21 @@ export async function GET(req: Request) {
 
 						for (const subscription of subscriptions) {
 							try {
+								// Build push notification message
+								let pushBody: string;
+								if (isThursday && thursdayGame) {
+									if (thursdayGame.homeTeam) {
+										pushBody = `${thursdayGame.awayTeam} vs ${thursdayGame.homeTeam} starts at ${thursdayGame.gameTime}! Make your picks.`;
+									} else {
+										pushBody = `${thursdayGame.awayTeam} starts at ${thursdayGame.gameTime}! Make your picks.`;
+									}
+								} else {
+									pushBody = `Don't miss out! Make your picks before Sunday's games.`;
+								}
+
 								const pushPayload = {
 									title: isThursday ? '🏈 Thursday Night Football!' : '⏰ Last Chance for Picks!',
-									body: isThursday
-										? `${thursdayGame!.awayTeam} vs ${thursdayGame!.homeTeam} starts soon! Make your picks.`
-										: `Don't miss out! Make your picks before Sunday's games.`,
+									body: pushBody,
 									url: '/dashboard',
 									leagueIds: leaguesWithoutPicks.map(l => l.id),
 									tag: 'pick-reminder'
