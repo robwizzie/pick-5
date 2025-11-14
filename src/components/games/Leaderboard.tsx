@@ -17,7 +17,7 @@ import { Crown } from 'lucide-react';
 export function Leaderboard() {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
-	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean; pickedTeams?: Array<{ team: string; abbreviation: string; logo: string }> }>>([]);
+	const [weeklyResults, setWeeklyResults] = useState<Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean; pickedTeams?: Array<{ team: string; abbreviation: string; logo: string; gameStatus: 'scheduled' | 'in_progress' | 'final'; isCorrect: boolean | null }> }>>([]);
 	const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 	const [showUserPicks, setShowUserPicks] = useState(false);
 	const [seasonStats, setSeasonStats] = useState<
@@ -254,18 +254,34 @@ export function Leaderboard() {
 													<div className='mb-2'>
 														{entry.hasPicks && entry.pickedTeams && entry.pickedTeams.length > 0 && gamesStarted ? (
 															<div className='flex flex-wrap items-center gap-1.5'>
-																{entry.pickedTeams.map((teamData, idx) => (
-																	<div key={idx} className='w-6 h-6 relative bg-white/10 rounded-sm p-0.5 border border-white/20'>
-																		<Image
-																			src={teamData.logo}
-																			alt={teamData.abbreviation}
-																			width={24}
-																			height={24}
-																			className='rounded-sm object-contain'
-																			unoptimized
-																		/>
-																	</div>
-																))}
+																{entry.pickedTeams
+																	.filter(teamData => teamData.gameStatus !== 'scheduled') // Only show live or finished games
+																	.map((teamData, idx) => {
+																		// Determine background color based on game status and result
+																		let bgClass = 'bg-white/10 border-white/20';
+																		if (teamData.gameStatus === 'in_progress') {
+																			bgClass = 'bg-blue-400/30 border-blue-400/50';
+																		} else if (teamData.gameStatus === 'final') {
+																			if (teamData.isCorrect === true) {
+																				bgClass = 'bg-green-500/30 border-green-500/50';
+																			} else if (teamData.isCorrect === false) {
+																				bgClass = 'bg-red-500/30 border-red-500/50';
+																			}
+																		}
+
+																		return (
+																			<div key={idx} className={`w-6 h-6 relative rounded-sm p-0.5 border ${bgClass}`}>
+																				<Image
+																					src={teamData.logo}
+																					alt={teamData.abbreviation}
+																					width={24}
+																					height={24}
+																					className='rounded-sm object-contain'
+																					unoptimized
+																				/>
+																			</div>
+																		);
+																	})}
 															</div>
 														) : (
 															<span className={`text-xs px-2 py-0.5 rounded-full font-medium inline-block ${entry.hasPicks ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
