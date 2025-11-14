@@ -18,6 +18,11 @@ interface EmailPreferences {
 	weeklyScoreEmail: boolean;
 }
 
+interface PushNotificationPreferences {
+	gameResults: boolean;
+	weeklyRecap: boolean;
+}
+
 export default function SettingsPage() {
 	const { data: session, status, update } = useSession();
 	const router = useRouter();
@@ -38,6 +43,10 @@ export default function SettingsPage() {
 		weeklyScoreEmail: true
 	});
 	const [pushEnabled, setPushEnabled] = useState(false);
+	const [pushNotificationPreferences, setPushNotificationPreferences] = useState<PushNotificationPreferences>({
+		gameResults: true,
+		weeklyRecap: true
+	});
 	const [pushSupported, setPushSupported] = useState(false);
 	const [notifLoading, setNotifLoading] = useState(false);
 
@@ -74,6 +83,9 @@ export default function SettingsPage() {
 				const data = await response.json();
 				setEmailPreferences(data.emailPreferences);
 				setPushEnabled(data.pushNotificationsEnabled);
+				if (data.pushNotificationPreferences) {
+					setPushNotificationPreferences(data.pushNotificationPreferences);
+				}
 			}
 		} catch (error) {
 			console.error('Error loading notification settings:', error);
@@ -135,7 +147,8 @@ export default function SettingsPage() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					emailPreferences,
-					pushNotificationsEnabled: pushEnabled
+					pushNotificationsEnabled: pushEnabled,
+					pushNotificationPreferences
 				})
 			});
 
@@ -439,7 +452,7 @@ export default function SettingsPage() {
 												</span>
 											)}
 										</Label>
-										<p className='text-sm text-muted-foreground'>Receive pick reminders as push notifications on this device</p>
+										<p className='text-sm text-muted-foreground'>Receive real-time notifications on this device</p>
 									</div>
 									{pushEnabled ? (
 										<Button onClick={handleDisablePush} variant='outline' className='text-red-500 border-red-500/50'>
@@ -451,6 +464,44 @@ export default function SettingsPage() {
 										</Button>
 									)}
 								</div>
+
+								{/* Game Result Notifications */}
+								{pushEnabled && (
+									<div className='space-y-4 p-4 rounded-lg border border-white/10'>
+										<div className='flex items-center justify-between'>
+											<div className='space-y-1'>
+												<Label htmlFor='game-results' className='text-base font-medium'>
+													Game Result Notifications
+												</Label>
+												<p className='text-sm text-muted-foreground'>Get notified when your picks win or lose</p>
+											</div>
+											<Switch
+												id='game-results'
+												checked={pushNotificationPreferences.gameResults}
+												onCheckedChange={checked => setPushNotificationPreferences(prev => ({ ...prev, gameResults: checked }))}
+											/>
+										</div>
+									</div>
+								)}
+
+								{/* Weekly Recap Notifications */}
+								{pushEnabled && (
+									<div className='space-y-4 p-4 rounded-lg border border-white/10'>
+										<div className='flex items-center justify-between'>
+											<div className='space-y-1'>
+												<Label htmlFor='weekly-recap' className='text-base font-medium'>
+													Weekly Recap Notifications
+												</Label>
+												<p className='text-sm text-muted-foreground'>Get a summary every Tuesday with your results and standings</p>
+											</div>
+											<Switch
+												id='weekly-recap'
+												checked={pushNotificationPreferences.weeklyRecap}
+												onCheckedChange={checked => setPushNotificationPreferences(prev => ({ ...prev, weeklyRecap: checked }))}
+											/>
+										</div>
+									</div>
+								)}
 							</div>
 						)}
 
