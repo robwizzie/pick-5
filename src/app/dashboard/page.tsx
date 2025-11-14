@@ -8,6 +8,7 @@ import { Plus, LogIn, BarChart3, Users, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
 import { NFLService } from '@/services/nflService';
+import { ScoringService } from '@/services/scoringService';
 import Image from 'next/image';
 
 interface TeamPick {
@@ -101,9 +102,19 @@ const Dashboard = () => {
 										const games = await NFLService.getWeeklyGames(pick.week);
 										const teamPicks: TeamPick[] = [];
 
+										// Build game results for scoring
+										const gameResults = games.map(game => ({
+											id: game.id,
+											homeScore: game.home.score || 0,
+											awayScore: game.away.score || 0,
+											homeTeam: game.home.team,
+											awayTeam: game.away.team,
+											status: game.status
+										}));
+
 										// Match picks with games to get logos and status
 										if (pick.picks && Array.isArray(pick.picks)) {
-											pick.picks.forEach((p: { gameId: string; team: string; isCorrect?: boolean | null }) => {
+											pick.picks.forEach((p: { gameId: string; team: string; isHome: boolean; isCorrect?: boolean | null }) => {
 												const game = games.find(g => g.id === p.gameId);
 												if (game) {
 													const teamData = p.team === game.home.team ? game.home : game.away;
@@ -116,10 +127,19 @@ const Dashboard = () => {
 														gameStatus = 'final';
 													}
 
+													// Calculate isCorrect for finished games
+													let isCorrect: boolean | null = null;
+													if (gameStatus === 'final') {
+														const gameResult = gameResults.find(gr => gr.id === p.gameId);
+														if (gameResult) {
+															isCorrect = ScoringService.calculatePickResult(p, gameResult);
+														}
+													}
+
 													teamPicks.push({
 														team: p.team,
 														logo: teamData.logo,
-														isCorrect: p.isCorrect ?? null,
+														isCorrect,
 														gameStatus
 													});
 												}
