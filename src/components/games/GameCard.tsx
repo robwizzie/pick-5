@@ -288,6 +288,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<span className={`text-[10px] font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 									</div>
 								)}
+								{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 							</div>
 						</div>
 					</Button>
@@ -318,6 +319,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<span className={`text-[10px] font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 									</div>
 								)}
+								{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 							</div>
 						</div>
 					</Button>
