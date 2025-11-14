@@ -5,6 +5,7 @@ import { WeekProvider } from '@/contexts/WeekContext';
 import { LeagueProvider } from '@/contexts/LeagueContext';
 import { Nav } from '@/components/games/Nav';
 import { AnimatedBackground } from '@/components/ui/animated-background';
+import { GameNotificationPoller } from '@/components/notifications/GameNotificationPoller';
 import '../styles/globals.css';
 import '@fontsource/space-grotesk/400.css';
 import '@fontsource/space-grotesk/500.css';
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			<body className='font-sans antialiased' style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', backgroundColor: '#141414' }}>
 				<AnimatedBackground />
 				<SessionProviderWrapper>
+					<GameNotificationPoller />
 					<StatsProvider>
 						<WeekProvider>
 							<LeagueProvider>
