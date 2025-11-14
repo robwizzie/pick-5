@@ -32,7 +32,7 @@ interface LeagueStats {
 	rank: number | null;
 	totalMembers: number;
 	seasonPoints: number;
-	pickedTeams?: Array<{ team: string; abbreviation: string; logo: string }>;
+	pickedTeams?: Array<{ team: string; abbreviation: string; logo: string; gameStatus: 'scheduled' | 'in_progress' | 'final'; isCorrect: boolean | null }>;
 	tfsPoints?: number;
 }
 
@@ -213,18 +213,32 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 											{/* Team Logos and TFS (when picks are in) */}
 											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
 												<div className='flex flex-wrap items-center gap-2'>
-													{stats.pickedTeams.map((teamData, idx) => (
-														<div key={idx} className='w-6 h-6 sm:w-7 sm:h-7 relative bg-white/10 rounded-sm p-0.5 border border-white/20'>
-															<Image
-																src={teamData.logo}
-																alt={teamData.abbreviation}
-																width={28}
-																height={28}
-																className='rounded-sm object-contain'
-																unoptimized
-															/>
-														</div>
-													))}
+													{stats.pickedTeams.map((teamData, idx) => {
+														// Determine background color based on game status and result
+														let bgClass = 'bg-white/10 border-white/20';
+														if (teamData.gameStatus === 'in_progress') {
+															bgClass = 'bg-blue-400/30 border-blue-400/50';
+														} else if (teamData.gameStatus === 'final') {
+															if (teamData.isCorrect === true) {
+																bgClass = 'bg-green-500/30 border-green-500/50';
+															} else if (teamData.isCorrect === false) {
+																bgClass = 'bg-red-500/30 border-red-500/50';
+															}
+														}
+
+														return (
+															<div key={idx} className={`w-6 h-6 sm:w-7 sm:h-7 relative rounded-sm p-0.5 border ${bgClass}`}>
+																<Image
+																	src={teamData.logo}
+																	alt={teamData.abbreviation}
+																	width={28}
+																	height={28}
+																	className='rounded-sm object-contain'
+																	unoptimized
+																/>
+															</div>
+														);
+													})}
 													{/* TFS Badge for Steve mode */}
 													{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
 														<span className='text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold whitespace-nowrap'>
