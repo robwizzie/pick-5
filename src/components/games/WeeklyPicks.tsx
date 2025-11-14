@@ -53,6 +53,7 @@ export function WeeklyPicks() {
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 	const [leagueMode, setLeagueMode] = useState<string>('');
 	const [tfsError, setTfsError] = useState<string | null>(null);
+	const [picksLoaded, setPicksLoaded] = useState(false);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -78,6 +79,7 @@ export function WeeklyPicks() {
 
 		initialLoadRef.current = true; // Reset for new week
 		lastSavedRef.current = null; // Reset last saved for new week
+		setPicksLoaded(false); // Reset picks loaded state for new week
 		loadWeeklyGames();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentWeek, session?.user, leagueMode]);
@@ -248,6 +250,8 @@ export function WeeklyPicks() {
 		} catch (error) {
 			console.error('[WeeklyPicks] Error loading picks:', error);
 			setError('Error loading picks');
+		} finally {
+			setPicksLoaded(true);
 		}
 	};
 
@@ -532,7 +536,7 @@ export function WeeklyPicks() {
 		}
 	};
 
-	if (sessionStatus === 'loading' || loading) {
+	if (sessionStatus === 'loading' || loading || !picksLoaded) {
 		return (
 			<Card>
 				<CardContent className='p-6'>

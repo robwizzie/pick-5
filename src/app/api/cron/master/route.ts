@@ -67,12 +67,18 @@ export async function GET(req: Request) {
 			results.push({ task: 'send-game-notifications', day: 'Thursday', result: gameNotifResult });
 		}
 
-		// Friday (5): Fetch odds
+		// Friday (5): Fetch odds and check for game results (TNF completed overnight)
 		if (dayOfWeek === 5) {
 			console.log('[Master Cron] Friday - Fetching odds');
 			const oddsResponse = await fetchOddsHandler(req);
 			const oddsResult = await oddsResponse.json();
 			results.push({ task: 'fetch-odds', day: 'Friday', result: oddsResult });
+
+			console.log('[Master Cron] Friday - Checking for game result notifications (TNF)');
+			const gameNotifResponse = await sendGameNotificationsHandler(req);
+			const gameNotifResult = await gameNotifResponse.json();
+			console.log('[Master Cron] Game notification result:', JSON.stringify(gameNotifResult, null, 2));
+			results.push({ task: 'send-game-notifications', day: 'Friday', result: gameNotifResult });
 		}
 
 		// Saturday (6): Send reminders
