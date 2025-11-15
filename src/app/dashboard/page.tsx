@@ -112,7 +112,7 @@ const Dashboard = () => {
 
 													if (status === 'in' || status === 'in_progress') {
 														gameStatus = 'in_progress';
-													} else if (status === 'post' || status === 'final') {
+													} else if (status === 'post' || status === 'final' || status === 'status_final') {
 														gameStatus = 'final';
 													}
 
