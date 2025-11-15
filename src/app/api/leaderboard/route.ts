@@ -78,10 +78,31 @@ export async function GET(req: Request) {
 				const isHome = p.isHome;
 				const teamData = isHome ? game.home : game.away;
 
+				// Determine game status
+				const status = game.status?.toLowerCase() || 'scheduled';
+				let gameStatus: 'scheduled' | 'in_progress' | 'final' = 'scheduled';
+
+				if (status === 'in' || status === 'in_progress') {
+					gameStatus = 'in_progress';
+				} else if (status === 'post' || status === 'final' || status === 'status_final') {
+					gameStatus = 'final';
+				}
+
+				// Determine if pick was correct (only for finished games)
+				let isCorrect: boolean | null = null;
+				if (gameStatus === 'final') {
+					const gameResult = gameResults.find(gr => gr.id === p.gameId);
+					if (gameResult) {
+						isCorrect = ScoringService.calculatePickResult(p, gameResult);
+					}
+				}
+
 				return {
 					team: teamData.team,
 					abbreviation: teamData.abbreviation,
-					logo: teamData.logo
+					logo: teamData.logo,
+					gameStatus,
+					isCorrect
 				};
 			}).filter(Boolean); // Remove any nulls
 
