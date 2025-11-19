@@ -3,8 +3,7 @@ import mongoose from 'mongoose';
 const PushSubscriptionSchema = new mongoose.Schema({
 	userId: {
 		type: String,
-		required: true,
-		index: true
+		required: true
 	},
 	endpoint: {
 		type: String,
