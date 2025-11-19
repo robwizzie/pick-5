@@ -4,8 +4,7 @@ import mongoose from 'mongoose';
 const GameNotificationSchema = new mongoose.Schema({
 	userId: {
 		type: String,
-		required: true,
-		index: true
+		required: true
 	},
 	gameId: {
 		type: String,
