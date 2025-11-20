@@ -25,7 +25,11 @@ self.addEventListener('push', function (event) {
 		},
 		vibrate: [200, 100, 200],
 		tag: data.tag || 'pick-reminder',
-		requireInteraction: false
+		// Pick reminders should persist until user interacts
+		requireInteraction: data.tag === 'pick-reminder',
+		// Make the notification sticky
+		silent: false,
+		renotify: true
 	};
 
 	event.waitUntil(self.registration.showNotification(title, options));
