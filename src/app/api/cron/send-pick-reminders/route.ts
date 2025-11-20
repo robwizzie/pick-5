@@ -28,10 +28,19 @@ webPush.setVapidDetails(
 async function getThursdayNightGame(week: number) {
 	try {
 		const games = await NFLService.getWeeklyGames(week);
-		// Find the Thursday night game (day of week = 4)
+		console.log(`[Pick Reminders] Checking ${games.length} games for Thursday game`);
+
+		// Find the Thursday night game - check in both UTC and ET
 		const thursdayGame = games.find(game => {
 			const gameDate = new Date(game.date);
-			return gameDate.getDay() === 4;
+			// Check day of week in ET timezone (Thursday = 4)
+			const etDay = new Date(gameDate.toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
+			const utcDay = gameDate.getDay();
+
+			console.log(`[Pick Reminders] Game: ${game.away.team} @ ${game.home.team}, Date: ${gameDate.toISOString()}, UTC Day: ${utcDay}, ET Day: ${etDay}`);
+
+			// Thursday night games are typically on Thursday (4) in ET, might be Friday (5) in UTC
+			return etDay === 4 || utcDay === 4;
 		});
 
 		if (thursdayGame) {
@@ -43,12 +52,16 @@ async function getThursdayNightGame(week: number) {
 				timeZoneName: 'short'
 			});
 
+			console.log(`[Pick Reminders] Found Thursday game: ${thursdayGame.away.team} @ ${thursdayGame.home.team} at ${timeString}`);
+
 			return {
 				awayTeam: thursdayGame.away.team,
 				homeTeam: thursdayGame.home.team,
 				gameTime: timeString
 			};
 		}
+
+		console.log('[Pick Reminders] No Thursday game found, using fallback');
 	} catch (error) {
 		console.error('[Pick Reminders] Error fetching Thursday night game:', error);
 	}
@@ -111,6 +124,9 @@ export async function GET(req: Request) {
 
 		// Get Thursday night game info for Thursday emails
 		const thursdayGame = isThursday ? await getThursdayNightGame(currentWeek) : null;
+
+		// Helper to delay between API calls to avoid rate limiting
+		const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 		// Process each user
 		for (const user of users) {
@@ -183,6 +199,9 @@ export async function GET(req: Request) {
 							emailsSent++;
 							console.log(`[Pick Reminders] Email sent to ${user.email} (ID: ${emailResult.data?.id})`);
 						}
+
+						// Rate limit: wait 600ms between emails (max ~1.6 req/sec, under 2 req/sec limit)
+						await delay(600);
 					}
 				} catch (emailError) {
 					console.error(`[Pick Reminders] Failed to send email to ${user.email}:`, emailError);
@@ -195,6 +214,10 @@ export async function GET(req: Request) {
 						const subscriptions = await PushSubscription.find({
 							userId: user._id.toString()
 						});
+
+						if (subscriptions.length === 0) {
+							console.log(`[Pick Reminders] No push subscriptions found for ${user.email}`);
+						}
 
 						for (const subscription of subscriptions) {
 							try {
@@ -218,6 +241,8 @@ export async function GET(req: Request) {
 									tag: 'pick-reminder'
 								};
 
+								console.log(`[Pick Reminders] Sending push to ${user.email}: ${JSON.stringify(pushPayload)}`);
+
 								await webPush.sendNotification(
 									{
 										endpoint: subscription.endpoint,
@@ -230,7 +255,7 @@ export async function GET(req: Request) {
 								);
 
 								pushNotificationsSent++;
-								console.log(`[Pick Reminders] Push notification sent to ${user.email}`);
+								console.log(`[Pick Reminders] Push notification sent successfully to ${user.email}`);
 							} catch (pushError: any) {
 								// If subscription is no longer valid, delete it
 								if (pushError.statusCode === 410) {
