@@ -65,8 +65,8 @@ export default function SettingsPage() {
 
 	useEffect(() => {
 		if (status === 'authenticated') {
-			loadNotificationSettings();
 			checkPushSupport();
+			loadNotificationSettings();
 		}
 	}, [status]);
 
@@ -82,13 +82,53 @@ export default function SettingsPage() {
 			if (response.ok) {
 				const data = await response.json();
 				setEmailPreferences(data.emailPreferences);
-				setPushEnabled(data.pushNotificationsEnabled);
 				if (data.pushNotificationPreferences) {
 					setPushNotificationPreferences(data.pushNotificationPreferences);
 				}
+
+				// Check actual browser permission and subscription state
+				await checkActualPushState(data.pushNotificationsEnabled);
 			}
 		} catch (error) {
 			console.error('Error loading notification settings:', error);
+		}
+	};
+
+	const checkActualPushState = async (dbPushEnabled: boolean) => {
+		try {
+			// Check if browser permission is granted
+			const permission = await Notification.permission;
+
+			// Check if there's an active subscription
+			const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+			const subscription = registration ? await registration.pushManager.getSubscription() : null;
+
+			// The actual state is enabled only if:
+			// 1. Permission is granted AND
+			// 2. There's an active subscription
+			const actuallyEnabled = permission === 'granted' && subscription !== null;
+
+			// If database says enabled but browser says otherwise, fix the state
+			if (dbPushEnabled && !actuallyEnabled) {
+				console.log('Push notifications are enabled in DB but not in browser. Syncing state...');
+				setPushEnabled(false);
+				// Update the database to reflect reality
+				await fetch('/api/user/settings', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						emailPreferences,
+						pushNotificationsEnabled: false,
+						pushNotificationPreferences
+					})
+				});
+			} else {
+				setPushEnabled(actuallyEnabled);
+			}
+		} catch (error) {
+			console.error('Error checking push state:', error);
+			// Fallback to database state
+			setPushEnabled(dbPushEnabled);
 		}
 	};
 
@@ -173,6 +213,10 @@ export default function SettingsPage() {
 		}
 
 		try {
+			setNotifLoading(true);
+			setError('');
+			setMessage('');
+
 			const registration = await navigator.serviceWorker.register('/sw.js');
 			await navigator.serviceWorker.ready;
 
@@ -180,6 +224,7 @@ export default function SettingsPage() {
 
 			if (permission !== 'granted') {
 				setError('Please allow notifications to enable push reminders');
+				setNotifLoading(false);
 				return;
 			}
 
@@ -206,14 +251,20 @@ export default function SettingsPage() {
 			console.error('Error enabling push notifications:', err);
 			setError('Failed to enable push notifications');
 			setTimeout(() => setError(''), 5000);
+		} finally {
+			setNotifLoading(false);
 		}
 	};
 
 	const handleDisablePush = async () => {
 		try {
-			const registration = await navigator.serviceWorker.ready;
-			const subscription = await registration.pushManager.getSubscription();
+			setNotifLoading(true);
 
+			// Try to get the service worker and subscription
+			const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+			const subscription = registration ? await registration.pushManager.getSubscription() : null;
+
+			// If there's an active subscription, unsubscribe from it
 			if (subscription) {
 				await fetch('/api/push/unsubscribe', {
 					method: 'POST',
@@ -222,14 +273,29 @@ export default function SettingsPage() {
 				});
 
 				await subscription.unsubscribe();
-				setPushEnabled(false);
-				setMessage('Push notifications disabled');
-				setTimeout(() => setMessage(''), 3000);
 			}
+
+			// Always update the database state, even if there was no subscription
+			await fetch('/api/user/settings', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					emailPreferences,
+					pushNotificationsEnabled: false,
+					pushNotificationPreferences
+				})
+			});
+
+			// Update local state
+			setPushEnabled(false);
+			setMessage('Push notifications disabled');
+			setTimeout(() => setMessage(''), 3000);
 		} catch (err) {
 			console.error('Error disabling push notifications:', err);
 			setError('Failed to disable push notifications');
 			setTimeout(() => setError(''), 5000);
+		} finally {
+			setNotifLoading(false);
 		}
 	};
 
@@ -455,12 +521,26 @@ export default function SettingsPage() {
 										<p className='text-sm text-muted-foreground'>Receive real-time notifications on this device</p>
 									</div>
 									{pushEnabled ? (
-										<Button onClick={handleDisablePush} variant='outline' className='text-red-500 border-red-500/50'>
-											Disable
+										<Button onClick={handleDisablePush} variant='outline' className='text-red-500 border-red-500/50' disabled={notifLoading}>
+											{notifLoading ? (
+												<>
+													<Loader2 className='h-4 w-4 mr-2 animate-spin' />
+													Disabling...
+												</>
+											) : (
+												'Disable'
+											)}
 										</Button>
 									) : (
-										<Button onClick={handleEnablePush} className='bg-primary hover:bg-primary/90'>
-											Enable
+										<Button onClick={handleEnablePush} className='bg-primary hover:bg-primary/90' disabled={notifLoading}>
+											{notifLoading ? (
+												<>
+													<Loader2 className='h-4 w-4 mr-2 animate-spin' />
+													Enabling...
+												</>
+											) : (
+												'Enable'
+											)}
 										</Button>
 									)}
 								</div>
