@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, LogIn, BarChart3, Users, Calendar } from 'lucide-react';
+import { Plus, LogIn, BarChart3, Users, Trophy, TrendingUp, Target } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
+import LiveFeed from '@/components/dashboard/LiveFeed';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
-import Image from 'next/image';
+import CountUp from 'react-countup';
 
 interface TeamPick {
 	team: string;
@@ -45,6 +46,13 @@ const Dashboard = () => {
 	const { data: session, status } = useSession();
 	const [leagues, setLeagues] = useState<League[]>([]);
 	const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+	const [stats, setStats] = useState({
+		totalSeasonPoints: 0,
+		globalRank: 0,
+		totalUsers: 0,
+		winRate: 0,
+		rankPercentage: 0
+	});
 
 	useEffect(() => {
 		if (status === 'unauthenticated') {
@@ -80,6 +88,93 @@ const Dashboard = () => {
 
 		fetchLeagues();
 	}, [session]);
+
+	// Fetch stats from all leagues
+	useEffect(() => {
+		const fetchStats = async () => {
+			if (!session || leagues.length === 0) return;
+
+			try {
+				let totalPoints = 0;
+				let totalPicks = 0;
+				let correctPicks = 0;
+
+				// Calculate total season points and win rate across all leagues
+				for (const league of leagues) {
+					try {
+						// Fetch leaderboard for this league to get user's points
+						const leaderboardRes = await fetch(`/api/leaderboard?leagueId=${league.id}`);
+						if (leaderboardRes.ok) {
+							const leaderboard = await leaderboardRes.json();
+							const userEntry = leaderboard.find((entry: { userId: string }) => entry.userId === session.user?.id);
+							if (userEntry) {
+								totalPoints += userEntry.seasonPoints || 0;
+							}
+						}
+
+						// Fetch user's picks to calculate win rate
+						const picksRes = await fetch(`/api/picks/user?leagueId=${league.id}`);
+						if (picksRes.ok) {
+							const picks = await picksRes.json();
+							for (const pick of picks) {
+								if (pick.picks && Array.isArray(pick.picks)) {
+									for (const p of pick.picks) {
+										totalPicks++;
+										if (p.isCorrect === true) {
+											correctPicks++;
+										}
+									}
+								}
+							}
+						}
+					} catch (error) {
+						console.error('Error fetching stats for league:', error);
+					}
+				}
+
+				// Calculate win rate
+				const winRate = totalPicks > 0 ? Math.round((correctPicks / totalPicks) * 100) : 0;
+
+				// Fetch global rank (simplified - could be enhanced)
+				// For now, we'll use the best rank across all leagues
+				let bestRank = 0;
+				let totalUsersInBestLeague = 0;
+
+				for (const league of leagues) {
+					try {
+						const leaderboardRes = await fetch(`/api/leaderboard?leagueId=${league.id}`);
+						if (leaderboardRes.ok) {
+							const leaderboard = await leaderboardRes.json();
+							const userIndex = leaderboard.findIndex((entry: { userId: string }) => entry.userId === session.user?.id);
+							if (userIndex !== -1) {
+								const rank = userIndex + 1;
+								if (bestRank === 0 || rank < bestRank) {
+									bestRank = rank;
+									totalUsersInBestLeague = leaderboard.length;
+								}
+							}
+						}
+					} catch (error) {
+						console.error('Error fetching leaderboard:', error);
+					}
+				}
+
+				const rankPercentage = totalUsersInBestLeague > 0 ? Math.round(((totalUsersInBestLeague - bestRank + 1) / totalUsersInBestLeague) * 100) : 0;
+
+				setStats({
+					totalSeasonPoints: totalPoints,
+					globalRank: bestRank,
+					totalUsers: totalUsersInBestLeague,
+					winRate,
+					rankPercentage
+				});
+			} catch (error) {
+				console.error('Error calculating stats:', error);
+			}
+		};
+
+		fetchStats();
+	}, [session, leagues]);
 
 	useEffect(() => {
 		const fetchRecentActivity = async () => {
@@ -190,37 +285,75 @@ const Dashboard = () => {
 					<p className='text-xl text-muted-foreground max-w-2xl mx-auto'>Ready to dominate your leagues? Make your picks and climb the leaderboard.</p>
 				</div>
 
-				{/* Stats Overview - TODO: Implement stats fetching */}
-				{/* <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-slide-up'>
-					<Card className='glass border-white/10 card-hover'>
-						<CardContent className='p-6 text-center space-y-2'>
-							<Trophy className='h-8 w-8 text-accent mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>0</p>
-							<p className='text-sm text-muted-foreground'>Total Picks</p>
-						</CardContent>
-					</Card>
-					<Card className='glass border-white/10 card-hover'>
-						<CardContent className='p-6 text-center space-y-2'>
-							<TrendingUp className='h-8 w-8 text-primary mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>0%</p>
-							<p className='text-sm text-muted-foreground'>Win Rate</p>
-						</CardContent>
-					</Card>
-					<Card className='glass border-white/10 card-hover'>
-						<CardContent className='p-6 text-center space-y-2'>
-							<Crown className='h-8 w-8 text-accent-3 mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>#0</p>
-							<p className='text-sm text-muted-foreground'>Current Rank</p>
-						</CardContent>
-					</Card>
-					<Card className='glass border-white/10 card-hover'>
-						<CardContent className='p-6 text-center space-y-2'>
-							<Star className='h-8 w-8 text-accent-2 mx-auto' />
-							<p className='text-2xl font-bold text-foreground'>0</p>
-							<p className='text-sm text-muted-foreground'>Week Streak</p>
-						</CardContent>
-					</Card>
-				</div> */}
+				{/* Stats Overview */}
+				{leagues.length > 0 && (
+					<div className='grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up'>
+						{/* Season Points */}
+						<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
+							<CardContent className='p-6'>
+								<div className='flex items-start justify-between'>
+									<div className='space-y-2'>
+										<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Season Points</p>
+										<div className='flex items-baseline gap-2'>
+											<p className='text-4xl font-mono font-bold text-primary'>
+												<CountUp end={stats.totalSeasonPoints} duration={1.5} />
+											</p>
+											{stats.rankPercentage > 0 && (
+												<span className='text-xs font-semibold px-2 py-1 rounded-full bg-primary/20 text-primary'>
+													Top {stats.rankPercentage}%
+												</span>
+											)}
+										</div>
+									</div>
+									<div className='p-3 rounded-full bg-primary/10'>
+										<Trophy className='h-6 w-6 text-primary' />
+									</div>
+								</div>
+							</CardContent>
+						</Card>
+
+						{/* Global Rank */}
+						<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
+							<CardContent className='p-6'>
+								<div className='flex items-start justify-between'>
+									<div className='space-y-2'>
+										<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+										<div className='flex items-baseline gap-2'>
+											<p className='text-4xl font-mono font-bold text-primary'>
+												#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
+											</p>
+										</div>
+										{stats.totalUsers > 0 && (
+											<p className='text-xs text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
+										)}
+									</div>
+									<div className='p-3 rounded-full bg-primary/10'>
+										<Target className='h-6 w-6 text-primary' />
+									</div>
+								</div>
+							</CardContent>
+						</Card>
+
+						{/* Win Rate */}
+						<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
+							<CardContent className='p-6'>
+								<div className='flex items-start justify-between'>
+									<div className='space-y-2'>
+										<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Win Rate</p>
+										<div className='flex items-baseline gap-2'>
+											<p className='text-4xl font-mono font-bold text-primary'>
+												<CountUp end={stats.winRate} duration={1.5} />%
+											</p>
+										</div>
+									</div>
+									<div className='p-3 rounded-full bg-primary/10'>
+										<TrendingUp className='h-6 w-6 text-primary' />
+									</div>
+								</div>
+							</CardContent>
+						</Card>
+					</div>
+				)}
 
 				{/* Main Content */}
 				<div className='grid lg:grid-cols-3 gap-8'>
@@ -275,79 +408,23 @@ const Dashboard = () => {
 								<CardTitle className='text-lg font-display font-semibold'>Quick Actions</CardTitle>
 							</CardHeader>
 							<CardContent className='space-y-3'>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10' onClick={() => router.push('/league/create')}>
+								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/create')}>
 									<Plus className='h-4 w-4 mr-3' />
 									Create New League
 								</Button>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10' onClick={() => router.push('/league/join')}>
+								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/join')}>
 									<LogIn className='h-4 w-4 mr-3' />
 									Join League
 								</Button>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10' onClick={() => router.push('/stats')}>
+								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/stats')}>
 									<BarChart3 className='h-4 w-4 mr-3' />
 									My Stats
 								</Button>
 							</CardContent>
 						</Card>
 
-						{/* Recent Activity */}
-						<Card className='glass border-white/10'>
-							<CardHeader>
-								<CardTitle className='text-lg font-display font-semibold'>Recent Activity</CardTitle>
-							</CardHeader>
-							<CardContent className='space-y-3'>
-								{recentActivity.length > 0 ? (
-									recentActivity.map((activity, index) => (
-										<div key={index} className='flex items-start gap-3 p-3 rounded-lg bg-card/50 hover:bg-card/80 transition-colors cursor-pointer' onClick={() => activity.leagueId && router.push(`/league/${activity.leagueId}`)}>
-											<div className='w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0' />
-											<div className='flex-1 min-w-0'>
-												<p className='text-sm text-foreground'>{activity.message}</p>
-												{activity.leagueName && <p className='text-xs text-muted-foreground truncate'>{activity.leagueName}</p>}
-												{activity.teamPicks && activity.teamPicks.length > 0 && (
-													<div className='flex items-center gap-1.5 mt-2 flex-wrap'>
-														{activity.teamPicks.map((pick, pickIndex) => {
-															// Determine background color based on game status and result
-															let bgClass = 'bg-white/10 border-white/20';
-															if (pick.gameStatus === 'in_progress') {
-																bgClass = 'bg-blue-400/30 border-blue-400/50';
-															} else if (pick.gameStatus === 'final') {
-																if (pick.isCorrect === true) {
-																	bgClass = 'bg-green-500/30 border-green-500/50';
-																} else if (pick.isCorrect === false) {
-																	bgClass = 'bg-red-500/30 border-red-500/50';
-																}
-															}
-
-															return (
-																<div
-																	key={pickIndex}
-																	className={`w-6 h-6 sm:w-7 sm:h-7 relative rounded-sm p-0.5 border ${bgClass}`}
-																>
-																	<Image
-																		src={pick.logo}
-																		alt={pick.team}
-																		width={28}
-																		height={28}
-																		className='rounded-sm object-contain'
-																		unoptimized
-																	/>
-																</div>
-															);
-														})}
-													</div>
-												)}
-												<p className='text-xs text-muted-foreground mt-1'>{new Date(activity.timestamp).toLocaleDateString()}</p>
-											</div>
-										</div>
-									))
-								) : (
-									<div className='text-center py-8 text-muted-foreground'>
-										<Calendar className='h-8 w-8 mx-auto mb-2' />
-										<p className='text-sm'>No recent activity</p>
-									</div>
-								)}
-							</CardContent>
-						</Card>
+						{/* Live Feed */}
+						<LiveFeed recentActivity={recentActivity} />
 					</div>
 				</div>
 			</div>
