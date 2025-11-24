@@ -98,6 +98,8 @@ const Dashboard = () => {
 				let totalPoints = 0;
 				let totalPicks = 0;
 				let correctPicks = 0;
+				let bestRank = 0;
+				let totalUsersInBestLeague = 0;
 
 				// Calculate total season points and win rate across all leagues
 				for (const league of leagues) {
@@ -105,24 +107,36 @@ const Dashboard = () => {
 						// Fetch leaderboard for this league to get user's points
 						const leaderboardRes = await fetch(`/api/leaderboard?leagueId=${league.id}`);
 						if (leaderboardRes.ok) {
-							const leaderboard = await leaderboardRes.json();
-							const userEntry = leaderboard.find((entry: { userId: string }) => entry.userId === session.user?.id);
-							if (userEntry) {
-								totalPoints += userEntry.seasonPoints || 0;
-							}
-						}
+							const data = await leaderboardRes.json();
 
-						// Fetch user's picks to calculate win rate
-						const picksRes = await fetch(`/api/picks/user?leagueId=${league.id}`);
-						if (picksRes.ok) {
-							const picks = await picksRes.json();
-							for (const pick of picks) {
-								if (pick.picks && Array.isArray(pick.picks)) {
-									for (const p of pick.picks) {
-										totalPicks++;
-										if (p.isCorrect === true) {
-											correctPicks++;
-										}
+							// Find user's season stats
+							const userSeasonStats = data.seasonStats?.find(
+								(entry: { player: string }) => entry.player === session.user?.name
+							);
+
+							if (userSeasonStats) {
+								totalPoints += userSeasonStats.totalPoints || 0;
+								totalPicks += userSeasonStats.totalPicks || 0;
+								correctPicks += userSeasonStats.correctPicks || 0;
+							}
+
+							// Calculate user's rank in this league
+							if (data.seasonStats && data.seasonStats.length > 0) {
+								// Sort by total points descending
+								const sortedStats = [...data.seasonStats].sort(
+									(a: { totalPoints: number }, b: { totalPoints: number }) =>
+										(b.totalPoints || 0) - (a.totalPoints || 0)
+								);
+
+								const userIndex = sortedStats.findIndex(
+									(entry: { player: string }) => entry.player === session.user?.name
+								);
+
+								if (userIndex !== -1) {
+									const rank = userIndex + 1;
+									if (bestRank === 0 || rank < bestRank) {
+										bestRank = rank;
+										totalUsersInBestLeague = sortedStats.length;
 									}
 								}
 							}
@@ -134,31 +148,6 @@ const Dashboard = () => {
 
 				// Calculate win rate
 				const winRate = totalPicks > 0 ? Math.round((correctPicks / totalPicks) * 100) : 0;
-
-				// Fetch global rank (simplified - could be enhanced)
-				// For now, we'll use the best rank across all leagues
-				let bestRank = 0;
-				let totalUsersInBestLeague = 0;
-
-				for (const league of leagues) {
-					try {
-						const leaderboardRes = await fetch(`/api/leaderboard?leagueId=${league.id}`);
-						if (leaderboardRes.ok) {
-							const leaderboard = await leaderboardRes.json();
-							const userIndex = leaderboard.findIndex((entry: { userId: string }) => entry.userId === session.user?.id);
-							if (userIndex !== -1) {
-								const rank = userIndex + 1;
-								if (bestRank === 0 || rank < bestRank) {
-									bestRank = rank;
-									totalUsersInBestLeague = leaderboard.length;
-								}
-							}
-						}
-					} catch (error) {
-						console.error('Error fetching leaderboard:', error);
-					}
-				}
-
 				const rankPercentage = totalUsersInBestLeague > 0 ? Math.round(((totalUsersInBestLeague - bestRank + 1) / totalUsersInBestLeague) * 100) : 0;
 
 				setStats({
