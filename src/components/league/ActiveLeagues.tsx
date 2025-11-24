@@ -128,6 +128,20 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 		return 'border-primary/20 hover:border-primary/40';
 	};
 
+	const getGradientBackground = (rank: number | null) => {
+		if (rank === 1) return 'bg-gradient-to-br from-yellow-500/10 via-transparent to-yellow-500/5';
+		if (rank === 2) return 'bg-gradient-to-br from-gray-400/10 via-transparent to-gray-400/5';
+		if (rank === 3) return 'bg-gradient-to-br from-orange-500/10 via-transparent to-orange-500/5';
+		return '';
+	};
+
+	const getRankGradientText = (rank: number | null) => {
+		if (rank === 1) return 'bg-gradient-to-br from-yellow-400 to-yellow-600 bg-clip-text text-transparent';
+		if (rank === 2) return 'bg-gradient-to-br from-gray-300 to-gray-500 bg-clip-text text-transparent';
+		if (rank === 3) return 'bg-gradient-to-br from-orange-400 to-orange-600 bg-clip-text text-transparent';
+		return 'text-primary';
+	};
+
 	return (
 		<div className='grid grid-cols-1 gap-4'>
 			{leagues.map((league, index) => {
@@ -153,15 +167,23 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 					>
 						<button
 							onClick={() => router.push(`/league/${league._id}`)}
-							className={`w-full p-5 sm:p-6 glass border-2 rounded-xl text-left transition-all duration-300 hover:bg-card/80 group ${getTop3BorderStyle(rank)}`}
+							className={`relative overflow-hidden w-full p-5 sm:p-6 glass border-2 rounded-xl text-left transition-all duration-300 hover:bg-card/80 group ${getTop3BorderStyle(rank)} ${getGradientBackground(rank)}`}
 						>
-							{/* Mobile Layout: Stack vertically */}
-							<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-5'>
-								{/* Top Section on Mobile, Left on Desktop: League Info */}
-								<div className='flex-1 min-w-0'>
+							<div className='flex items-start gap-4 sm:gap-6'>
+								{/* Large Rank Number on Left */}
+								{rank && (
+									<div className='flex-shrink-0'>
+										<div className={`text-6xl sm:text-7xl font-bold font-mono leading-none ${getRankGradientText(rank)}`}>
+											#{rank}
+										</div>
+									</div>
+								)}
+
+								{/* Middle Section: League Info */}
+								<div className='flex-1 min-w-0 space-y-3'>
 									{/* League Name & Mode Badge */}
-									<div className='flex items-center gap-2.5 mb-3 flex-wrap'>
-										<h3 className='font-oswald text-xl sm:text-2xl uppercase tracking-wider text-foreground group-hover:text-primary transition-colors font-bold'>
+									<div className='flex items-center gap-2.5 flex-wrap'>
+										<h3 className='font-oswald text-lg sm:text-xl uppercase tracking-wider text-foreground group-hover:text-primary transition-colors font-bold'>
 											{league.name}
 										</h3>
 										{league.mode && (
@@ -175,106 +197,97 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 										)}
 									</div>
 
-									{/* Status & Stats */}
+									{/* Status & Stats Row */}
 									{isLoading ? (
-										<div className='flex items-center gap-2.5 sm:gap-3'>
-											<Skeleton className='h-3.5 sm:h-4 w-24 sm:w-28' />
-											<Skeleton className='h-3.5 sm:h-4 w-16 sm:w-20' />
+										<div className='flex items-center gap-3'>
+											<Skeleton className='h-4 w-28' />
+											<Skeleton className='h-4 w-20' />
 										</div>
 									) : stats ? (
-										<div className='space-y-2'>
-											<div className='flex flex-wrap items-center gap-2.5 sm:gap-5 text-xs sm:text-sm'>
-												{/* Picks Status */}
-												<div className='flex items-center gap-1 sm:gap-1.5'>
-													{stats.hasPicks ? (
-														<>
-															<CheckCircle2 className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-400 flex-shrink-0' />
-															<span className='text-green-400 font-medium'>Picks In</span>
-														</>
-													) : (
-														<>
-															<Clock className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-orange-400 flex-shrink-0' />
-															<span className='text-orange-400 font-medium'>Picks Needed</span>
-														</>
-													)}
-												</div>
-
-												{/* Rank & Members with special badges for top 3 */}
-												{stats.rank && (
-													<div className='flex items-center gap-1.5 sm:gap-2'>
-														{stats.rank === 1 && (
-															<Crown className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-yellow-400 animate-pulse flex-shrink-0' fill='currentColor' />
-														)}
-														{!isTop3 && <Trophy className='h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0' />}
-														<span className={`text-xs sm:text-sm px-1.5 sm:px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${getRankBadgeStyle(stats.rank)}`}>
-															#{stats.rank}
-														</span>
-														<span className='text-xs sm:text-sm text-muted-foreground whitespace-nowrap'>of {stats.totalMembers}</span>
-													</div>
+										<div className='flex flex-wrap items-center gap-3 text-sm'>
+											{/* Picks Status */}
+											<div className='flex items-center gap-1.5'>
+												{stats.hasPicks ? (
+													<>
+														<div className='px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30 flex items-center gap-1.5'>
+															<CheckCircle2 className='h-3.5 w-3.5 text-green-400 flex-shrink-0' />
+															<span className='text-green-400 font-semibold text-xs'>Picks In</span>
+														</div>
+													</>
+												) : (
+													<>
+														<div className='px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center gap-1.5'>
+															<Clock className='h-3.5 w-3.5 text-orange-400 flex-shrink-0' />
+															<span className='text-orange-400 font-semibold text-xs'>Picks Needed</span>
+														</div>
+													</>
 												)}
 											</div>
 
-											{/* Team Logos and TFS (when picks are in) */}
-											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
-												<div className='flex flex-wrap items-center gap-2 mt-1'>
-													{stats.pickedTeams.map((teamData, idx) => {
-														// Determine background color based on game status and result
-														let bgClass = 'bg-white/10 border-white/20';
-														if (teamData.gameStatus === 'in_progress') {
-															bgClass = 'bg-blue-400/30 border-blue-400/50';
-														} else if (teamData.gameStatus === 'final') {
-															if (teamData.isCorrect === true) {
-																bgClass = 'bg-green-500/30 border-green-500/50';
-															} else if (teamData.isCorrect === false) {
-																bgClass = 'bg-red-500/30 border-red-500/50';
-															}
-														}
-
-														return (
-															<div key={idx} className={`w-8 h-8 sm:w-9 sm:h-9 relative rounded-md p-1 border-2 ${bgClass} transition-all duration-200 hover:scale-110`}>
-																<Image
-																	src={teamData.logo}
-																	alt={teamData.abbreviation}
-																	width={32}
-																	height={32}
-																	className='rounded-sm object-contain'
-																	unoptimized
-																/>
-															</div>
-														);
-													})}
-													{/* TFS Badge for Steve mode */}
-													{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
-														<span className='text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-400 font-bold whitespace-nowrap border border-purple-500/30'>
-															{stats.tfsPoints} TFS
-														</span>
-													)}
-												</div>
-											)}
+											{/* Members Count */}
+											<span className='text-xs text-muted-foreground'>
+												{stats.totalMembers} {stats.totalMembers === 1 ? 'member' : 'members'}
+											</span>
 										</div>
 									) : null}
+
+									{/* Team Logos - Always at bottom */}
+									{!isLoading && stats?.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
+										<div className='flex flex-wrap items-center gap-2'>
+											{stats.pickedTeams.map((teamData, idx) => {
+												// Determine background color based on game status and result
+												let bgClass = 'bg-white/10 border-white/20';
+												if (teamData.gameStatus === 'in_progress') {
+													bgClass = 'bg-blue-400/30 border-blue-400/50';
+												} else if (teamData.gameStatus === 'final') {
+													if (teamData.isCorrect === true) {
+														bgClass = 'bg-green-500/30 border-green-500/50';
+													} else if (teamData.isCorrect === false) {
+														bgClass = 'bg-red-500/30 border-red-500/50';
+													}
+												}
+
+												return (
+													<div key={idx} className={`w-9 h-9 sm:w-10 sm:h-10 relative rounded-md p-1 border-2 ${bgClass} transition-all duration-200 hover:scale-110`}>
+														<Image
+															src={teamData.logo}
+															alt={teamData.abbreviation}
+															width={40}
+															height={40}
+															className='rounded-sm object-contain'
+															unoptimized
+														/>
+													</div>
+												);
+											})}
+											{/* TFS Badge for Steve mode */}
+											{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
+												<span className='text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-400 font-bold whitespace-nowrap border border-purple-500/30'>
+													{stats.tfsPoints} TFS
+												</span>
+											)}
+										</div>
+									)}
 								</div>
 
-								{/* Bottom Section on Mobile, Right on Desktop: Points & Menu */}
-								<div className='flex items-center justify-between sm:justify-end gap-4'>
-									{/* Points Display */}
+								{/* Right Side: Points Display */}
+								<div className='flex-shrink-0 flex items-start gap-3'>
 									{isLoading ? (
-										<div className='text-right space-y-0.5'>
-											<Skeleton className='h-8 w-16' />
-											<Skeleton className='h-3 w-20' />
+										<div className='text-right space-y-1'>
+											<Skeleton className='h-10 w-20' />
+											<Skeleton className='h-3 w-24' />
 										</div>
 									) : stats ? (
-										<div className='text-left sm:text-right space-y-1'>
-											<div className='flex items-center sm:justify-end gap-1.5'>
-												<span className='text-3xl sm:text-4xl font-bold text-primary tabular-nums font-mono'>
+										<div className='text-right space-y-1'>
+											<div className='flex items-center justify-end gap-1.5'>
+												<span className='text-4xl sm:text-5xl font-bold text-primary tabular-nums font-mono leading-none'>
 													<CountUp end={stats.seasonPoints} duration={0.5} />
 												</span>
-												<span className='text-xs text-muted-foreground self-end mb-1 font-medium'>pts</span>
+												<span className='text-sm text-muted-foreground self-end mb-1 font-medium'>pts</span>
 											</div>
-											<p className='text-xs text-muted-foreground font-medium'>Season Total</p>
 											{stats.currentWeekPoints > 0 && (
-												<p className='text-xs text-primary/70 tabular-nums font-mono font-medium'>
-													+<CountUp end={stats.currentWeekPoints} duration={0.5} /> Week {currentWeek}
+												<p className='text-xs text-green-400 tabular-nums font-mono font-bold'>
+													+<CountUp end={stats.currentWeekPoints} duration={0.5} /> this week
 												</p>
 											)}
 										</div>
@@ -285,8 +298,8 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 										<div onClick={handleDropdownClick} className='flex-shrink-0'>
 											<DropdownMenu>
 												<DropdownMenuTrigger asChild>
-													<Button variant='ghost' size='sm' className='h-7 w-7 sm:h-8 sm:w-8 p-0 hover:bg-primary/20'>
-														<MoreVertical className='h-3.5 w-3.5 sm:h-4 sm:w-4' />
+													<Button variant='ghost' size='sm' className='h-8 w-8 p-0 hover:bg-primary/20'>
+														<MoreVertical className='h-4 w-4' />
 													</Button>
 												</DropdownMenuTrigger>
 												<DropdownMenuContent align='end' className='glass border-white/10 backdrop-blur-xl'>
