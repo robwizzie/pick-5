@@ -148,24 +148,28 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 							delay: index * 0.05,
 							ease: 'easeOut'
 						}}
-						whileHover={{ scale: 1.02 }}
-						whileTap={{ scale: 0.98 }}
+						whileHover={{ scale: 1.01 }}
+						whileTap={{ scale: 0.99 }}
 					>
 						<button
 							onClick={() => router.push(`/league/${league._id}`)}
-							className={`w-full p-3 sm:p-5 bg-card border-2 rounded-lg text-left transition-all hover:bg-primary/10 hover:shadow-glow group ${getTop3BorderStyle(rank)}`}
+							className={`w-full p-5 sm:p-6 glass border-2 rounded-xl text-left transition-all duration-300 hover:bg-card/80 group ${getTop3BorderStyle(rank)}`}
 						>
 							{/* Mobile Layout: Stack vertically */}
 							<div className='flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-5'>
 								{/* Top Section on Mobile, Left on Desktop: League Info */}
 								<div className='flex-1 min-w-0'>
 									{/* League Name & Mode Badge */}
-									<div className='flex items-center gap-2 mb-2 sm:mb-2.5 flex-wrap'>
-										<h3 className='font-oswald text-lg sm:text-xl uppercase tracking-wide text-primary group-hover:text-primary/80 transition-colors'>
+									<div className='flex items-center gap-2.5 mb-3 flex-wrap'>
+										<h3 className='font-oswald text-xl sm:text-2xl uppercase tracking-wider text-foreground group-hover:text-primary transition-colors font-bold'>
 											{league.name}
 										</h3>
 										{league.mode && (
-											<span className='text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-primary/10 text-primary/80 font-medium whitespace-nowrap'>
+											<span className={`text-xs px-2.5 py-1 rounded-full font-semibold whitespace-nowrap ${
+												league.mode === 'steve'
+													? 'bg-green-500/20 text-green-400'
+													: 'bg-blue-500/20 text-blue-400'
+											}`}>
 												{league.mode === 'steve' ? 'Steve' : 'Standard'}
 											</span>
 										)}
@@ -212,7 +216,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 
 											{/* Team Logos and TFS (when picks are in) */}
 											{stats.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
-												<div className='flex flex-wrap items-center gap-2'>
+												<div className='flex flex-wrap items-center gap-2 mt-1'>
 													{stats.pickedTeams.map((teamData, idx) => {
 														// Determine background color based on game status and result
 														let bgClass = 'bg-white/10 border-white/20';
@@ -227,12 +231,12 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 														}
 
 														return (
-															<div key={idx} className={`w-6 h-6 sm:w-7 sm:h-7 relative rounded-sm p-0.5 border ${bgClass}`}>
+															<div key={idx} className={`w-8 h-8 sm:w-9 sm:h-9 relative rounded-md p-1 border-2 ${bgClass} transition-all duration-200 hover:scale-110`}>
 																<Image
 																	src={teamData.logo}
 																	alt={teamData.abbreviation}
-																	width={28}
-																	height={28}
+																	width={32}
+																	height={32}
 																	className='rounded-sm object-contain'
 																	unoptimized
 																/>
@@ -241,7 +245,7 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 													})}
 													{/* TFS Badge for Steve mode */}
 													{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
-														<span className='text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold whitespace-nowrap'>
+														<span className='text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-400 font-bold whitespace-nowrap border border-purple-500/30'>
 															{stats.tfsPoints} TFS
 														</span>
 													)}
@@ -252,25 +256,25 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 								</div>
 
 								{/* Bottom Section on Mobile, Right on Desktop: Points & Menu */}
-								<div className='flex items-center justify-between sm:justify-end gap-3 sm:gap-4'>
+								<div className='flex items-center justify-between sm:justify-end gap-4'>
 									{/* Points Display */}
 									{isLoading ? (
 										<div className='text-right space-y-0.5'>
-											<Skeleton className='h-6 sm:h-7 w-11 sm:w-14' />
-											<Skeleton className='h-3 w-14 sm:w-16' />
+											<Skeleton className='h-8 w-16' />
+											<Skeleton className='h-3 w-20' />
 										</div>
 									) : stats ? (
-										<div className='text-left sm:text-right space-y-0'>
-											<div className='flex items-center sm:justify-end gap-1'>
-												<span className='text-xl sm:text-2xl font-bold text-primary tabular-nums font-mono'>
+										<div className='text-left sm:text-right space-y-1'>
+											<div className='flex items-center sm:justify-end gap-1.5'>
+												<span className='text-3xl sm:text-4xl font-bold text-primary tabular-nums font-mono'>
 													<CountUp end={stats.seasonPoints} duration={0.5} />
 												</span>
-												<span className='text-[10px] text-muted-foreground self-end mb-0.5'>pts</span>
+												<span className='text-xs text-muted-foreground self-end mb-1 font-medium'>pts</span>
 											</div>
-											<p className='text-[10px] sm:text-xs text-muted-foreground -mt-0.5'>Season Total</p>
+											<p className='text-xs text-muted-foreground font-medium'>Season Total</p>
 											{stats.currentWeekPoints > 0 && (
-												<p className='text-[10px] sm:text-xs text-muted-foreground/70 tabular-nums font-mono'>
-													<CountUp end={stats.currentWeekPoints} duration={0.5} /> Week {currentWeek}
+												<p className='text-xs text-primary/70 tabular-nums font-mono font-medium'>
+													+<CountUp end={stats.currentWeekPoints} duration={0.5} /> Week {currentWeek}
 												</p>
 											)}
 										</div>
