@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from '@/components/ui/input';
 import { WeeklyPicks } from '@/components/games/WeeklyPicks';
 import { Results } from '@/components/games/Results';
-import { SeasonStats } from '@/components/games/SeasonStats';
 import { Leaderboard } from '@/components/games/Leaderboard';
 import { Recap } from '@/components/games/Recap';
 import { Spinner } from '@/components/ui/spinner';
+import LeagueStats from '@/components/league/LeagueStats';
 import Image from 'next/image';
 import { Share2, Copy, Check, Info, LogOut, Gamepad2, Trophy, BarChart3, TrendingUp, Sparkles, Settings, UserMinus, Eye, EyeOff } from 'lucide-react';
 import { useWeek } from '@/contexts/WeekContext';
@@ -364,9 +364,8 @@ export default function LeagueDetails() {
 						)}
 					</Tabs>
 				</div>
-				<div className='space-y-8'>
-					<SeasonStats />
-					<Leaderboard />
+				<div>
+					<LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />
 				</div>
 			</div>
 
@@ -375,7 +374,7 @@ export default function LeagueDetails() {
 				{mobileView === 'picks' && <WeeklyPicks />}
 				{mobileView === 'results' && <Results />}
 				{mobileView === 'leaderboard' && <Leaderboard />}
-				{mobileView === 'stats' && <SeasonStats />}
+				{mobileView === 'stats' && <LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />}
 				{hasRecapData && recapWeekToShow && mobileView === 'recap' && <Recap weekOverride={recapWeekToShow} />}
 			</div>
 
