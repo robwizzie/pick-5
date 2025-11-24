@@ -89,7 +89,7 @@ const Dashboard = () => {
 		fetchLeagues();
 	}, [session]);
 
-	// Fetch stats from all leagues
+	// Fetch stats from all leagues with TRUE global rank
 	useEffect(() => {
 		const fetchStats = async () => {
 			if (!session || leagues.length === 0) return;
@@ -98,8 +98,9 @@ const Dashboard = () => {
 				let totalPoints = 0;
 				let totalPicks = 0;
 				let correctPicks = 0;
-				let bestRank = 0;
-				let totalUsersInBestLeague = 0;
+
+				// Map to store all users and their total points across all leagues
+				const globalUserPoints = new Map<string, { name: string; totalPoints: number }>();
 
 				// Calculate total season points and win rate across all leagues
 				for (const league of leagues) {
@@ -109,7 +110,7 @@ const Dashboard = () => {
 						if (leaderboardRes.ok) {
 							const data = await leaderboardRes.json();
 
-							// Find user's season stats
+							// Find user's season stats in this league
 							const userSeasonStats = data.seasonStats?.find(
 								(entry: { player: string }) => entry.player === session.user?.name
 							);
@@ -120,25 +121,19 @@ const Dashboard = () => {
 								correctPicks += userSeasonStats.correctPicks || 0;
 							}
 
-							// Calculate user's rank in this league
-							if (data.seasonStats && data.seasonStats.length > 0) {
-								// Sort by total points descending
-								const sortedStats = [...data.seasonStats].sort(
-									(a: { totalPoints: number }, b: { totalPoints: number }) =>
-										(b.totalPoints || 0) - (a.totalPoints || 0)
-								);
-
-								const userIndex = sortedStats.findIndex(
-									(entry: { player: string }) => entry.player === session.user?.name
-								);
-
-								if (userIndex !== -1) {
-									const rank = userIndex + 1;
-									if (bestRank === 0 || rank < bestRank) {
-										bestRank = rank;
-										totalUsersInBestLeague = sortedStats.length;
+							// Aggregate all users' points across leagues for global ranking
+							if (data.seasonStats && Array.isArray(data.seasonStats)) {
+								data.seasonStats.forEach((stat: { player: string; totalPoints: number }) => {
+									const existing = globalUserPoints.get(stat.player);
+									if (existing) {
+										existing.totalPoints += stat.totalPoints || 0;
+									} else {
+										globalUserPoints.set(stat.player, {
+											name: stat.player,
+											totalPoints: stat.totalPoints || 0
+										});
 									}
-								}
+								});
 							}
 						}
 					} catch (error) {
@@ -146,14 +141,23 @@ const Dashboard = () => {
 					}
 				}
 
+				// Calculate TRUE global rank across all users in all leagues
+				const allUsers = Array.from(globalUserPoints.values());
+				const sortedUsers = allUsers.sort((a, b) => b.totalPoints - a.totalPoints);
+
+				const userGlobalRank = sortedUsers.findIndex(u => u.name === session.user?.name) + 1;
+				const totalGlobalUsers = sortedUsers.length;
+
 				// Calculate win rate
 				const winRate = totalPicks > 0 ? Math.round((correctPicks / totalPicks) * 100) : 0;
-				const rankPercentage = totalUsersInBestLeague > 0 ? Math.round(((totalUsersInBestLeague - bestRank + 1) / totalUsersInBestLeague) * 100) : 0;
+				const rankPercentage = totalGlobalUsers > 0 && userGlobalRank > 0
+					? Math.round(((totalGlobalUsers - userGlobalRank + 1) / totalGlobalUsers) * 100)
+					: 0;
 
 				setStats({
 					totalSeasonPoints: totalPoints,
-					globalRank: bestRank,
-					totalUsers: totalUsersInBestLeague,
+					globalRank: userGlobalRank,
+					totalUsers: totalGlobalUsers,
 					winRate,
 					rankPercentage
 				});
@@ -267,85 +271,229 @@ const Dashboard = () => {
 
 	return (
 		<div className='min-h-screen p-4 pt-8'>
-			<div className='max-w-7xl mx-auto space-y-8'>
-				{/* Welcome Header */}
-				<div className='text-center space-y-4 animate-fade-in'>
-					<h1 className='text-4xl lg:text-5xl font-display font-bold gradient-text'>Welcome back, {session?.user?.name?.split(' ')[0]}!</h1>
-					<p className='text-xl text-muted-foreground max-w-2xl mx-auto'>Ready to dominate your leagues? Make your picks and climb the leaderboard.</p>
+			<div className='max-w-7xl mx-auto space-y-6 lg:space-y-8'>
+				{/* Welcome Header - Compact on Mobile */}
+				<div className='text-center space-y-2 lg:space-y-4 animate-fade-in'>
+					<h1 className='text-3xl lg:text-5xl font-display font-bold gradient-text'>Welcome back, {session?.user?.name?.split(' ')[0]}!</h1>
+					<p className='text-base lg:text-xl text-muted-foreground max-w-2xl mx-auto'>Ready to dominate your leagues? Make your picks and climb the leaderboard.</p>
 				</div>
 
-				{/* Stats Overview */}
+				{/* Leagues Section - FIRST on Mobile */}
+				<div className='lg:hidden space-y-4'>
+					<div className='flex items-center justify-between'>
+						<h2 className='text-xl font-display font-bold text-foreground'>Your Leagues</h2>
+						<div className='flex gap-2'>
+							<Button variant='outline' size='sm' onClick={() => router.push('/league/create')} className='glass border-white/20 hover:border-primary/50'>
+								<Plus className='h-4 w-4 mr-1.5' />
+								Create
+							</Button>
+							<Button size='sm' onClick={() => router.push('/league/join')} className='bg-primary hover:bg-primary/90'>
+								<LogIn className='h-4 w-4 mr-1.5' />
+								Join
+							</Button>
+						</div>
+					</div>
+
+					{leagues.length > 0 ? (
+						<ActiveLeagues leagues={leagues} userId={session?.user?.id} />
+					) : (
+						<Card className='glass border-white/10'>
+							<CardContent className='p-8 text-center space-y-4'>
+								<div className='w-16 h-16 mx-auto bg-muted/20 rounded-full flex items-center justify-center'>
+									<Users className='h-8 w-8 text-muted-foreground' />
+								</div>
+								<div className='space-y-2'>
+									<h3 className='text-lg font-semibold text-foreground'>No leagues yet</h3>
+									<p className='text-sm text-muted-foreground'>Join your first league to start competing.</p>
+								</div>
+								<div className='flex flex-col gap-2'>
+									<Button onClick={() => router.push('/league/create')} className='bg-primary hover:bg-primary/90'>
+										<Plus className='h-4 w-4 mr-2' />
+										Create League
+									</Button>
+									<Button variant='outline' onClick={() => router.push('/league/join')} className='glass border-white/20 hover:border-primary/50'>
+										<LogIn className='h-4 w-4 mr-2' />
+										Join League
+									</Button>
+								</div>
+							</CardContent>
+						</Card>
+					)}
+				</div>
+
+				{/* Stats Overview - Below Leagues on Mobile, Above on Desktop */}
 				{leagues.length > 0 && (
-					<div className='grid grid-cols-1 md:grid-cols-3 gap-6 animate-slide-up'>
-						{/* Season Points */}
-						<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
-							<CardContent className='p-6'>
-								<div className='flex items-start justify-between'>
-									<div className='space-y-2'>
-										<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Season Points</p>
-										<div className='flex items-baseline gap-2'>
-											<p className='text-4xl font-mono font-bold text-primary'>
-												<CountUp end={stats.totalSeasonPoints} duration={1.5} />
-											</p>
-											{stats.rankPercentage > 0 && (
-												<span className='text-xs font-semibold px-2 py-1 rounded-full bg-primary/20 text-primary'>
-													Top {stats.rankPercentage}%
-												</span>
+					<>
+						{/* Mobile: Horizontal Scroll */}
+						<div className='lg:hidden'>
+							<h3 className='text-lg font-display font-bold text-foreground mb-3'>Your Stats</h3>
+							<div className='flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide'>
+								{/* Season Points */}
+								<Card className='flex-shrink-0 w-[280px] glass border-white/10 snap-start'>
+									<CardContent className='p-5'>
+										<div className='flex items-start justify-between'>
+											<div className='space-y-1.5'>
+												<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Season Points</p>
+												<div className='flex items-baseline gap-2'>
+													<p className='text-3xl font-mono font-bold text-primary'>
+														<CountUp end={stats.totalSeasonPoints} duration={1.5} />
+													</p>
+													{stats.rankPercentage > 0 && (
+														<span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary'>
+															Top {stats.rankPercentage}%
+														</span>
+													)}
+												</div>
+											</div>
+											<div className='p-2.5 rounded-full bg-primary/10'>
+												<Trophy className='h-5 w-5 text-primary' />
+											</div>
+										</div>
+									</CardContent>
+								</Card>
+
+								{/* Global Rank */}
+								<Card className='flex-shrink-0 w-[280px] glass border-white/10 snap-start'>
+									<CardContent className='p-5'>
+										<div className='flex items-start justify-between'>
+											<div className='space-y-1.5'>
+												<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+												<div className='flex items-baseline gap-2'>
+													<p className='text-3xl font-mono font-bold text-primary'>
+														#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
+													</p>
+												</div>
+												{stats.totalUsers > 0 && (
+													<p className='text-[10px] text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
+												)}
+											</div>
+											<div className='p-2.5 rounded-full bg-primary/10'>
+												<Target className='h-5 w-5 text-primary' />
+											</div>
+										</div>
+									</CardContent>
+								</Card>
+
+								{/* Win Rate */}
+								<Card className='flex-shrink-0 w-[280px] glass border-white/10 snap-start'>
+									<CardContent className='p-5'>
+										<div className='flex items-start justify-between'>
+											<div className='space-y-1.5'>
+												<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Win Rate</p>
+												<div className='flex items-baseline gap-2'>
+													<p className='text-3xl font-mono font-bold text-primary'>
+														<CountUp end={stats.winRate} duration={1.5} />%
+													</p>
+												</div>
+											</div>
+											<div className='p-2.5 rounded-full bg-primary/10'>
+												<TrendingUp className='h-5 w-5 text-primary' />
+											</div>
+										</div>
+									</CardContent>
+								</Card>
+							</div>
+						</div>
+
+						{/* Desktop: Grid */}
+						<div className='hidden lg:grid grid-cols-3 gap-6 animate-slide-up'>
+							{/* Season Points */}
+							<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
+								<CardContent className='p-6'>
+									<div className='flex items-start justify-between'>
+										<div className='space-y-2'>
+											<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Season Points</p>
+											<div className='flex items-baseline gap-2'>
+												<p className='text-4xl font-mono font-bold text-primary'>
+													<CountUp end={stats.totalSeasonPoints} duration={1.5} />
+												</p>
+												{stats.rankPercentage > 0 && (
+													<span className='text-xs font-semibold px-2 py-1 rounded-full bg-primary/20 text-primary'>
+														Top {stats.rankPercentage}%
+													</span>
+												)}
+											</div>
+										</div>
+										<div className='p-3 rounded-full bg-primary/10'>
+											<Trophy className='h-6 w-6 text-primary' />
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+
+							{/* Global Rank */}
+							<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
+								<CardContent className='p-6'>
+									<div className='flex items-start justify-between'>
+										<div className='space-y-2'>
+											<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+											<div className='flex items-baseline gap-2'>
+												<p className='text-4xl font-mono font-bold text-primary'>
+													#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
+												</p>
+											</div>
+											{stats.totalUsers > 0 && (
+												<p className='text-xs text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
 											)}
 										</div>
-									</div>
-									<div className='p-3 rounded-full bg-primary/10'>
-										<Trophy className='h-6 w-6 text-primary' />
-									</div>
-								</div>
-							</CardContent>
-						</Card>
-
-						{/* Global Rank */}
-						<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
-							<CardContent className='p-6'>
-								<div className='flex items-start justify-between'>
-									<div className='space-y-2'>
-										<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
-										<div className='flex items-baseline gap-2'>
-											<p className='text-4xl font-mono font-bold text-primary'>
-												#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
-											</p>
-										</div>
-										{stats.totalUsers > 0 && (
-											<p className='text-xs text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
-										)}
-									</div>
-									<div className='p-3 rounded-full bg-primary/10'>
-										<Target className='h-6 w-6 text-primary' />
-									</div>
-								</div>
-							</CardContent>
-						</Card>
-
-						{/* Win Rate */}
-						<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
-							<CardContent className='p-6'>
-								<div className='flex items-start justify-between'>
-									<div className='space-y-2'>
-										<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Win Rate</p>
-										<div className='flex items-baseline gap-2'>
-											<p className='text-4xl font-mono font-bold text-primary'>
-												<CountUp end={stats.winRate} duration={1.5} />%
-											</p>
+										<div className='p-3 rounded-full bg-primary/10'>
+											<Target className='h-6 w-6 text-primary' />
 										</div>
 									</div>
-									<div className='p-3 rounded-full bg-primary/10'>
-										<TrendingUp className='h-6 w-6 text-primary' />
+								</CardContent>
+							</Card>
+
+							{/* Win Rate */}
+							<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
+								<CardContent className='p-6'>
+									<div className='flex items-start justify-between'>
+										<div className='space-y-2'>
+											<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Win Rate</p>
+											<div className='flex items-baseline gap-2'>
+												<p className='text-4xl font-mono font-bold text-primary'>
+													<CountUp end={stats.winRate} duration={1.5} />%
+												</p>
+											</div>
+										</div>
+										<div className='p-3 rounded-full bg-primary/10'>
+											<TrendingUp className='h-6 w-6 text-primary' />
+										</div>
 									</div>
-								</div>
-							</CardContent>
-						</Card>
-					</div>
+								</CardContent>
+							</Card>
+						</div>
+					</>
 				)}
 
-				{/* Main Content */}
-				<div className='grid lg:grid-cols-3 gap-8'>
+				{/* Mobile: Quick Actions and Live Feed */}
+				<div className='lg:hidden space-y-6'>
+					{/* Quick Actions */}
+					<Card className='glass border-white/10'>
+						<CardHeader>
+							<CardTitle className='text-lg font-display font-semibold'>Quick Actions</CardTitle>
+						</CardHeader>
+						<CardContent className='space-y-3'>
+							<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/create')}>
+								<Plus className='h-4 w-4 mr-3' />
+								Create New League
+							</Button>
+							<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/join')}>
+								<LogIn className='h-4 w-4 mr-3' />
+								Join League
+							</Button>
+							<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/stats')}>
+								<BarChart3 className='h-4 w-4 mr-3' />
+								My Stats
+							</Button>
+						</CardContent>
+					</Card>
+
+					{/* Live Feed */}
+					<LiveFeed recentActivity={recentActivity} />
+				</div>
+
+				{/* Desktop Layout: Leagues + Sidebar */}
+				<div className='hidden lg:grid lg:grid-cols-3 gap-8'>
 					{/* Leagues Section */}
 					<div className='lg:col-span-2 space-y-6'>
 						<div className='flex items-center justify-between'>
