@@ -129,16 +129,16 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 	};
 
 	const getGradientBackground = (rank: number | null) => {
-		if (rank === 1) return 'bg-gradient-to-br from-yellow-500/10 via-transparent to-yellow-500/5';
-		if (rank === 2) return 'bg-gradient-to-br from-gray-400/10 via-transparent to-gray-400/5';
-		if (rank === 3) return 'bg-gradient-to-br from-orange-500/10 via-transparent to-orange-500/5';
+		if (rank === 1) return 'bg-gradient-to-br from-yellow-500/15 via-yellow-500/5 to-transparent';
+		if (rank === 2) return 'bg-gradient-to-br from-gray-400/15 via-gray-400/5 to-transparent';
+		if (rank === 3) return 'bg-gradient-to-br from-orange-500/15 via-orange-500/5 to-transparent';
 		return '';
 	};
 
 	const getRankGradientText = (rank: number | null) => {
-		if (rank === 1) return 'bg-gradient-to-br from-yellow-400 to-yellow-600 bg-clip-text text-transparent';
-		if (rank === 2) return 'bg-gradient-to-br from-gray-300 to-gray-500 bg-clip-text text-transparent';
-		if (rank === 3) return 'bg-gradient-to-br from-orange-400 to-orange-600 bg-clip-text text-transparent';
+		if (rank === 1) return 'bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-600 bg-clip-text text-transparent';
+		if (rank === 2) return 'bg-gradient-to-br from-gray-200 via-gray-300 to-gray-500 bg-clip-text text-transparent';
+		if (rank === 3) return 'bg-gradient-to-br from-orange-300 via-orange-400 to-orange-600 bg-clip-text text-transparent';
 		return 'text-primary';
 	};
 
@@ -167,13 +167,13 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 					>
 						<button
 							onClick={() => router.push(`/league/${league._id}`)}
-							className={`relative overflow-hidden w-full p-5 sm:p-6 glass border-2 rounded-xl text-left transition-all duration-300 hover:bg-card/80 group ${getTop3BorderStyle(rank)} ${getGradientBackground(rank)}`}
+							className={`relative overflow-hidden w-full p-4 sm:p-6 glass border-2 rounded-2xl text-left transition-all duration-300 hover:bg-card/80 group ${getTop3BorderStyle(rank)} ${getGradientBackground(rank)}`}
 						>
-							<div className='flex items-start gap-4 sm:gap-6'>
+							<div className='flex items-center gap-3 sm:gap-6'>
 								{/* Large Rank Number on Left */}
 								{rank && (
-									<div className='flex-shrink-0'>
-										<div className={`text-6xl sm:text-7xl font-bold font-mono leading-none ${getRankGradientText(rank)}`}>
+									<div className='flex-shrink-0 flex items-center justify-center w-20 sm:w-24'>
+										<div className={`text-5xl sm:text-7xl font-bold font-mono leading-none ${getRankGradientText(rank)} drop-shadow-lg`}>
 											#{rank}
 										</div>
 									</div>
@@ -271,22 +271,22 @@ export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
 								</div>
 
 								{/* Right Side: Points Display */}
-								<div className='flex-shrink-0 flex items-start gap-3'>
+								<div className='flex-shrink-0 flex items-center gap-3'>
 									{isLoading ? (
 										<div className='text-right space-y-1'>
 											<Skeleton className='h-10 w-20' />
 											<Skeleton className='h-3 w-24' />
 										</div>
 									) : stats ? (
-										<div className='text-right space-y-1'>
-											<div className='flex items-center justify-end gap-1.5'>
-												<span className='text-4xl sm:text-5xl font-bold text-primary tabular-nums font-mono leading-none'>
+										<div className='text-right'>
+											<div className='flex items-baseline justify-end gap-1.5'>
+												<span className='text-3xl sm:text-5xl font-bold text-primary tabular-nums font-mono leading-none'>
 													<CountUp end={stats.seasonPoints} duration={0.5} />
 												</span>
-												<span className='text-sm text-muted-foreground self-end mb-1 font-medium'>pts</span>
+												<span className='text-xs sm:text-sm text-muted-foreground font-medium'>pts</span>
 											</div>
 											{stats.currentWeekPoints > 0 && (
-												<p className='text-xs text-green-400 tabular-nums font-mono font-bold'>
+												<p className='text-[10px] sm:text-xs text-green-400 tabular-nums font-mono font-bold mt-1'>
 													+<CountUp end={stats.currentWeekPoints} duration={0.5} /> this week
 												</p>
 											)}
