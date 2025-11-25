@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, LogIn, BarChart3, Users, Trophy, TrendingUp, Target } from 'lucide-react';
+import { Plus, LogIn, BarChart3, Users, Trophy, TrendingUp, Target, Info } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import ActiveLeagues from '@/components/league/ActiveLeagues';
 import LiveFeed from '@/components/dashboard/LiveFeed';
@@ -357,7 +357,15 @@ const Dashboard = () => {
 									<CardContent className='p-5'>
 										<div className='flex items-start justify-between'>
 											<div className='space-y-1.5'>
-												<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+												<div className='flex items-center gap-1.5'>
+													<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+													<div className='group relative'>
+														<Info className='h-3 w-3 text-muted-foreground cursor-help' />
+														<div className='absolute left-0 top-full mt-2 w-64 p-3 bg-card border border-white/20 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 z-50 text-xs text-foreground'>
+															Your rank among all unique users across all your leagues, based on total points.
+														</div>
+													</div>
+												</div>
 												<div className='flex items-baseline gap-2'>
 													<p className='text-3xl font-mono font-bold text-primary'>
 														#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
@@ -366,6 +374,14 @@ const Dashboard = () => {
 												{stats.totalUsers > 0 && (
 													<p className='text-[10px] text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
 												)}
+												<Button
+													variant='ghost'
+													size='sm'
+													className='text-[10px] h-6 px-2 text-primary hover:text-primary/80 hover:bg-primary/10'
+													onClick={() => router.push('/leaderboard')}
+												>
+													View Global Leaderboard →
+												</Button>
 											</div>
 											<div className='p-2.5 rounded-full bg-primary/10'>
 												<Target className='h-5 w-5 text-primary' />
@@ -426,7 +442,16 @@ const Dashboard = () => {
 								<CardContent className='p-6'>
 									<div className='flex items-start justify-between'>
 										<div className='space-y-2'>
-											<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+											<div className='flex items-center gap-2'>
+												<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
+												<div className='group relative'>
+													<Info className='h-4 w-4 text-muted-foreground cursor-help' />
+													<div className='absolute left-0 top-full mt-2 w-72 p-4 bg-card border border-white/20 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 z-50 text-sm text-foreground'>
+														<p className='font-semibold mb-1'>How Global Rank Works:</p>
+														<p className='text-xs'>Your rank among all unique users across all your leagues, based on total season points.</p>
+													</div>
+												</div>
+											</div>
 											<div className='flex items-baseline gap-2'>
 												<p className='text-4xl font-mono font-bold text-primary'>
 													#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
@@ -435,6 +460,14 @@ const Dashboard = () => {
 											{stats.totalUsers > 0 && (
 												<p className='text-xs text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
 											)}
+											<Button
+												variant='ghost'
+												size='sm'
+												className='text-xs h-7 px-3 text-primary hover:text-primary/80 hover:bg-primary/10 mt-1'
+												onClick={() => router.push('/leaderboard')}
+											>
+												View Global Leaderboard →
+											</Button>
 										</div>
 										<div className='p-3 rounded-full bg-primary/10'>
 											<Target className='h-6 w-6 text-primary' />
