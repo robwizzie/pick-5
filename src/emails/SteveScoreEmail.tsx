@@ -149,8 +149,16 @@ export const SteveScoreEmail = ({
 									{upsetInfo.team} beat {upsetInfo.opponent}
 								</Text>
 								<Text style={upsetSubtext}>
-									<strong>{upsetInfo.userCount}</strong> {upsetInfo.userCount === 1 ? 'player' : 'players'} picked{' '}
-									{upsetInfo.opponent} and got it wrong!
+									{upsetInfo.players && upsetInfo.players.length > 0 ? (
+										<>
+											<strong>{upsetInfo.players.join(', ')}</strong> picked {upsetInfo.opponent} and got it wrong!
+										</>
+									) : (
+										<>
+											<strong>{upsetInfo.userCount}</strong> {upsetInfo.userCount === 1 ? 'player' : 'players'} picked{' '}
+											{upsetInfo.opponent} and got it wrong!
+										</>
+									)}
 								</Text>
 							</Section>
 						</Section>
