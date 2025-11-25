@@ -26,6 +26,7 @@ interface UpsetInfo {
 	opponent: string;
 	userCount: number;
 	points?: number;
+	players?: string[];
 }
 
 interface StandardScoreEmailProps {
@@ -118,13 +119,23 @@ export const StandardScoreEmail = ({
 					<Section style={leaderboardSection}>
 						<Text style={leaderboardHeading}>🏅 Top 5 Leaderboard</Text>
 						<Section style={leaderboardBox}>
-							{leaderboard.map((entry, index) => (
-								<div key={entry.userId} style={leaderboardItem}>
-									<span style={leaderboardRank}>{index + 1}.</span>
-									<span style={leaderboardName}>{entry.player}</span>
-									<span style={leaderboardPoints}>{entry.points} pts</span>
-								</div>
-							))}
+							{leaderboard.map((entry, index) => {
+								const rank = index + 1;
+								const isTopThree = rank <= 3;
+								const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+								const itemStyle = isTopThree ? { ...leaderboardItem, backgroundColor: 'rgba(94, 196, 255, 0.08)' } : leaderboardItem;
+								const nameStyle = isTopThree ? { ...leaderboardName, fontWeight: 'bold' as const } : leaderboardName;
+
+								return (
+									<div key={entry.userId} style={itemStyle}>
+										<span style={leaderboardRank}>
+											{rankEmoji ? rankEmoji : `${rank}.`}
+										</span>
+										<span style={nameStyle}>{entry.player}</span>
+										<span style={leaderboardPoints}>{entry.points} pts</span>
+									</div>
+								);
+							})}
 						</Section>
 					</Section>
 
@@ -138,8 +149,16 @@ export const StandardScoreEmail = ({
 									{upsetInfo.team} beat {upsetInfo.opponent}
 								</Text>
 								<Text style={upsetSubtext}>
-									Worth <strong>{upsetInfo.points}</strong> {upsetInfo.points === 1 ? 'point' : 'points'}! {upsetInfo.userCount}{' '}
-									{upsetInfo.userCount === 1 ? 'player' : 'players'} nailed this upset pick.
+									Worth <strong>{upsetInfo.points}</strong> {upsetInfo.points === 1 ? 'point' : 'points'}!{' '}
+									{upsetInfo.players && upsetInfo.players.length > 0 ? (
+										<>
+											<strong>{upsetInfo.players.join(', ')}</strong> nailed this upset pick.
+										</>
+									) : (
+										<>
+											{upsetInfo.userCount} {upsetInfo.userCount === 1 ? 'player' : 'players'} nailed this upset pick.
+										</>
+									)}
 								</Text>
 							</Section>
 						</Section>
@@ -320,27 +339,33 @@ const leaderboardBox = {
 const leaderboardItem = {
 	display: 'flex',
 	alignItems: 'center',
-	padding: '12px 0',
-	borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
+	padding: '14px 12px',
+	borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+	borderRadius: '6px',
+	marginBottom: '4px'
 };
 
 const leaderboardRank = {
 	color: '#5ec4ff',
-	fontSize: '16px',
+	fontSize: '18px',
 	fontWeight: 'bold',
-	width: '40px'
+	width: '50px',
+	flexShrink: 0
 };
 
 const leaderboardName = {
 	color: '#f4f4f5',
 	fontSize: '16px',
-	flex: '1'
+	flex: '1',
+	marginRight: '12px'
 };
 
 const leaderboardPoints = {
 	color: '#a1a1aa',
-	fontSize: '14px',
-	fontWeight: 'bold'
+	fontSize: '15px',
+	fontWeight: 'bold',
+	minWidth: '60px',
+	textAlign: 'right' as const
 };
 
 const upsetSection = {

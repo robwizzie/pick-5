@@ -37,6 +37,7 @@ interface UpsetInfo {
 	opponent: string;
 	userCount: number;
 	points?: number;
+	players?: string[]; // Names of players who picked this upset
 }
 
 export async function GET(req: Request) {
@@ -164,9 +165,28 @@ export async function GET(req: Request) {
 						const userRank = leaderboard.findIndex(entry => entry.userId === user._id.toString()) + 1;
 
 						// Calculate total possible points
-						const completedGames = gameResults.filter(g => g.status === 'Final' || g.status === 'STATUS_FINAL').length;
-						const maxPointsPerGame = leagueMode === 'steve' ? 1 : 5; // Steve mode is 1 point per correct, standard can be up to 5
-						const maxPossiblePoints = completedGames * maxPointsPerGame;
+						const completedGames = gameResults.filter(g => g.status === 'post' || g.status === 'final');
+						let maxPossiblePoints = 0;
+
+						if (leagueMode === 'steve') {
+							// Steve mode: 2 points per correct pick
+							maxPossiblePoints = completedGames.length * 2;
+						} else {
+							// Standard mode: sum the max points for each game based on odds
+							// For each completed game, find the maximum points possible (higher odds team)
+							for (const game of completedGames) {
+								// Find picks for this game to get the odds
+								let maxGamePoints = 5; // Default max if no odds found
+								for (const pick of allPicks) {
+									const gamePick = pick.picks.find((p: { gameId: string }) => p.gameId === game.id);
+									if (gamePick && gamePick.odds) {
+										const points = calculatePointsFromOdds(gamePick.odds);
+										maxGamePoints = Math.max(maxGamePoints, points);
+									}
+								}
+								maxPossiblePoints += maxGamePoints;
+							}
+						}
 
 						// Find the biggest upset
 						let upsetInfo: UpsetInfo | null = null;
@@ -212,10 +232,13 @@ export async function GET(req: Request) {
 							}
 						} else {
 							// Standard mode: Find the biggest upset that was CORRECT (highest points awarded)
-							let maxPoints = 0;
-							const teamPointCounts = new Map<string, { count: number; points: number; opponent: string }>();
+							const teamPointCounts = new Map<string, { count: number; points: number; opponent: string; players: string[] }>();
 
+							// Build map of correct upset picks
 							for (const pick of allPicks) {
+								const pickUser = leaderboard.find(entry => entry.userId === pick.userId.toString());
+								const playerName = pickUser?.player || 'Unknown Player';
+
 								for (const gamePick of pick.picks) {
 									if (gamePick.isCorrect === true && gamePick.odds) {
 										const points = calculatePointsFromOdds(gamePick.odds);
@@ -225,22 +248,29 @@ export async function GET(req: Request) {
 											teamPointCounts.set(key, {
 												count: 0,
 												points: points,
-												opponent: gamePick.opponent
+												opponent: gamePick.opponent,
+												players: []
 											});
 										}
 										const entry = teamPointCounts.get(key)!;
 										entry.count++;
-
-										if (points > maxPoints) {
-											maxPoints = points;
-											upsetInfo = {
-												team: gamePick.team,
-												opponent: gamePick.opponent,
-												userCount: entry.count,
-												points: points
-											};
-										}
+										entry.players.push(playerName);
 									}
+								}
+							}
+
+							// Find the highest-point upset
+							let maxPoints = 0;
+							for (const [team, value] of Array.from(teamPointCounts.entries())) {
+								if (value.points > maxPoints) {
+									maxPoints = value.points;
+									upsetInfo = {
+										team: team,
+										opponent: value.opponent,
+										userCount: value.count,
+										points: value.points,
+										players: value.players
+									};
 								}
 							}
 						}
