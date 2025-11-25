@@ -193,9 +193,12 @@ export async function GET(req: Request) {
 
 						if (leagueMode === 'steve') {
 							// Steve mode: Find the game where most users picked the LOSING team
-							const gameUpsetCounts = new Map<string, { team: string; opponent: string; count: number }>();
+							const gameUpsetCounts = new Map<string, { winningTeam: string; losingTeam: string; count: number; players: string[] }>();
 
 							for (const pick of allPicks) {
+								const pickUser = leaderboard.find(entry => entry.userId === pick.userId.toString());
+								const playerName = pickUser?.player || 'Unknown Player';
+
 								for (const gamePick of pick.picks) {
 									const gameResult = gameResults.find(g => g.id === gamePick.gameId);
 									if (!gameResult) continue;
@@ -204,16 +207,20 @@ export async function GET(req: Request) {
 									const isWrong = gamePick.isCorrect === false;
 
 									if (isWrong) {
+										// gamePick.team = the team that was picked (and lost)
+										// gamePick.opponent = the team that won (the upset winner)
 										const key = `${gamePick.gameId}-${gamePick.team}`;
 										if (!gameUpsetCounts.has(key)) {
 											gameUpsetCounts.set(key, {
-												team: gamePick.team,
-												opponent: gamePick.opponent,
-												count: 0
+												winningTeam: gamePick.opponent, // The team that won
+												losingTeam: gamePick.team,      // The team that was picked and lost
+												count: 0,
+												players: []
 											});
 										}
 										const entry = gameUpsetCounts.get(key)!;
 										entry.count++;
+										entry.players.push(playerName);
 									}
 								}
 							}
@@ -224,9 +231,10 @@ export async function GET(req: Request) {
 								if (value.count > maxWrongPicks) {
 									maxWrongPicks = value.count;
 									upsetInfo = {
-										team: value.team,
-										opponent: value.opponent,
-										userCount: value.count
+										team: value.winningTeam,    // The upset winner
+										opponent: value.losingTeam, // The team people picked (and lost)
+										userCount: value.count,
+										players: value.players
 									};
 								}
 							}
