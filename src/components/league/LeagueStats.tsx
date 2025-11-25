@@ -44,6 +44,21 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 	const [allPlayersData, setAllPlayersData] = useState<PlayerWeeklyData[]>([]);
 	const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
 	const [viewMode, setViewMode] = useState<'me' | 'everyone'>('me');
+	const [hiddenPlayers, setHiddenPlayers] = useState<Set<string>>(new Set());
+	const [hoveredPlayer, setHoveredPlayer] = useState<string | null>(null);
+
+	// Toggle player visibility
+	const togglePlayer = (playerName: string) => {
+		setHiddenPlayers(prev => {
+			const newSet = new Set(prev);
+			if (newSet.has(playerName)) {
+				newSet.delete(playerName);
+			} else {
+				newSet.add(playerName);
+			}
+			return newSet;
+		});
+	};
 
 	// Color palette for different players
 	const playerColors = [
@@ -355,22 +370,22 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 										// Single user bar chart
 										<div className='relative px-4 py-3'>
 											{/* Y-axis labels */}
-											<div className='absolute left-0 top-0 bottom-8 flex flex-col justify-between text-[10px] text-muted-foreground font-mono'>
+											<div className='absolute left-0 top-0 bottom-12 flex flex-col justify-between text-[10px] text-muted-foreground font-mono'>
 												<span>{maxPoints}</span>
 												<span>{Math.round(maxPoints / 2)}</span>
 												<span>0</span>
 											</div>
 
 											{/* Chart area */}
-											<div className='ml-6' style={{ height: '180px' }}>
-												<div className='relative h-full'>
+											<div className='ml-6' style={{ height: '220px' }}>
+												<div className='relative h-full pb-8'>
 													{/* Baseline */}
-													<div className='absolute bottom-0 left-0 right-0 h-px bg-border'></div>
+													<div className='absolute bottom-8 left-0 right-0 h-px bg-border'></div>
 
 													{/* Bars */}
-													<div className='h-full flex items-end justify-around gap-4'>
+													<div className='h-full flex items-end justify-around gap-4 pb-8'>
 														{weeklyTrend.map((data) => {
-															const heightPx = maxPoints > 0 ? (data.points / maxPoints) * 150 : 0;
+															const heightPx = maxPoints > 0 ? (data.points / maxPoints) * 170 : 0;
 															return (
 																<div key={data.week} className='flex-1 flex flex-col items-center gap-3' style={{ maxWidth: '70px' }}>
 																	<div className='relative w-full group flex flex-col items-center'>
@@ -416,7 +431,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 
 											<div className='flex'>
 												{/* Y-axis */}
-												<div className='w-8 flex-shrink-0 flex flex-col justify-between text-[10px] text-muted-foreground font-mono' style={{ height: '200px', paddingBottom: '28px' }}>
+												<div className='w-8 flex-shrink-0 flex flex-col justify-between text-[10px] text-muted-foreground font-mono' style={{ height: '240px', paddingBottom: '36px' }}>
 													<span>{maxPoints}</span>
 													<span>{Math.round(maxPoints / 2)}</span>
 													<span>0</span>
@@ -424,11 +439,11 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 
 												{/* Chart area */}
 												<div className='flex-1 overflow-x-auto'>
-													<div className='inline-flex items-end gap-8 min-w-full' style={{ height: '200px', paddingBottom: '28px' }}>
+													<div className='inline-flex items-end gap-8 min-w-full' style={{ height: '240px', paddingBottom: '36px' }}>
 														{allWeeks.map((week) => (
 															<div key={week} className='flex flex-col items-center gap-3 min-w-[120px]'>
 																{/* Bar group */}
-																<div className='relative' style={{ height: '172px' }}>
+																<div className='relative' style={{ height: '204px' }}>
 																	{/* Baseline */}
 																	<div className='absolute bottom-0 left-0 right-0 h-px bg-border'></div>
 
@@ -437,7 +452,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 																		{allPlayersData.map((player) => {
 																			const weekData = player.weeks.find(w => w.week === week);
 																			const points = weekData?.points || 0;
-																			const heightPx = maxPoints > 0 ? (points / maxPoints) * 160 : 0;
+																			const heightPx = maxPoints > 0 ? (points / maxPoints) * 190 : 0;
 																			const isCurrentUser = player.player === session?.user?.name;
 
 																			return (
@@ -604,8 +619,26 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 															});
 
 															const isCurrentUser = player.player === session?.user?.name;
-															const strokeWidth = isCurrentUser ? 3.5 : 2.5;
-															const opacity = isCurrentUser ? 1 : 0.75;
+															const isHidden = hiddenPlayers.has(player.player);
+															const isHovered = hoveredPlayer === player.player;
+
+															// Don't render if hidden
+															if (isHidden) return null;
+
+															// Adjust appearance based on hover state
+															let strokeWidth = isCurrentUser ? 3.5 : 2.5;
+															let opacity = isCurrentUser ? 1 : 0.75;
+															let circleRadius = isCurrentUser ? 6 : 5;
+
+															// If a player is hovered, dim others
+															if (hoveredPlayer && !isHovered) {
+																opacity = 0.2;
+																strokeWidth = isCurrentUser ? 2.5 : 1.5;
+															} else if (isHovered) {
+																opacity = 1;
+																strokeWidth = isCurrentUser ? 4.5 : 3.5;
+																circleRadius = isCurrentUser ? 7 : 6;
+															}
 
 															return (
 																<g key={player.player}>
@@ -623,6 +656,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 																			strokeLinecap='round'
 																			strokeLinejoin='round'
 																			opacity={opacity}
+																			style={{ transition: 'all 0.2s ease' }}
 																		/>
 																	)}
 
@@ -635,11 +669,12 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 																				key={`${player.player}-${d.week}`}
 																				cx={x}
 																				cy={y}
-																				r={isCurrentUser ? '6' : '5'}
+																				r={circleRadius}
 																				fill={player.color}
 																				stroke='rgb(var(--card))'
 																				strokeWidth='2.5'
 																				opacity={opacity}
+																				style={{ transition: 'all 0.2s ease' }}
 																			/>
 																		);
 																	})}
@@ -663,19 +698,35 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 											<div className='grid grid-cols-2 gap-x-4 gap-y-2 pt-3 border-t border-white/10'>
 												{allPlayersData.map((player) => {
 													const isCurrentUser = player.player === session?.user?.name;
+													const isHidden = hiddenPlayers.has(player.player);
+													const isHovered = hoveredPlayer === player.player;
 													return (
-														<div key={player.player} className='flex items-center gap-2 min-w-0'>
+														<button
+															key={player.player}
+															className='flex items-center gap-2 min-w-0 text-left transition-all duration-200 hover:bg-card/30 rounded px-2 py-1.5 -mx-2 cursor-pointer'
+															onClick={() => togglePlayer(player.player)}
+															onMouseEnter={() => setHoveredPlayer(player.player)}
+															onMouseLeave={() => setHoveredPlayer(null)}
+														>
 															<div
-																className='w-3 h-3 rounded-full flex-shrink-0'
+																className='w-3 h-3 rounded-full flex-shrink-0 transition-all duration-200'
 																style={{
 																	backgroundColor: player.color,
-																	boxShadow: isCurrentUser ? `0 0 8px ${player.color}` : 'none'
+																	boxShadow: isCurrentUser ? `0 0 8px ${player.color}` : 'none',
+																	opacity: isHidden ? 0.3 : 1,
+																	transform: isHovered ? 'scale(1.2)' : 'scale(1)'
 																}}
 															/>
-															<span className={`text-xs truncate ${isCurrentUser ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+															<span className={`text-xs truncate transition-all duration-200 ${
+																isHidden
+																	? 'line-through opacity-50'
+																	: isCurrentUser
+																		? 'font-semibold text-foreground'
+																		: 'text-muted-foreground'
+															} ${isHovered ? 'font-semibold' : ''}`}>
 																{player.player}{isCurrentUser && ' (You)'}
 															</span>
-														</div>
+														</button>
 													);
 												})}
 											</div>
