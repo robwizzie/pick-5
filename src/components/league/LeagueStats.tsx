@@ -345,7 +345,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 						</div>
 					</div>
 				</CardHeader>
-				<CardContent>
+				<CardContent className='pt-4'>
 					{(viewMode === 'me' ? weeklyTrend.length > 0 : allPlayersData.length > 0) ? (
 						<div className='space-y-4'>
 							{/* Bar Chart View */}
@@ -353,85 +353,124 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 								<div className='space-y-3'>
 									{viewMode === 'me' ? (
 										// Single user bar chart
-										<div className='relative' style={{ height: '200px' }}>
-											<div className='absolute inset-0 flex items-end justify-around gap-3 px-2'>
-												{weeklyTrend.map((data) => {
-													const heightPx = maxPoints > 0 ? (data.points / maxPoints) * 160 : 0;
-													return (
-														<div key={data.week} className='flex-1 flex flex-col items-center gap-2' style={{ maxWidth: '80px' }}>
-															<div className='relative w-full group flex flex-col items-center'>
-																{/* Point Label Above Bar */}
-																{data.points > 0 && (
-																	<div className='mb-1 text-sm font-bold font-mono text-primary'>
-																		{data.points}
-																	</div>
-																)}
+										<div className='relative px-4 py-3'>
+											{/* Y-axis labels */}
+											<div className='absolute left-0 top-0 bottom-8 flex flex-col justify-between text-[10px] text-muted-foreground font-mono'>
+												<span>{maxPoints}</span>
+												<span>{Math.round(maxPoints / 2)}</span>
+												<span>0</span>
+											</div>
 
-																{/* Bar */}
-																<div
-																	className='w-full bg-gradient-to-t from-primary via-primary/90 to-primary/60 rounded-t-lg transition-all duration-300 hover:from-primary hover:via-primary hover:to-primary/70 shadow-lg shadow-primary/20 relative'
-																	style={{
-																		height: `${Math.max(heightPx, data.points > 0 ? 12 : 4)}px`
-																	}}
-																>
-																	{/* Hover Tooltip */}
-																	<div className='absolute -top-16 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10'>
-																		<div className='bg-card border border-primary/30 rounded-lg px-3 py-2 text-xs font-mono font-bold whitespace-nowrap shadow-xl'>
-																			<div className='text-primary'>{data.points} pts</div>
-																			<div className='text-muted-foreground text-[10px]'>Week {data.week}</div>
+											{/* Chart area */}
+											<div className='ml-6' style={{ height: '180px' }}>
+												<div className='relative h-full'>
+													{/* Baseline */}
+													<div className='absolute bottom-0 left-0 right-0 h-px bg-border'></div>
+
+													{/* Bars */}
+													<div className='h-full flex items-end justify-around gap-4'>
+														{weeklyTrend.map((data) => {
+															const heightPx = maxPoints > 0 ? (data.points / maxPoints) * 150 : 0;
+															return (
+																<div key={data.week} className='flex-1 flex flex-col items-center gap-3' style={{ maxWidth: '70px' }}>
+																	<div className='relative w-full group flex flex-col items-center'>
+																		{/* Point Label Above Bar */}
+																		{data.points > 0 && (
+																			<div className='mb-2 text-sm font-bold font-mono text-primary'>
+																				{data.points}
+																			</div>
+																		)}
+
+																		{/* Bar */}
+																		<div
+																			className='w-full bg-gradient-to-t from-primary via-primary/90 to-primary/60 rounded-t-lg transition-all duration-300 hover:from-primary hover:via-primary hover:to-primary/70 shadow-lg shadow-primary/20 relative'
+																			style={{
+																				height: `${Math.max(heightPx, data.points > 0 ? 12 : 4)}px`
+																			}}
+																		>
+																			{/* Hover Tooltip */}
+																			<div className='absolute -top-14 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10'>
+																				<div className='bg-card border border-primary/30 rounded-lg px-3 py-2 text-xs font-mono font-bold whitespace-nowrap shadow-xl'>
+																					<div className='text-primary'>{data.points} pts</div>
+																					<div className='text-muted-foreground text-[10px]'>Week {data.week}</div>
+																				</div>
+																			</div>
 																		</div>
 																	</div>
+																	<span className='text-xs text-muted-foreground font-semibold'>W{data.week}</span>
 																</div>
-															</div>
-															<span className='text-xs text-muted-foreground font-semibold mt-1'>W{data.week}</span>
-														</div>
-													);
-												})}
+															);
+														})}
+													</div>
+												</div>
 											</div>
 										</div>
 									) : (
 										// Multi-user grouped bar chart
-										<div className='overflow-x-auto'>
-											<div className='relative min-w-full' style={{ height: '240px' }}>
-												<div className='absolute inset-0 flex items-end gap-4 px-2'>
-													{allWeeks.map((week) => (
-														<div key={week} className='flex flex-col items-center gap-2 min-w-[100px]'>
-															<div className='flex items-end gap-1 justify-center' style={{ height: '180px' }}>
-																{allPlayersData.map((player) => {
-																	const weekData = player.weeks.find(w => w.week === week);
-																	const points = weekData?.points || 0;
-																	const heightPx = maxPoints > 0 ? (points / maxPoints) * 160 : 0;
-																	const isCurrentUser = player.player === session?.user?.name;
+										<div className='overflow-x-auto px-4 py-3'>
+											{/* Y-axis labels */}
+											<div className='flex mb-2'>
+												<div className='w-8 flex-shrink-0'></div>
+												<div className='flex-1'></div>
+											</div>
 
-																	return (
-																		<div key={player.player} className='group relative' style={{ width: '12px' }}>
-																			<div
-																				className='w-full rounded-t transition-all duration-300 hover:opacity-90'
-																				style={{
-																					backgroundColor: player.color,
-																					height: `${Math.max(heightPx, points > 0 ? 8 : 2)}px`,
-																					opacity: isCurrentUser ? 1 : 0.75,
-																					boxShadow: isCurrentUser ? `0 0 8px ${player.color}80` : 'none',
-																					filter: isCurrentUser ? 'brightness(1.1)' : 'none'
-																				}}
-																			>
-																				{/* Hover Tooltip */}
-																				<div className='absolute -top-16 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20 whitespace-nowrap'>
-																					<div className='bg-card border border-white/20 rounded-lg px-2 py-1.5 text-xs shadow-xl'>
-																						<div className='font-semibold text-[10px]' style={{ color: player.color }}>
-																							{player.player.length > 15 ? player.player.substring(0, 15) + '...' : player.player}
+											<div className='flex'>
+												{/* Y-axis */}
+												<div className='w-8 flex-shrink-0 flex flex-col justify-between text-[10px] text-muted-foreground font-mono' style={{ height: '200px', paddingBottom: '28px' }}>
+													<span>{maxPoints}</span>
+													<span>{Math.round(maxPoints / 2)}</span>
+													<span>0</span>
+												</div>
+
+												{/* Chart area */}
+												<div className='flex-1 overflow-x-auto'>
+													<div className='inline-flex items-end gap-8 min-w-full' style={{ height: '200px', paddingBottom: '28px' }}>
+														{allWeeks.map((week) => (
+															<div key={week} className='flex flex-col items-center gap-3 min-w-[120px]'>
+																{/* Bar group */}
+																<div className='relative' style={{ height: '172px' }}>
+																	{/* Baseline */}
+																	<div className='absolute bottom-0 left-0 right-0 h-px bg-border'></div>
+
+																	{/* Bars */}
+																	<div className='h-full flex items-end gap-1.5 justify-center px-2'>
+																		{allPlayersData.map((player) => {
+																			const weekData = player.weeks.find(w => w.week === week);
+																			const points = weekData?.points || 0;
+																			const heightPx = maxPoints > 0 ? (points / maxPoints) * 160 : 0;
+																			const isCurrentUser = player.player === session?.user?.name;
+
+																			return (
+																				<div key={player.player} className='group relative' style={{ width: '14px' }}>
+																					<div
+																						className='w-full rounded-t-md transition-all duration-300 hover:opacity-90'
+																						style={{
+																							backgroundColor: player.color,
+																							height: `${Math.max(heightPx, points > 0 ? 8 : 2)}px`,
+																							opacity: isCurrentUser ? 1 : 0.8,
+																							boxShadow: isCurrentUser ? `0 0 10px ${player.color}80` : 'none',
+																							filter: isCurrentUser ? 'brightness(1.15)' : 'none'
+																						}}
+																					>
+																						{/* Hover Tooltip */}
+																						<div className='absolute -top-14 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-20 whitespace-nowrap'>
+																							<div className='bg-card border border-white/20 rounded-lg px-2 py-1.5 text-xs shadow-xl'>
+																								<div className='font-semibold text-[10px]' style={{ color: player.color }}>
+																									{player.player.length > 12 ? player.player.substring(0, 12) + '...' : player.player}
+																								</div>
+																								<div className='text-primary font-bold font-mono text-xs'>{points} pts</div>
+																							</div>
 																						</div>
-																						<div className='text-primary font-bold font-mono'>{points} pts</div>
 																					</div>
 																				</div>
-																			</div>
-																		</div>
-																	);
-																})}
+																			);
+																		})}
+																	</div>
+																</div>
+																<span className='text-xs text-muted-foreground font-semibold'>W{week}</span>
 															</div>
-															<span className='text-xs text-muted-foreground font-semibold'>W{week}</span>
-														</div>
-													))}
+														))}
+													</div>
 												</div>
 											</div>
 										</div>
@@ -441,155 +480,177 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 
 							{/* Line Chart View */}
 							{chartType === 'line' && (
-								<div className='space-y-3'>
+								<div className='space-y-4'>
 									{viewMode === 'me' ? (
 										// Single user line chart
-										<div className='relative' style={{ height: '200px' }}>
-											<svg className='w-full h-full' viewBox='0 0 400 200' preserveAspectRatio='xMidYMid meet'>
-												{/* Grid lines */}
-												<line x1='0' y1='20' x2='400' y2='20' stroke='currentColor' strokeWidth='0.5' className='text-muted-foreground/20' />
-												<line x1='0' y1='110' x2='400' y2='110' stroke='currentColor' strokeWidth='0.5' className='text-muted-foreground/20' />
-												<line x1='0' y1='180' x2='400' y2='180' stroke='currentColor' strokeWidth='0.5' className='text-muted-foreground/20' />
+										<div className='px-4 py-3'>
+											<div className='relative' style={{ height: '200px' }}>
+												{/* Y-axis labels */}
+												<div className='absolute left-0 top-0 bottom-8 w-8 flex flex-col justify-between text-[10px] text-muted-foreground font-mono'>
+													<span>{maxPoints}</span>
+													<span>{Math.round(maxPoints / 2)}</span>
+													<span>0</span>
+												</div>
 
-												{/* Gradient fill */}
-												<defs>
-													<linearGradient id='lineGradient' x1='0' x2='0' y1='0' y2='1'>
-														<stop offset='0%' stopColor='currentColor' stopOpacity='0.2' className='text-primary' />
-														<stop offset='100%' stopColor='currentColor' stopOpacity='0' className='text-primary' />
-													</linearGradient>
-												</defs>
+												{/* SVG Chart */}
+												<div className='ml-8 h-full'>
+													<svg className='w-full h-full' viewBox='0 0 400 200' preserveAspectRatio='xMidYMid meet'>
+														{/* Grid lines */}
+														<line x1='0' y1='20' x2='400' y2='20' stroke='currentColor' strokeWidth='0.8' className='text-muted-foreground/30' strokeDasharray='4 4' />
+														<line x1='0' y1='110' x2='400' y2='110' stroke='currentColor' strokeWidth='0.8' className='text-muted-foreground/30' strokeDasharray='4 4' />
+														<line x1='0' y1='180' x2='400' y2='180' stroke='currentColor' strokeWidth='1' className='text-border' />
 
-												{/* Area fill */}
-												{weeklyTrend.length > 0 && (
-													<path
-														d={`M ${weeklyTrend.map((d, i) => {
-															const x = weeklyTrend.length === 1 ? 200 : (i / (weeklyTrend.length - 1)) * 380 + 10;
-															const y = 180 - (maxPoints > 0 ? (d.points / maxPoints) * 150 : 0);
-															return `${x},${y}`;
-														}).join(' L ')} L ${weeklyTrend.length === 1 ? 200 : 390},180 L 10,180 Z`}
-														fill='url(#lineGradient)'
-													/>
-												)}
+														{/* Gradient fill */}
+														<defs>
+															<linearGradient id='lineGradient' x1='0' x2='0' y1='0' y2='1'>
+																<stop offset='0%' stopColor='currentColor' stopOpacity='0.25' className='text-primary' />
+																<stop offset='100%' stopColor='currentColor' stopOpacity='0' className='text-primary' />
+															</linearGradient>
+														</defs>
 
-												{/* Line */}
-												{weeklyTrend.length > 0 && (
-													<path
-														d={`M ${weeklyTrend.map((d, i) => {
-															const x = weeklyTrend.length === 1 ? 200 : (i / (weeklyTrend.length - 1)) * 380 + 10;
-															const y = 180 - (maxPoints > 0 ? (d.points / maxPoints) * 150 : 0);
-															return `${x},${y}`;
-														}).join(' L ')}`}
-														fill='none'
-														stroke='currentColor'
-														strokeWidth='3'
-														strokeLinecap='round'
-														strokeLinejoin='round'
-														className='text-primary'
-													/>
-												)}
+														{/* Area fill */}
+														{weeklyTrend.length > 0 && (
+															<path
+																d={`M ${weeklyTrend.map((d, i) => {
+																	const x = weeklyTrend.length === 1 ? 200 : (i / (weeklyTrend.length - 1)) * 380 + 10;
+																	const y = 180 - (maxPoints > 0 ? (d.points / maxPoints) * 150 : 0);
+																	return `${x},${y}`;
+																}).join(' L ')} L ${weeklyTrend.length === 1 ? 200 : 390},180 L 10,180 Z`}
+																fill='url(#lineGradient)'
+															/>
+														)}
 
-												{/* Data points */}
-												{weeklyTrend.map((d, i) => {
-													const x = weeklyTrend.length === 1 ? 200 : (i / (weeklyTrend.length - 1)) * 380 + 10;
-													const y = 180 - (maxPoints > 0 ? (d.points / maxPoints) * 150 : 0);
-													return (
-														<g key={d.week}>
-															<circle
-																cx={x}
-																cy={y}
-																r='5'
-																fill='currentColor'
-																stroke='rgb(var(--card))'
-																strokeWidth='2'
+														{/* Line */}
+														{weeklyTrend.length > 0 && (
+															<path
+																d={`M ${weeklyTrend.map((d, i) => {
+																	const x = weeklyTrend.length === 1 ? 200 : (i / (weeklyTrend.length - 1)) * 380 + 10;
+																	const y = 180 - (maxPoints > 0 ? (d.points / maxPoints) * 150 : 0);
+																	return `${x},${y}`;
+																}).join(' L ')}`}
+																fill='none'
+																stroke='currentColor'
+																strokeWidth='3.5'
+																strokeLinecap='round'
+																strokeLinejoin='round'
 																className='text-primary'
 															/>
-															<text
-																x={x}
-																y={y - 12}
-																textAnchor='middle'
-																className='text-xs font-bold fill-primary'
-																style={{ fontSize: '11px' }}
-															>
-																{d.points}
-															</text>
-														</g>
-													);
-												})}
-											</svg>
+														)}
 
-											{/* Week labels */}
-											<div className='flex justify-around px-2 mt-2'>
-												{weeklyTrend.map((d) => (
-													<span key={d.week} className='text-xs text-muted-foreground font-semibold'>
-														W{d.week}
-													</span>
-												))}
+														{/* Data points */}
+														{weeklyTrend.map((d, i) => {
+															const x = weeklyTrend.length === 1 ? 200 : (i / (weeklyTrend.length - 1)) * 380 + 10;
+															const y = 180 - (maxPoints > 0 ? (d.points / maxPoints) * 150 : 0);
+															return (
+																<g key={d.week}>
+																	<circle
+																		cx={x}
+																		cy={y}
+																		r='6'
+																		fill='currentColor'
+																		stroke='rgb(var(--card))'
+																		strokeWidth='2.5'
+																		className='text-primary'
+																	/>
+																	<text
+																		x={x}
+																		y={y - 14}
+																		textAnchor='middle'
+																		className='text-xs font-bold fill-primary'
+																		style={{ fontSize: '12px' }}
+																	>
+																		{d.points}
+																	</text>
+																</g>
+															);
+														})}
+													</svg>
+												</div>
+
+												{/* Week labels */}
+												<div className='ml-8 flex justify-around px-2 mt-2'>
+													{weeklyTrend.map((d) => (
+														<span key={d.week} className='text-xs text-muted-foreground font-semibold'>
+															W{d.week}
+														</span>
+													))}
+												</div>
 											</div>
 										</div>
 									) : (
 										// Multi-user line chart
-										<div className='space-y-3'>
+										<div className='px-4 py-3 space-y-4'>
 											<div className='relative' style={{ height: '240px' }}>
-												<svg className='w-full h-full' viewBox='0 0 400 220' preserveAspectRatio='xMidYMid meet'>
-													{/* Grid lines */}
-													<line x1='0' y1='20' x2='400' y2='20' stroke='currentColor' strokeWidth='0.5' className='text-muted-foreground/20' />
-													<line x1='0' y1='120' x2='400' y2='120' stroke='currentColor' strokeWidth='0.5' className='text-muted-foreground/20' />
-													<line x1='0' y1='200' x2='400' y2='200' stroke='currentColor' strokeWidth='0.5' className='text-muted-foreground/20' />
+												{/* Y-axis labels */}
+												<div className='absolute left-0 top-0 bottom-8 w-8 flex flex-col justify-between text-[10px] text-muted-foreground font-mono'>
+													<span>{maxPoints}</span>
+													<span>{Math.round(maxPoints / 2)}</span>
+													<span>0</span>
+												</div>
 
-													{/* Lines for each player */}
-													{allPlayersData.map((player) => {
-														const playerWeeks = allWeeks.map(week => {
-															const weekData = player.weeks.find(w => w.week === week);
-															return { week, points: weekData?.points || 0 };
-														});
+												{/* SVG Chart */}
+												<div className='ml-8 h-full'>
+													<svg className='w-full h-full' viewBox='0 0 400 220' preserveAspectRatio='xMidYMid meet'>
+														{/* Grid lines */}
+														<line x1='0' y1='20' x2='400' y2='20' stroke='currentColor' strokeWidth='0.8' className='text-muted-foreground/30' strokeDasharray='4 4' />
+														<line x1='0' y1='120' x2='400' y2='120' stroke='currentColor' strokeWidth='0.8' className='text-muted-foreground/30' strokeDasharray='4 4' />
+														<line x1='0' y1='200' x2='400' y2='200' stroke='currentColor' strokeWidth='1' className='text-border' />
 
-														const isCurrentUser = player.player === session?.user?.name;
-														const strokeWidth = isCurrentUser ? 3 : 2;
-														const opacity = isCurrentUser ? 1 : 0.7;
+														{/* Lines for each player */}
+														{allPlayersData.map((player) => {
+															const playerWeeks = allWeeks.map(week => {
+																const weekData = player.weeks.find(w => w.week === week);
+																return { week, points: weekData?.points || 0 };
+															});
 
-														return (
-															<g key={player.player}>
-																{/* Line path */}
-																{playerWeeks.length > 0 && (
-																	<path
-																		d={`M ${playerWeeks.map((d, i) => {
-																			const x = allWeeks.length === 1 ? 200 : (i / (allWeeks.length - 1)) * 380 + 10;
-																			const y = 200 - (maxPoints > 0 ? (d.points / maxPoints) * 170 : 0);
-																			return `${x},${y}`;
-																		}).join(' L ')}`}
-																		fill='none'
-																		stroke={player.color}
-																		strokeWidth={strokeWidth}
-																		strokeLinecap='round'
-																		strokeLinejoin='round'
-																		opacity={opacity}
-																	/>
-																)}
+															const isCurrentUser = player.player === session?.user?.name;
+															const strokeWidth = isCurrentUser ? 3.5 : 2.5;
+															const opacity = isCurrentUser ? 1 : 0.75;
 
-																{/* Data points */}
-																{playerWeeks.map((d, i) => {
-																	const x = allWeeks.length === 1 ? 200 : (i / (allWeeks.length - 1)) * 380 + 10;
-																	const y = 200 - (maxPoints > 0 ? (d.points / maxPoints) * 170 : 0);
-																	return (
-																		<circle
-																			key={`${player.player}-${d.week}`}
-																			cx={x}
-																			cy={y}
-																			r={isCurrentUser ? '5' : '4'}
-																			fill={player.color}
-																			stroke='rgb(var(--card))'
-																			strokeWidth='2'
+															return (
+																<g key={player.player}>
+																	{/* Line path */}
+																	{playerWeeks.length > 0 && (
+																		<path
+																			d={`M ${playerWeeks.map((d, i) => {
+																				const x = allWeeks.length === 1 ? 200 : (i / (allWeeks.length - 1)) * 380 + 10;
+																				const y = 200 - (maxPoints > 0 ? (d.points / maxPoints) * 170 : 0);
+																				return `${x},${y}`;
+																			}).join(' L ')}`}
+																			fill='none'
+																			stroke={player.color}
+																			strokeWidth={strokeWidth}
+																			strokeLinecap='round'
+																			strokeLinejoin='round'
 																			opacity={opacity}
 																		/>
-																	);
-																})}
-															</g>
-														);
-													})}
-												</svg>
+																	)}
+
+																	{/* Data points */}
+																	{playerWeeks.map((d, i) => {
+																		const x = allWeeks.length === 1 ? 200 : (i / (allWeeks.length - 1)) * 380 + 10;
+																		const y = 200 - (maxPoints > 0 ? (d.points / maxPoints) * 170 : 0);
+																		return (
+																			<circle
+																				key={`${player.player}-${d.week}`}
+																				cx={x}
+																				cy={y}
+																				r={isCurrentUser ? '6' : '5'}
+																				fill={player.color}
+																				stroke='rgb(var(--card))'
+																				strokeWidth='2.5'
+																				opacity={opacity}
+																			/>
+																		);
+																	})}
+																</g>
+															);
+														})}
+													</svg>
+												</div>
 
 												{/* Week labels */}
-												<div className='flex justify-around px-2 mt-2'>
+												<div className='ml-8 flex justify-around px-2 mt-2'>
 													{allWeeks.map((week) => (
 														<span key={week} className='text-xs text-muted-foreground font-semibold'>
 															W{week}
@@ -599,21 +660,20 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 											</div>
 
 											{/* Legend */}
-											<div className='flex flex-wrap gap-3 pt-2 border-t border-white/10'>
+											<div className='grid grid-cols-2 gap-x-4 gap-y-2 pt-3 border-t border-white/10'>
 												{allPlayersData.map((player) => {
 													const isCurrentUser = player.player === session?.user?.name;
 													return (
-														<div key={player.player} className='flex items-center gap-2'>
+														<div key={player.player} className='flex items-center gap-2 min-w-0'>
 															<div
-																className='w-3 h-3 rounded-full'
+																className='w-3 h-3 rounded-full flex-shrink-0'
 																style={{
 																	backgroundColor: player.color,
 																	boxShadow: isCurrentUser ? `0 0 8px ${player.color}` : 'none'
 																}}
 															/>
-															<span className={`text-xs ${isCurrentUser ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
-																{player.player.length > 20 ? player.player.substring(0, 20) + '...' : player.player}
-																{isCurrentUser && ' (You)'}
+															<span className={`text-xs truncate ${isCurrentUser ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+																{player.player}{isCurrentUser && ' (You)'}
 															</span>
 														</div>
 													);
