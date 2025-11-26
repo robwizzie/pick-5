@@ -364,8 +364,9 @@ export default function LeagueDetails() {
 						)}
 					</Tabs>
 				</div>
-				<div>
+				<div className='space-y-8'>
 					<LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />
+					<Leaderboard />
 				</div>
 			</div>
 
