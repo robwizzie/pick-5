@@ -35,6 +35,19 @@ interface SnapshotOdds {
 	away?: { odds?: number };
 }
 
+interface LeagueUserPick {
+	userId: string;
+	name: string;
+	image: string | null;
+}
+
+interface LeaguePicksData {
+	[gameId: string]: {
+		away: LeagueUserPick[];
+		home: LeagueUserPick[];
+	};
+}
+
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: UserPicksModalProps) {
 	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
@@ -44,6 +57,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 
 	// Check if viewing own picks
 	const isViewingOwnPicks = session?.user?.id === userId;
@@ -63,13 +77,22 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 					setLeagueMode(fetchedLeagueMode);
 				}
 
-				const [weeklyGames, picksResponse] = await Promise.all([NFLService.getWeeklyGames(week), fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`)]);
+				let [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
+					NFLService.getWeeklyGames(week),
+					fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`),
+					fetch(`/api/picks/league?week=${week}&leagueId=${leagueId}`, { cache: 'no-store' })
+				]);
+
+				// Enrich live games with clock and period data
+				weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
 
 				if (!picksResponse.ok) {
 					throw new Error('Failed to fetch picks');
 				}
 
 				const picksData = await picksResponse.json();
+				const leaguePicksData = leaguePicksResponse.ok ? await leaguePicksResponse.json() : {};
+				setLeaguePicks(leaguePicksData);
 
 				if (picksData) {
 					setPicks(picksData.picks || []);
@@ -234,6 +257,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 													showScores={shouldShowScores}
 													isCorrect={isCorrect}
 													pickPoints={pickPoints}
+													leaguePicks={(gameFinished || gameInProgress) ? leaguePicks[pick.gameId] : undefined}
 													leagueMode={leagueMode}
 													variant="picks"
 												/>
