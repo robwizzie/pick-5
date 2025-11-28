@@ -64,7 +64,7 @@ export function Results() {
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
 	const [leagueMembers, setLeagueMembers] = useState<UserPick[]>([]);
-	const [selectedUserId, setSelectedUserId] = useState<string>('all-games');
+	const [selectedUserId, setSelectedUserId] = useState<string>('');
 
 	// Fetch league mode
 	useEffect(() => {
@@ -95,7 +95,10 @@ export function Results() {
 				if (response.ok) {
 					const members = await response.json();
 					setLeagueMembers(members);
-					// Default to 'all-games' view - no need to set selectedUserId
+					// Default to current user's results
+					if (session?.user?.id && !selectedUserId) {
+						setSelectedUserId(session.user.id);
+					}
 				}
 			} catch (error) {
 				console.error('Error fetching league members:', error);
