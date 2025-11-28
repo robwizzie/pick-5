@@ -183,7 +183,8 @@ export async function GET(req: Request) {
 					totalPoints: 0,
 					totalTFSPoints: 0,
 					correctPicks: 0,
-					totalPicks: 0
+					totalPicks: 0,
+					weeksWon: 0
 				});
 			}
 
@@ -192,6 +193,41 @@ export async function GET(req: Request) {
 			userStats.totalTFSPoints += tfsPoints;
 			userStats.correctPicks += correct;
 			userStats.totalPicks += completedGames; // Use completed games, not pick.picks.length
+		}
+
+		// Calculate weeks won for each user (weeks where they got 1st or tied for 1st)
+		for (const weekNum of uniqueWeeks) {
+			// Get all picks for this week
+			const weekPicksForLeaderboard = allPicksForSeason.filter(p => p.week === weekNum);
+			const weekResults = gameResultsByWeek.get(weekNum) || [];
+
+			// Calculate each user's points for this week
+			const weekScores = new Map<string, number>();
+			let maxPointsForWeek = 0;
+
+			for (const pick of weekPicksForLeaderboard) {
+				const { weeklyPoints } = ScoringService.calculateWeekScore(
+					pick.picks,
+					weekResults,
+					pick.tfsGame,
+					pick.tfsScore,
+					leagueMode,
+					calculatePointsFromOdds
+				);
+
+				const userId = pick.userId.toString();
+				weekScores.set(userId, weeklyPoints);
+				maxPointsForWeek = Math.max(maxPointsForWeek, weeklyPoints);
+			}
+
+			// Award "weeks won" to users who got max points (and max > 0)
+			if (maxPointsForWeek > 0) {
+				weekScores.forEach((points, userId) => {
+					if (points === maxPointsForWeek && seasonStatsMap.has(userId)) {
+						seasonStatsMap.get(userId).weeksWon++;
+					}
+				});
+			}
 		}
 
 		console.log('[API Debug] Re-calculated season stats:', Array.from(seasonStatsMap.entries()));
@@ -206,6 +242,7 @@ export async function GET(req: Request) {
 				totalTFSPoints: stat?.totalTFSPoints || 0,
 				totalPicks: stat?.totalPicks || 0,
 				correctPicks: stat?.correctPicks || 0,
+				weeksWon: stat?.weeksWon || 0,
 				winPercentage: stat?.totalPicks > 0 ? (stat.correctPicks / stat.totalPicks) * 100 : 0
 			};
 		});

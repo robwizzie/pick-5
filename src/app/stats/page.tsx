@@ -21,6 +21,7 @@ interface LeagueStats {
 	bestWeekPoints: number;
 	currentStreak: number;
 	bestStreak: number;
+	weeksWon: number;
 }
 
 interface AllTimeStats {
@@ -127,6 +128,7 @@ const StatsPage = () => {
 						let leagueTotalPicks = 0;
 						let leagueTotalTFSPoints = 0;
 						let leagueBestWeekPoints = 0;
+						let leagueWeeksWon = 0;
 
 						picks.forEach((pick: PickData) => {
 							// Count how many games are finished vs total picks
@@ -142,7 +144,6 @@ const StatsPage = () => {
 								leagueCorrectPicks += correctInWeek;
 								leagueTotalPicks += finishedGamesCount; // Only count finished games
 								leagueTotalTFSPoints += pick.tfsPoints || 0;
-								leagueBestWeekPoints = Math.max(leagueBestWeekPoints, pick.weeklyPoints || 0);
 
 								// Check for perfect week (all 5 picks correct and all 5 games finished)
 								const isPerfectWeek = allGamesFinished && totalPicksInWeek === 5 && correctInWeek === 5;
@@ -164,16 +165,36 @@ const StatsPage = () => {
 										perfectWeeksSet.add(`week-${pick.week}`);
 									}
 								}
-
-								if (pick.weeklyPoints && pick.weeklyPoints > allTimeData.bestWeekPoints) {
-									allTimeData.bestWeekPoints = pick.weeklyPoints;
-									allTimeData.bestWeekNumber = pick.week;
-								}
 							}
 						});
 
 						// Count weeks with at least one finished game
 						const weeksPlayed = picks.filter((p: PickData) => p.picks.some(pick => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
+
+						// Fetch weeks won and recalculated weekly stats from seasonStats API
+						try {
+							const seasonStatsResponse = await fetch(`/api/seasonStats?leagueId=${league._id}`);
+							if (seasonStatsResponse.ok) {
+								const seasonStatsData = await seasonStatsResponse.json();
+								leagueWeeksWon = seasonStatsData.weeksWon || 0;
+
+								// Use recalculated weekly stats for best week (retroactive)
+								if (seasonStatsData.weeklyStats) {
+									Object.entries(seasonStatsData.weeklyStats).forEach(([week, weekData]: [string, any]) => {
+										const weekPoints = weekData.weeklyPoints || 0;
+										if (weekPoints > leagueBestWeekPoints) {
+											leagueBestWeekPoints = weekPoints;
+										}
+										if (weekPoints > allTimeData.bestWeekPoints) {
+											allTimeData.bestWeekPoints = weekPoints;
+											allTimeData.bestWeekNumber = parseInt(week);
+										}
+									});
+								}
+							}
+						} catch (error) {
+							console.error('Error fetching weeks won for league:', league._id, error);
+						}
 
 						leagueStatsData.push({
 							leagueId: league._id,
@@ -187,7 +208,8 @@ const StatsPage = () => {
 							weeksPlayed,
 							bestWeekPoints: leagueBestWeekPoints,
 							currentStreak: 0,
-							bestStreak: 0
+							bestStreak: 0,
+							weeksWon: leagueWeeksWon
 						});
 
 						allTimeData.totalPoints += leagueTotalPoints;
@@ -699,7 +721,7 @@ const StatsPage = () => {
 											<Award className='h-6 w-6 text-primary group-hover:text-accent transition-colors' />
 										</div>
 
-										<div className={`grid grid-cols-2 ${stat.leagueMode === 'steve' ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-4`}>
+										<div className={`grid grid-cols-2 ${stat.leagueMode === 'steve' ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-4`}>
 											<div className='text-center p-3 rounded-lg bg-card/30'>
 												<p className='text-xs text-muted-foreground mb-1'>Points</p>
 												<p className='text-2xl font-bold text-foreground'>{stat.totalPoints}</p>
@@ -707,6 +729,10 @@ const StatsPage = () => {
 											<div className='text-center p-3 rounded-lg bg-card/30'>
 												<p className='text-xs text-muted-foreground mb-1'>Win %</p>
 												<p className='text-2xl font-bold text-green-400'>{Math.round(stat.winPercentage)}%</p>
+											</div>
+											<div className='text-center p-3 rounded-lg bg-card/30'>
+												<p className='text-xs text-muted-foreground mb-1'>Weeks Won</p>
+												<p className='text-2xl font-bold text-yellow-400'>{stat.weeksWon}</p>
 											</div>
 											<div className='text-center p-3 rounded-lg bg-card/30'>
 												<p className='text-xs text-muted-foreground mb-1'>Correct</p>
