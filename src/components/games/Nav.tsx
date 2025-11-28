@@ -72,44 +72,29 @@ export function Nav() {
 
 	return (
 		<nav className='glass sticky top-0 z-50 border-b border-white/10'>
-			<div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
-				<div className='flex justify-between items-center h-20'>
+			<div className='max-w-7xl mx-auto px-3 sm:px-6 lg:px-8'>
+				<div className='flex justify-between items-center h-16'>
 					{/* Left side - Week navigation for league pages */}
-					<div className='flex items-center space-x-4'>
+					<div className='flex items-center'>
 						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
-							<div className='flex items-center space-x-2'>
-								{/* Dashboard button - always visible on league pages */}
-								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors mr-2'>
-									<Home className='h-4 w-4' />
-									<span className='hidden sm:inline font-medium'>Dashboard</span>
+							<div className='flex items-center space-x-2 glass rounded-full px-3 py-1.5'>
+								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
+									<ChevronLeft className='h-4 w-4' />
 								</Button>
-								{/* Week navigation */}
-								<div className='flex items-center space-x-2 glass rounded-full px-4 py-2'>
-									<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
-										<ChevronLeft className='h-4 w-4' />
-									</Button>
-									<button onClick={() => setIsWeekSelectorOpen(true)} className='text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[80px] text-center hover:bg-primary/10 px-2 py-1 rounded transition-colors cursor-pointer'>
-										Week {currentWeek}
-									</button>
-									<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-8 w-8 p-0 hover:bg-primary/20 text-primary rounded-full'>
-										<ChevronRight className='h-4 w-4' />
-									</Button>
-								</div>
-							</div>
-						) : !isDashboard ? (
-							<div className='flex items-center space-x-2'>
-								<Button variant='ghost' size='sm' onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 text-muted-foreground hover:text-foreground hover:bg-card/80 transition-colors'>
-									<Home className='h-4 w-4' />
-									<span className='hidden sm:inline font-medium'>Dashboard</span>
+								<button onClick={() => setIsWeekSelectorOpen(true)} className='text-base sm:text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[70px] sm:min-w-[80px] text-center hover:bg-primary/10 px-2 py-0.5 rounded transition-colors cursor-pointer'>
+									Week {currentWeek}
+								</button>
+								<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full'>
+									<ChevronRight className='h-4 w-4' />
 								</Button>
 							</div>
 						) : null}
 					</div>
 
-					{/* Center - Logo (hidden on small screens when on league page to prevent overlap) */}
-					<div className={`absolute left-1/2 transform -translate-x-1/2 ${isLeaguePage ? 'hidden sm:block' : ''}`}>
+					{/* Center - Logo */}
+					<div className='absolute left-1/2 transform -translate-x-1/2'>
 						<div className='cursor-pointer transition-all duration-300 hover:scale-110 hover:drop-shadow-glow' onClick={() => router.push('/dashboard')}>
-							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' width={56} height={56} className='drop-shadow-lg' priority />
+							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' width={48} height={48} className='drop-shadow-lg sm:w-14 sm:h-14' priority />
 						</div>
 					</div>
 
@@ -127,35 +112,27 @@ export function Nav() {
 										</Avatar>
 									</Button>
 								</DropdownMenuTrigger>
-								<DropdownMenuContent className='w-64 glass border-white/10 backdrop-blur-xl' align='end' forceMount>
+								<DropdownMenuContent className='w-56 glass border-white/10 backdrop-blur-xl' align='end' forceMount>
 									<DropdownMenuLabel className='pb-2'>
 										<div className='flex flex-col space-y-1'>
 											<p className='font-semibold text-foreground'>{session.user?.name}</p>
-											<p className='text-sm text-muted-foreground'>{session.user?.email}</p>
+											<p className='text-xs text-muted-foreground truncate'>{session.user?.email}</p>
 										</div>
 									</DropdownMenuLabel>
 									<DropdownMenuSeparator className='bg-white/10' />
-									{!isDashboard && (
-										<>
-											<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-card/80 hover:text-foreground'>
-												<Home className='h-4 w-4' />
-												<span>Dashboard</span>
-											</DropdownMenuItem>
-											<DropdownMenuSeparator className='bg-white/10' />
-										</>
-									)}
+									<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
+										<Home className='h-4 w-4' />
+										<span>Dashboard</span>
+									</DropdownMenuItem>
 									<DropdownMenuItem onClick={() => router.push('/stats')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
 										<BarChart3 className='h-4 w-4' />
 										<span>My Stats</span>
 									</DropdownMenuItem>
 									{isAdmin && (
-										<>
-											<DropdownMenuSeparator className='bg-white/10' />
-											<DropdownMenuItem onClick={() => router.push('/admin')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10 text-primary'>
-												<Shield className='h-4 w-4' />
-												<span>Admin Tools</span>
-											</DropdownMenuItem>
-										</>
+										<DropdownMenuItem onClick={() => router.push('/admin')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10 text-primary'>
+											<Shield className='h-4 w-4' />
+											<span>Admin Tools</span>
+										</DropdownMenuItem>
 									)}
 									<DropdownMenuSeparator className='bg-white/10' />
 									<DropdownMenuItem onClick={() => router.push('/settings')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
