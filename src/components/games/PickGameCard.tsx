@@ -112,7 +112,7 @@ export function PickGameCard({
 					disabled={true}
 					isCorrect={gameFinished ? isCorrect : null}
 					noHover={true}
-					leaguePicks={gameFinished ? leaguePicks : undefined}
+					leaguePicks={(gameFinished || gameInProgress) ? leaguePicks : undefined}
 					leagueMode={leagueMode}
 				/>
 			</div>
