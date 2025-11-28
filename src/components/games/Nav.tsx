@@ -74,7 +74,7 @@ export function Nav() {
 		<nav className='glass sticky top-0 z-50 border-b border-white/10'>
 			<div className='max-w-7xl mx-auto px-3 sm:px-6 lg:px-8'>
 				<div className='flex justify-between items-center h-16'>
-					{/* Left side - Week navigation for league pages */}
+					{/* Left side - Week navigation for league pages or Dashboard button */}
 					<div className='flex items-center'>
 						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
 							<div className='flex items-center space-x-2 glass rounded-full px-3 py-1.5'>
@@ -88,6 +88,16 @@ export function Nav() {
 									<ChevronRight className='h-4 w-4' />
 								</Button>
 							</div>
+						) : !isDashboard ? (
+							<Button
+								variant='ghost'
+								size='sm'
+								onClick={() => router.push('/dashboard')}
+								className='flex items-center gap-2 text-primary hover:bg-primary/10 transition-colors px-3 py-2 rounded-full glass'
+							>
+								<Home className='h-4 w-4' />
+								<span className='hidden sm:inline text-sm font-medium'>Dashboard</span>
+							</Button>
 						) : null}
 					</div>
 
