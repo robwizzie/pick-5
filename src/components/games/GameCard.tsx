@@ -238,27 +238,42 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md'>
 				{/* Mobile Date (shown only on mobile at the top) */}
 				<div className='xl:hidden mb-3'>
-					<div className='flex flex-col items-center gap-2'>
-						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
+					<div className='flex justify-center'>
+						<div className={`px-3 py-1.5 rounded-full ${statusInfo.bgColor} relative inline-flex items-center gap-1.5`}>
 							{(statusInfo as any).isLive && (
-								<span className='absolute -left-1 top-1/2 -translate-y-1/2 flex h-2 w-2'>
-									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'></span>
+								<span className='flex h-2 w-2'>
+									<span className='animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75'></span>
 									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
 								</span>
 							)}
-							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
-								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
-							</div>
-							<div className='text-[10px] text-muted-foreground mt-0.5'>
-								{statusInfo.isScheduled ? (
-									statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-								) : (statusInfo as any).isLive && (statusInfo as any).periodText ? (
-									<div className='flex flex-col items-center gap-0.5'>
-										<span className='text-green-400 font-semibold'>{(statusInfo as any).periodText}</span>
-										{(statusInfo as any).clockText && <span className='text-primary font-mono'>{(statusInfo as any).clockText}</span>}
-									</div>
-								) : (
-									`${statusInfo.dayText} ${statusInfo.timeText}`
+							<div className='flex items-center gap-1.5'>
+								<span className={`text-xs font-semibold ${statusInfo.color}`}>
+									{statusInfo.isScheduled ? statusInfo.text : statusInfo.text}
+								</span>
+								{(statusInfo as any).isLive && (
+									<>
+										{(statusInfo as any).periodText && (
+											<>
+												<span className='text-muted-foreground'>•</span>
+												<span className='text-[11px] font-semibold text-green-400'>{(statusInfo as any).periodText}</span>
+											</>
+										)}
+										{(statusInfo as any).clockText && (
+											<span className='text-[11px] font-mono text-primary font-semibold'>{(statusInfo as any).clockText}</span>
+										)}
+									</>
+								)}
+								{statusInfo.isScheduled && (
+									<>
+										<span className='text-muted-foreground'>•</span>
+										<span className='text-[10px] text-muted-foreground'>{statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+									</>
+								)}
+								{!statusInfo.isScheduled && !(statusInfo as any).isLive && (
+									<>
+										<span className='text-muted-foreground'>•</span>
+										<span className='text-[10px] text-muted-foreground'>{statusInfo.dayText}</span>
+									</>
 								)}
 							</div>
 						</div>
@@ -268,23 +283,22 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				{/* Mobile Horizontal Layout */}
 				<div className='xl:hidden flex items-center justify-between gap-2'>
 					{/* Away Team - Mobile Compact */}
-					<Button {...buttonProps} className={`${buttonProps.className} flex-1 h-auto py-3 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
-						<div className='flex flex-col items-center gap-1 w-full'>
-							<div className='relative w-10 h-10 flex-shrink-0 bg-white rounded-sm p-1.5'>
+					<Button {...buttonProps} className={`${buttonProps.className} flex-1 h-auto py-2 px-2 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
+						<div className='flex flex-col items-center gap-1.5 w-full'>
+							<div className='relative w-12 h-12 flex-shrink-0 bg-white rounded-sm p-1.5'>
 								<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
 							</div>
-							<div className='text-center'>
-								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.abbreviation}</div>
-								<div className={`text-[10px] ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-medium text-white/80' : selected === game.away.team ? 'font-medium text-black/70' : 'text-muted-foreground'}`}>{game.away.record}</div>
+							<div className='text-center min-w-0 w-full'>
+								<div className={`font-oswald uppercase tracking-wide text-xs leading-tight ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.abbreviation}</div>
+								<div className={`text-[10px] leading-tight ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-medium text-white/80' : selected === game.away.team ? 'font-medium text-black/70' : 'text-muted-foreground'}`}>{game.away.record}</div>
 								{showScores && game.away.score !== undefined && (
-									<div className={`text-lg mt-1 font-mono ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
+									<div className={`text-xl mt-1 font-mono leading-tight ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
 										<CountUp end={game.away.score} duration={0.8} preserveValue />
 									</div>
 								)}
-								{isStandardMode && game.away.odds !== undefined && (
-									<div className='flex items-center justify-center gap-1 mt-1'>
+								{isStandardMode && game.away.odds !== undefined && !showScores && (
+									<div className='flex flex-col items-center gap-0.5 mt-1'>
 										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-										<span className={`text-[10px] ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
 										<span className={`text-[10px] font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 									</div>
 								)}
@@ -294,28 +308,27 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					</Button>
 
 					{/* VS Symbol */}
-					<div className='flex-shrink-0 px-1'>
-						<span className='text-xs font-medium text-accent'>@</span>
+					<div className='flex-shrink-0'>
+						<span className='text-sm font-medium text-accent'>@</span>
 					</div>
 
 					{/* Home Team - Mobile Compact */}
-					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 h-auto py-3 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
-						<div className='flex flex-col items-center gap-1 w-full'>
-							<div className='relative w-10 h-10 flex-shrink-0 bg-white rounded-sm p-1.5'>
+					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 h-auto py-2 px-2 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
+						<div className='flex flex-col items-center gap-1.5 w-full'>
+							<div className='relative w-12 h-12 flex-shrink-0 bg-white rounded-sm p-1.5'>
 								<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
 							</div>
-							<div className='text-center'>
-								<div className={`font-oswald uppercase tracking-wide text-xs ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.abbreviation}</div>
-								<div className={`text-[10px] ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-medium text-white/80' : selected === game.home.team ? 'font-medium text-black/70' : 'text-muted-foreground'}`}>{game.home.record}</div>
+							<div className='text-center min-w-0 w-full'>
+								<div className={`font-oswald uppercase tracking-wide text-xs leading-tight ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.abbreviation}</div>
+								<div className={`text-[10px] leading-tight ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-medium text-white/80' : selected === game.home.team ? 'font-medium text-black/70' : 'text-muted-foreground'}`}>{game.home.record}</div>
 								{showScores && game.home.score !== undefined && (
-									<div className={`text-lg mt-1 font-mono ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
+									<div className={`text-xl mt-1 font-mono leading-tight ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
 										<CountUp end={game.home.score} duration={0.8} preserveValue />
 									</div>
 								)}
-								{isStandardMode && game.home.odds !== undefined && (
-									<div className='flex items-center justify-center gap-1 mt-1'>
+								{isStandardMode && game.home.odds !== undefined && !showScores && (
+									<div className='flex flex-col items-center gap-0.5 mt-1'>
 										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-										<span className={`text-[10px] ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
 										<span className={`text-[10px] font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 									</div>
 								)}
