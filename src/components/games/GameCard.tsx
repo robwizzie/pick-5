@@ -191,7 +191,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			return `bg-green-500/30 text-white border-green-500/40 ${baseStyle}`;
 		}
 
-		return `border-primary/20 text-white ${baseStyle}`;
+		return `border-primary/20 text-foreground ${baseStyle}`;
 	};
 
 	const buttonProps = noHover
@@ -235,7 +235,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			)}
 
 			{/* GameCard Container */}
-			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md'>
+			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md min-h-[200px] xl:min-h-[140px]'>
 				{/* Mobile Date (shown only on mobile at the top) */}
 				<div className='xl:hidden mb-3'>
 					<div className='flex justify-center'>
