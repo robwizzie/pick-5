@@ -222,11 +222,11 @@ export async function GET(req: Request) {
 
 			// Award "weeks won" to users who got max points (and max > 0)
 			if (maxPointsForWeek > 0) {
-				for (const [userId, points] of weekScores.entries()) {
+				weekScores.forEach((points, userId) => {
 					if (points === maxPointsForWeek && seasonStatsMap.has(userId)) {
 						seasonStatsMap.get(userId).weeksWon++;
 					}
-				}
+				});
 			}
 		}
 
