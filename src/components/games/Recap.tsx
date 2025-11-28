@@ -761,6 +761,7 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 											noHover={true}
 											leagueMode={leagueMode}
 											leaguePicks={upset.leaguePicks}
+											forceShowOdds={true}
 										/>
 									</motion.div>
 								))}
@@ -811,6 +812,7 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 											noHover={true}
 											leagueMode={leagueMode}
 											leaguePicks={pick.leaguePicks}
+											forceShowOdds={true}
 										/>
 									</motion.div>
 								))}
@@ -861,6 +863,7 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 											noHover={true}
 											leagueMode={leagueMode}
 											leaguePicks={pick.leaguePicks}
+											forceShowOdds={true}
 										/>
 									</motion.div>
 								))}

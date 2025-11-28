@@ -131,10 +131,13 @@ export function Results() {
 
 				// Handle "All Games" view differently
 				if (selectedUserId === 'all-games') {
-					const [weeklyGames, leaguePicksResponse] = await Promise.all([
+					let [weeklyGames, leaguePicksResponse] = await Promise.all([
 						NFLService.getWeeklyGames(currentWeek),
 						fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
 					]);
+
+					// Enrich live games with clock and period data
+					weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
 
 					const leaguePicksData = await leaguePicksResponse.json();
 
@@ -178,11 +181,14 @@ export function Results() {
 				}
 
 				// Pass leagueId and userId to the backend
-				const [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
+				let [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
 					NFLService.getWeeklyGames(currentWeek),
 					fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`, { cache: 'no-store' }),
 					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
 				]);
+
+				// Enrich live games with clock and period data
+				weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
 
 				const picksData = await picksResponse.json();
 				const leaguePicksData = await leaguePicksResponse.json();

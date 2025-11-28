@@ -75,19 +75,32 @@ export function Nav() {
 			<div className='max-w-7xl mx-auto px-3 sm:px-6 lg:px-8'>
 				<div className='flex justify-between items-center h-16'>
 					{/* Left side - Week navigation for league pages or Dashboard button */}
-					<div className='flex items-center'>
+					<div className='flex items-center gap-2'>
 						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
-							<div className='flex items-center space-x-2 glass rounded-full px-3 py-1.5'>
-								<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
-									<ChevronLeft className='h-4 w-4' />
+							<>
+								{/* Dashboard button for league pages */}
+								<Button
+									variant='ghost'
+									size='sm'
+									onClick={() => router.push('/dashboard')}
+									className='h-8 w-8 p-0 hover:bg-primary/10 transition-colors rounded-full glass flex items-center justify-center'
+									title='Dashboard'
+								>
+									<Home className='h-4 w-4 text-primary' />
 								</Button>
-								<button onClick={() => setIsWeekSelectorOpen(true)} className='text-base sm:text-lg font-display uppercase tracking-wide text-primary font-semibold min-w-[70px] sm:min-w-[80px] text-center hover:bg-primary/10 px-2 py-0.5 rounded transition-colors cursor-pointer'>
-									Week {currentWeek}
-								</button>
-								<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full'>
-									<ChevronRight className='h-4 w-4' />
-								</Button>
-							</div>
+								{/* Week selector */}
+								<div className='flex items-center space-x-1.5 glass rounded-full px-2 py-1'>
+									<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
+										<ChevronLeft className='h-3.5 w-3.5' />
+									</Button>
+									<button onClick={() => setIsWeekSelectorOpen(true)} className='text-sm font-display uppercase tracking-wide text-primary font-semibold min-w-[60px] text-center hover:bg-primary/10 px-2 py-0.5 rounded transition-colors cursor-pointer'>
+										Week {currentWeek}
+									</button>
+									<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full'>
+										<ChevronRight className='h-3.5 w-3.5' />
+									</Button>
+								</div>
+							</>
 						) : !isDashboard ? (
 							<Button
 								variant='ghost'
@@ -101,10 +114,17 @@ export function Nav() {
 						) : null}
 					</div>
 
-					{/* Center - Logo */}
+					{/* Center - Logo (smaller on mobile, especially when in a league) */}
 					<div className='absolute left-1/2 transform -translate-x-1/2'>
 						<div className='cursor-pointer transition-all duration-300 hover:scale-110 hover:drop-shadow-glow' onClick={() => router.push('/dashboard')}>
-							<Image src='/pick-5-logo.png' alt='Pick 5 Logo' width={48} height={48} className='drop-shadow-lg sm:w-14 sm:h-14' priority />
+							<Image
+								src='/pick-5-logo.png'
+								alt='Pick 5 Logo'
+								width={40}
+								height={40}
+								className={`drop-shadow-lg ${isLeaguePage ? 'sm:w-12 sm:h-12' : 'sm:w-14 sm:h-14'}`}
+								priority
+							/>
 						</div>
 					</div>
 
