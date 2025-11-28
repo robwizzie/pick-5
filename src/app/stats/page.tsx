@@ -144,7 +144,6 @@ const StatsPage = () => {
 								leagueCorrectPicks += correctInWeek;
 								leagueTotalPicks += finishedGamesCount; // Only count finished games
 								leagueTotalTFSPoints += pick.tfsPoints || 0;
-								leagueBestWeekPoints = Math.max(leagueBestWeekPoints, pick.weeklyPoints || 0);
 
 								// Check for perfect week (all 5 picks correct and all 5 games finished)
 								const isPerfectWeek = allGamesFinished && totalPicksInWeek === 5 && correctInWeek === 5;
@@ -166,23 +165,32 @@ const StatsPage = () => {
 										perfectWeeksSet.add(`week-${pick.week}`);
 									}
 								}
-
-								if (pick.weeklyPoints && pick.weeklyPoints > allTimeData.bestWeekPoints) {
-									allTimeData.bestWeekPoints = pick.weeklyPoints;
-									allTimeData.bestWeekNumber = pick.week;
-								}
 							}
 						});
 
 						// Count weeks with at least one finished game
 						const weeksPlayed = picks.filter((p: PickData) => p.picks.some(pick => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
 
-						// Fetch weeks won from seasonStats API
+						// Fetch weeks won and recalculated weekly stats from seasonStats API
 						try {
 							const seasonStatsResponse = await fetch(`/api/seasonStats?leagueId=${league._id}`);
 							if (seasonStatsResponse.ok) {
 								const seasonStatsData = await seasonStatsResponse.json();
 								leagueWeeksWon = seasonStatsData.weeksWon || 0;
+
+								// Use recalculated weekly stats for best week (retroactive)
+								if (seasonStatsData.weeklyStats) {
+									Object.entries(seasonStatsData.weeklyStats).forEach(([week, weekData]: [string, any]) => {
+										const weekPoints = weekData.weeklyPoints || 0;
+										if (weekPoints > leagueBestWeekPoints) {
+											leagueBestWeekPoints = weekPoints;
+										}
+										if (weekPoints > allTimeData.bestWeekPoints) {
+											allTimeData.bestWeekPoints = weekPoints;
+											allTimeData.bestWeekNumber = parseInt(week);
+										}
+									});
+								}
 							}
 						} catch (error) {
 							console.error('Error fetching weeks won for league:', league._id, error);

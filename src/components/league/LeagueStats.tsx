@@ -234,16 +234,16 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 						<span className='text-5xl font-bold font-mono text-primary'>
 							{stats.rank > 0 ? (
 								<>
-									<CountUp end={stats.rank} duration={0.5} />
 									{stats.rank === 1 && '🥇'}
 									{stats.rank === 2 && '🥈'}
 									{stats.rank === 3 && '🥉'}
+									{stats.rank > 3 && <CountUp end={stats.rank} duration={0.5} />}
 								</>
 							) : '—'}
 						</span>
-						{stats.rank <= 3 && stats.rank > 0 && (
+						{stats.rank > 3 && (
 							<span className='text-xs text-muted-foreground'>
-								{stats.rank === 1 ? 'st' : stats.rank === 2 ? 'nd' : 'rd'}
+								{stats.rank === 4 ? 'th' : stats.rank % 10 === 1 && stats.rank !== 11 ? 'st' : stats.rank % 10 === 2 && stats.rank !== 12 ? 'nd' : stats.rank % 10 === 3 && stats.rank !== 13 ? 'rd' : 'th'}
 							</span>
 						)}
 					</div>
