@@ -46,6 +46,7 @@ interface GameCardProps {
 	noHover?: boolean;
 	leaguePicks?: GamePicksData;
 	leagueMode?: string;
+	forceShowOdds?: boolean; // Always show odds regardless of league mode
 }
 
 // Component to render stacked avatars
@@ -92,10 +93,11 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 	);
 }
 
-export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode }: GameCardProps) {
+export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode, forceShowOdds }: GameCardProps) {
 	if (!game) return null;
 
 	const isStandardMode = leagueMode === 'standard';
+	const shouldShowOdds = forceShowOdds || isStandardMode;
 
 	// Helper function to format game date and time
 	const formatGameDateTime = (date: Date) => {
@@ -296,7 +298,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<CountUp end={game.away.score} duration={0.8} preserveValue />
 									</div>
 								)}
-								{isStandardMode && game.away.odds !== undefined && (
+								{shouldShowOdds && game.away.odds !== undefined && (
 									<div className='flex flex-col items-center gap-0.5 mt-1'>
 										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
 										<span className={`text-[10px] font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
@@ -326,7 +328,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<CountUp end={game.home.score} duration={0.8} preserveValue />
 									</div>
 								)}
-								{isStandardMode && game.home.odds !== undefined && (
+								{shouldShowOdds && game.home.odds !== undefined && (
 									<div className='flex flex-col items-center gap-0.5 mt-1'>
 										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
 										<span className={`text-[10px] font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
@@ -350,7 +352,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.team}</div>
 									<div className={`text-xs ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white/80' : selected === game.away.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.away.record}</div>
-									{isStandardMode && game.away.odds !== undefined && (
+									{shouldShowOdds && game.away.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
 											<span className={`text-xs font-semibold px-2 py-0.5 rounded ${getOddsBadgeClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
 											<span className={`text-xs ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
@@ -421,7 +423,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 								<div className='text-left flex-1'>
 									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.team}</div>
 									<div className={`text-xs ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white/80' : selected === game.home.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.home.record}</div>
-									{isStandardMode && game.home.odds !== undefined && (
+									{shouldShowOdds && game.home.odds !== undefined && (
 										<div className='flex items-center gap-1.5 mt-1'>
 											<span className={`text-xs font-semibold px-2 py-0.5 rounded ${getOddsBadgeClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
 											<span className={`text-xs ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
