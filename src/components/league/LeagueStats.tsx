@@ -742,61 +742,6 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 					)}
 				</CardContent>
 			</Card>
-
-			{/* Mini Leaderboard */}
-			<Card className='glass border-white/10'>
-				<CardHeader>
-					<CardTitle className='text-lg font-display flex items-center gap-2'>
-						<Award className='h-5 w-5 text-primary' />
-						Mini Leaderboard
-					</CardTitle>
-				</CardHeader>
-				<CardContent className='space-y-2'>
-					{leaderboard.length > 0 ? (
-						leaderboard.map((entry, index) => (
-							<div
-								key={entry.player}
-								className='flex items-center gap-3 p-2 rounded-lg bg-card/50 hover:bg-card/80 transition-colors'
-							>
-								{/* Rank Badge */}
-								<div className='flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs'>
-									{index + 1}
-								</div>
-
-								{/* Avatar */}
-								<div className='relative w-8 h-8 rounded-full overflow-hidden bg-primary/20 flex-shrink-0'>
-									{entry.image ? (
-										<Image
-											src={entry.image}
-											alt={entry.player}
-											fill
-											className='object-cover'
-										/>
-									) : (
-										<div className='w-full h-full flex items-center justify-center text-primary font-semibold text-xs'>
-											{entry.player.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
-										</div>
-									)}
-								</div>
-
-								{/* Name */}
-								<span className='flex-1 text-sm font-medium text-foreground truncate'>
-									{entry.player}
-								</span>
-
-								{/* Points */}
-								<span className='text-sm font-bold font-mono text-primary'>
-									{entry.totalPoints}
-								</span>
-							</div>
-						))
-					) : (
-						<p className='text-sm text-muted-foreground text-center py-4'>
-							No rankings yet
-						</p>
-					)}
-				</CardContent>
-			</Card>
 		</div>
 	);
 }
