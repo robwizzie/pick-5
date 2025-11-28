@@ -606,7 +606,7 @@ export function WeeklyPicks() {
 											showScores={true}
 											isCorrect={isCorrect}
 											pickPoints={pickPoints}
-											leaguePicks={leaguePicks[pick.gameId]}
+											leaguePicks={(gameFinished || gameInProgress) ? leaguePicks[pick.gameId] : undefined}
 											leagueMode={leagueMode}
 											variant="results"
 										/>
@@ -688,7 +688,7 @@ export function WeeklyPicks() {
 												showScores={true}
 												isCorrect={isCorrect}
 												pickPoints={pickPoints}
-												leaguePicks={leaguePicks[game.id]}
+												leaguePicks={(gameFinished || gameInProgress) ? leaguePicks[game.id] : undefined}
 												leagueMode={leagueMode}
 												variant="results"
 											/>
