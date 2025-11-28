@@ -296,13 +296,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<CountUp end={game.away.score} duration={0.8} preserveValue />
 									</div>
 								)}
-								{isStandardMode && game.away.odds !== undefined && !showScores && (
+								{isStandardMode && game.away.odds !== undefined && (
 									<div className='flex flex-col items-center gap-0.5 mt-1'>
 										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
 										<span className={`text-[10px] font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
 									</div>
 								)}
-								{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
+								{leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 							</div>
 						</div>
 					</Button>
@@ -326,13 +326,13 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 										<CountUp end={game.home.score} duration={0.8} preserveValue />
 									</div>
 								)}
-								{isStandardMode && game.home.odds !== undefined && !showScores && (
+								{isStandardMode && game.home.odds !== undefined && (
 									<div className='flex flex-col items-center gap-0.5 mt-1'>
 										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
 										<span className={`text-[10px] font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
 									</div>
 								)}
-								{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
+								{leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 							</div>
 						</div>
 					</Button>
@@ -362,35 +362,50 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 											<CountUp end={game.away.score} duration={0.8} preserveValue />
 										</div>
 									)}
-									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
+									{leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
 								</div>
 							</div>
 						</Button>
 					</div>
 
 					{/* Center Section - Game Status & Time (Desktop only) */}
-					<div className='hidden xl:flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[120px] gap-2'>
+					<div className='hidden xl:flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[140px] gap-2'>
 						<span className='text-sm font-medium text-accent'>@</span>
-						<div className={`px-3 py-1.5 rounded-full text-center ${statusInfo.bgColor} relative`}>
+						<div className={`px-3 py-1.5 rounded-full ${statusInfo.bgColor} relative inline-flex items-center gap-1.5`}>
 							{(statusInfo as any).isLive && (
-								<span className='absolute -left-1 top-1/2 -translate-y-1/2 flex h-2 w-2'>
-									<span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75'></span>
+								<span className='flex h-2 w-2'>
+									<span className='animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75'></span>
 									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
 								</span>
 							)}
-							<div className={`text-xs font-semibold ${statusInfo.color} whitespace-nowrap`}>
-								{statusInfo.isScheduled ? statusInfo.text : `${statusInfo.text}`}
-							</div>
-							<div className='text-[10px] text-muted-foreground mt-0.5'>
-								{statusInfo.isScheduled ? (
-									statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-								) : (statusInfo as any).isLive && (statusInfo as any).periodText ? (
-									<div className='flex flex-col items-center gap-0.5'>
-										<span className='text-green-400 font-semibold'>{(statusInfo as any).periodText}</span>
-										{(statusInfo as any).clockText && <span className='text-primary font-mono'>{(statusInfo as any).clockText}</span>}
-									</div>
-								) : (
-									`${statusInfo.dayText} ${statusInfo.timeText}`
+							<div className='flex items-center gap-1.5'>
+								<span className={`text-xs font-semibold ${statusInfo.color}`}>
+									{statusInfo.isScheduled ? statusInfo.text : statusInfo.text}
+								</span>
+								{(statusInfo as any).isLive && (
+									<>
+										{(statusInfo as any).periodText && (
+											<>
+												<span className='text-muted-foreground'>•</span>
+												<span className='text-[11px] font-semibold text-green-400'>{(statusInfo as any).periodText}</span>
+											</>
+										)}
+										{(statusInfo as any).clockText && (
+											<span className='text-[11px] font-mono text-primary font-semibold'>{(statusInfo as any).clockText}</span>
+										)}
+									</>
+								)}
+								{statusInfo.isScheduled && (
+									<>
+										<span className='text-muted-foreground'>•</span>
+										<span className='text-[10px] text-muted-foreground'>{statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+									</>
+								)}
+								{!statusInfo.isScheduled && !(statusInfo as any).isLive && (
+									<>
+										<span className='text-muted-foreground'>•</span>
+										<span className='text-[10px] text-muted-foreground'>{statusInfo.dayText}</span>
+									</>
 								)}
 							</div>
 						</div>
@@ -418,7 +433,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 											<CountUp end={game.home.score} duration={0.8} preserveValue />
 										</div>
 									)}
-									{showScores && leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
+									{leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
 								</div>
 							</div>
 						</Button>
