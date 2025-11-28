@@ -37,7 +37,8 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 		winRate: 0,
 		correctPicks: 0,
 		totalPicks: 0,
-		tfsPoints: 0
+		tfsPoints: 0,
+		weeksWon: 0
 	});
 	const [weeklyTrend, setWeeklyTrend] = useState<WeeklyTrend[]>([]);
 	const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -112,7 +113,8 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 						winRate,
 						correctPicks: userSeasonStats.correctPicks || 0,
 						totalPicks: userSeasonStats.totalPicks || 0,
-						tfsPoints: userSeasonStats.totalTFSPoints || 0
+						tfsPoints: userSeasonStats.totalTFSPoints || 0,
+						weeksWon: userSeasonStats.weeksWon || 0
 					});
 
 					// Set top 4 leaderboard
@@ -272,6 +274,14 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 						<span className='text-sm text-muted-foreground'>Win %</span>
 						<span className='text-2xl font-bold font-mono text-primary'>
 							<CountUp end={stats.winRate} duration={0.5} />%
+						</span>
+					</div>
+
+					{/* Weeks Won */}
+					<div className='flex items-center justify-between'>
+						<span className='text-sm text-muted-foreground'>Weeks Won</span>
+						<span className='text-2xl font-bold font-mono text-yellow-400'>
+							<CountUp end={stats.weeksWon} duration={0.5} />
 						</span>
 					</div>
 

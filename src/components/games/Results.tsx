@@ -460,10 +460,10 @@ export function Results() {
 
 	// Handle "All Games" view
 	if (selectedUserId === 'all-games') {
-		// Only show final games (Results = games that are over)
-		const finalGames = games.filter(g => {
+		// Show final and in-progress games only (no upcoming games)
+		const finishedOrLiveGames = games.filter(g => {
 			const status = g.status?.toLowerCase();
-			return status === 'post' || status === 'final';
+			return status === 'post' || status === 'final' || status === 'in' || status === 'in_progress';
 		});
 
 		return (
@@ -514,16 +514,15 @@ export function Results() {
 					</div>
 				</CardHeader>
 				<CardContent>
-					{finalGames.length > 0 ? (
+					{finishedOrLiveGames.length > 0 ? (
 						<div className='space-y-3'>
-							{finalGames.map((game, index) => (
+							{finishedOrLiveGames.map((game, index) => (
 								<motion.div
 									key={game.id}
 									initial={{ opacity: 0, y: 10 }}
 									whileInView={{ opacity: 1, y: 0 }}
 									viewport={{ once: true, margin: "-50px" }}
 									transition={{ duration: 0.3, delay: index * 0.05 }}
-									className='rounded-lg border-2 border-primary/20 bg-card'
 								>
 									<GameCard
 										game={game}
@@ -538,7 +537,7 @@ export function Results() {
 						</div>
 					) : (
 						<div className='text-center py-12 text-muted-foreground'>
-							No completed games yet this week.
+							No completed or live games yet this week.
 						</div>
 					)}
 				</CardContent>
@@ -660,26 +659,6 @@ export function Results() {
 								</div>
 								<div className='space-y-3'>
 									{results.liveGames.map((game: React.ReactElement, index: number) => (
-										<motion.div
-											key={game.key || index}
-											initial={{ opacity: 0, y: 10 }}
-											whileInView={{ opacity: 1, y: 0 }}
-											viewport={{ once: true, margin: "-50px" }}
-											transition={{ duration: 0.3, delay: index * 0.05 }}
-										>
-											{game}
-										</motion.div>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Upcoming Games */}
-						{results.upcomingGames.length > 0 && (
-							<div className='mb-6'>
-								<h4 className='text-md font-semibold text-primary uppercase tracking-wide mb-3'>Upcoming Games</h4>
-								<div className='space-y-3'>
-									{results.upcomingGames.map((game: React.ReactElement, index: number) => (
 										<motion.div
 											key={game.key || index}
 											initial={{ opacity: 0, y: 10 }}
