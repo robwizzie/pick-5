@@ -229,15 +229,15 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 			viewport={{ once: true, margin: "-50px" }}
 			transition={{ duration: 0.3 }}
 		>
-			{/* Upset Badge */}
+			{/* Upset Badge - positioned safely inside card bounds */}
 			{isUpset && (
-				<div className='absolute -top-2 -right-2 z-10 bg-gradient-to-r from-orange-500 to-red-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg animate-pulse'>
+				<div className='absolute top-1 right-1 z-10 bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] xl:text-xs font-bold px-2 xl:px-3 py-0.5 xl:py-1 rounded-full shadow-lg'>
 					🔥 UPSET
 				</div>
 			)}
 
-			{/* GameCard Container */}
-			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md min-h-[200px] xl:min-h-[140px]'>
+			{/* GameCard Container - consistent heights */}
+			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md h-[220px] xl:h-[160px]'>
 				{/* Mobile Date (shown only on mobile at the top) */}
 				<div className='xl:hidden mb-3'>
 					<div className='flex justify-center'>
