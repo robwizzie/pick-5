@@ -236,8 +236,8 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				</div>
 			)}
 
-			{/* GameCard Container - consistent heights */}
-			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md h-[220px] xl:h-[160px]'>
+			{/* GameCard Container - flexible height, consistent team areas */}
+			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md min-h-[200px] xl:min-h-[140px] flex flex-col justify-between'>
 				{/* Mobile Date (shown only on mobile at the top) */}
 				<div className='xl:hidden mb-3'>
 					<div className='flex justify-center'>
@@ -285,7 +285,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				{/* Mobile Horizontal Layout */}
 				<div className='xl:hidden flex items-center justify-between gap-2'>
 					{/* Away Team - Mobile Compact */}
-					<Button {...buttonProps} className={`${buttonProps.className} flex-1 h-auto py-2 px-2 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
+					<Button {...buttonProps} className={`${buttonProps.className} flex-1 min-h-[160px] py-2 px-2 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
 						<div className='flex flex-col items-center gap-1.5 w-full'>
 							<div className='relative w-12 h-12 flex-shrink-0 bg-white rounded-sm p-1.5'>
 								<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
@@ -315,7 +315,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 					</div>
 
 					{/* Home Team - Mobile Compact */}
-					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 h-auto py-2 px-2 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
+					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 min-h-[160px] py-2 px-2 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
 						<div className='flex flex-col items-center gap-1.5 w-full'>
 							<div className='relative w-12 h-12 flex-shrink-0 bg-white rounded-sm p-1.5'>
 								<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
@@ -344,7 +344,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				<div className='hidden xl:flex xl:flex-row xl:justify-between xl:items-center'>
 					{/* Away Team */}
 					<div className='flex-1 xl:mr-4'>
-						<Button {...buttonProps} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
+						<Button {...buttonProps} className={`${buttonProps.className} min-h-[100px] ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
 							<div className='flex items-center space-x-3 w-full'>
 								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0 bg-white rounded-sm p-1 xl:p-1.5'>
 									<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
@@ -415,7 +415,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 
 					{/* Home Team */}
 					<div className='flex-1 xl:ml-4'>
-						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
+						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} min-h-[100px] ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
 							<div className='flex items-center space-x-3 w-full'>
 								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0 bg-white rounded-sm p-1 xl:p-1.5'>
 									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />

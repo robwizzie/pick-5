@@ -724,9 +724,9 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 										initial={{ opacity: 0, x: -10 }}
 										animate={{ opacity: 1, x: 0 }}
 										transition={{ duration: 0.3, delay: 0.5 + idx * 0.1 }}
-										className='space-y-3'
+										className='space-y-4'
 									>
-										<div className='flex items-center justify-between mb-2'>
+										<div className='flex items-center justify-between mb-4'>
 											<div>
 												<p className='text-sm font-semibold text-foreground'>
 													<span className='text-orange-400'>{upset.team}</span> beat {upset.opponent}
@@ -793,9 +793,9 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 										initial={{ opacity: 0, x: -10 }}
 										animate={{ opacity: 1, x: 0 }}
 										transition={{ duration: 0.3, delay: 0.6 + idx * 0.1 }}
-										className='space-y-3'
+										className='space-y-4'
 									>
-										<div className='flex items-center justify-between mb-2'>
+										<div className='flex items-center justify-between mb-4'>
 											<div>
 												<p className='text-sm font-semibold text-foreground'>
 													<span className='text-green-400'>{pick.winningTeam}</span> beat {pick.losingTeam}
@@ -844,9 +844,9 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 										initial={{ opacity: 0, x: -10 }}
 										animate={{ opacity: 1, x: 0 }}
 										transition={{ duration: 0.3, delay: 0.7 + idx * 0.1 }}
-										className='space-y-3'
+										className='space-y-4'
 									>
-										<div className='flex items-center justify-between mb-2'>
+										<div className='flex items-center justify-between mb-4'>
 											<div>
 												<p className='text-sm font-semibold text-foreground'>
 													{pick.pickCount} players picked <span className='text-red-400'>{pick.losingTeam}</span>

@@ -696,8 +696,6 @@ export function WeeklyPicks() {
 									}
 
 									// Otherwise show normal GameCard with selection
-									const gameCompleted = game && typeof game.home.score === 'number' && typeof game.away.score === 'number';
-
 									return (
 										<div key={game.id} className={`relative rounded-lg overflow-hidden bg-card border-2 ${isPicked ? 'border-primary' : 'border-primary/20'}`}>
 											<GameCard
@@ -706,7 +704,7 @@ export function WeeklyPicks() {
 												onSelect={handleTeamSelect}
 												disabled={!canSelect || (picks.length >= 5 && !isPicked)}
 												showScores={gameStarted}
-												leaguePicks={gameCompleted ? leaguePicks[game.id] : undefined}
+												leaguePicks={(gameStarted || gameFinished) ? leaguePicks[game.id] : undefined}
 												leagueMode={leagueMode}
 											/>
 										</div>
