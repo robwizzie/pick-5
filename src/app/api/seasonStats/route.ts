@@ -63,6 +63,7 @@ export async function GET(req: Request) {
 		let totalCorrectPicks = 0;
 		let totalCompletedPicks = 0;
 		let totalTFSPoints = 0;
+		let weeksWon = 0;
 
 		// Re-calculate stats for each week
 		userPicks.forEach(pick => {
@@ -93,11 +94,45 @@ export async function GET(req: Request) {
 			totalTFSPoints += tfsPoints;
 		});
 
+		// Calculate weeks won (weeks where user got 1st or tied for 1st)
+		for (const week of uniqueWeeks) {
+			// Get all picks for this week in the league
+			const allPicksForWeek = await Pick.find({ week, leagueId }).lean();
+
+			// Calculate scores for all users in this week
+			const weekResults = gameResultsByWeek.get(week) || [];
+			let maxPointsForWeek = 0;
+			let userPointsForWeek = 0;
+
+			for (const pick of allPicksForWeek) {
+				const { weeklyPoints } = ScoringService.calculateWeekScore(
+					pick.picks,
+					weekResults,
+					pick.tfsGame,
+					pick.tfsScore,
+					leagueMode,
+					calculatePointsFromOdds
+				);
+
+				if (pick.userId.toString() === session.user.id) {
+					userPointsForWeek = weeklyPoints;
+				}
+
+				maxPointsForWeek = Math.max(maxPointsForWeek, weeklyPoints);
+			}
+
+			// If user's points equal max points and max points > 0, they won/tied for 1st
+			if (userPointsForWeek > 0 && userPointsForWeek === maxPointsForWeek) {
+				weeksWon++;
+			}
+		}
+
 		return NextResponse.json({
 			totalPoints,
 			correctPicks: totalCorrectPicks,
 			totalPicks: totalCompletedPicks,
 			totalTFSPoints,
+			weeksWon,
 			weeklyStats
 		});
 	} catch (error) {

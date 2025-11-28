@@ -20,12 +20,14 @@ export function SeasonStats() {
 		correctPicks: number;
 		totalPicks: number;
 		totalTFSPoints: number;
+		weeksWon: number;
 	}>({
 		totalPoints: 0,
 		weeklyStats: {},
 		correctPicks: 0,
 		totalPicks: 0,
-		totalTFSPoints: 0
+		totalTFSPoints: 0,
+		weeksWon: 0
 	});
 	const [key, setKey] = useState(0); // Force rerender
 	const [isUpdating, setIsUpdating] = useState(false);
@@ -180,9 +182,9 @@ export function SeasonStats() {
 						transition={{ duration: 0.3, delay: 0.1 }}
 						whileHover={{ scale: 1.02 }}
 					>
-						<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
-						<p className='text-2xl font-bold font-mono text-primary'>
-							<CountUp end={stats.correctPicks} duration={1} preserveValue />/<CountUp end={stats.totalPicks} duration={1} preserveValue />
+						<p className='text-primary/80 text-sm font-medium'>Weeks Won</p>
+						<p className='text-2xl font-bold font-mono text-yellow-400'>
+							<CountUp end={stats.weeksWon} duration={1} preserveValue />
 						</p>
 					</motion.div>
 					<motion.div
@@ -193,9 +195,9 @@ export function SeasonStats() {
 						transition={{ duration: 0.3, delay: 0.15 }}
 						whileHover={{ scale: 1.02 }}
 					>
-						<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
+						<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
 						<p className='text-2xl font-bold font-mono text-primary'>
-							<CountUp end={stats.totalTFSPoints} duration={1} preserveValue />
+							<CountUp end={stats.correctPicks} duration={1} preserveValue />/<CountUp end={stats.totalPicks} duration={1} preserveValue />
 						</p>
 					</motion.div>
 				</div>

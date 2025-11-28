@@ -186,7 +186,7 @@ export function Leaderboard() {
 				{loading && <Spinner />}
 				{error && <p className='text-destructive'>{error}</p>}
 				{!loading && !error && (
-					<Tabs defaultValue='weekly'>
+					<Tabs defaultValue='season'>
 						<TabsList className='mb-4'>
 							<TabsTrigger value='weekly'>Week {currentWeek}</TabsTrigger>
 							<TabsTrigger value='season'>Season</TabsTrigger>
