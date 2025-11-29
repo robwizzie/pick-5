@@ -38,7 +38,33 @@ export async function GET(req: Request) {
 		}
 
 		// Get game results for the week
-		const games = await NFLService.getWeeklyGames(week);
+		let games = await NFLService.getWeeklyGames(week);
+
+		// Fetch odds from snapshot for Standard mode leagues
+		if (leagueMode === 'standard') {
+			try {
+				const oddsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/odds/snapshot?week=${week}`);
+				if (oddsResponse.ok) {
+					const oddsData = await oddsResponse.json();
+					const snapshotOdds = oddsData.odds || [];
+
+					// Attach odds to games
+					games = games.map(game => {
+						const gameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+						if (gameOdds) {
+							return {
+								...game,
+								away: { ...game.away, odds: gameOdds.away?.odds },
+								home: { ...game.home, odds: gameOdds.home?.odds }
+							};
+						}
+						return game;
+					});
+				}
+			} catch (error) {
+				console.error('Error fetching odds for recap:', error);
+			}
+		}
 
 		// Check if all games are completed
 		const allGamesCompleted = games.every(g => {
