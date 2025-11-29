@@ -78,12 +78,12 @@ export function Nav() {
 					<div className='flex items-center gap-2'>
 						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
 							<>
-								{/* Dashboard button for league pages */}
+								{/* Dashboard button for league pages - hidden on mobile, visible on sm+ */}
 								<Button
 									variant='ghost'
 									size='sm'
 									onClick={() => router.push('/dashboard')}
-									className='h-8 w-8 p-0 hover:bg-primary/10 transition-colors rounded-full glass flex items-center justify-center'
+									className='hidden sm:flex h-8 w-8 p-0 hover:bg-primary/10 transition-colors rounded-full glass items-center justify-center'
 									title='Dashboard'
 								>
 									<Home className='h-4 w-4 text-primary' />
