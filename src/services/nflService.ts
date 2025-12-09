@@ -117,15 +117,21 @@ export class NFLService {
 					const espnWeek = data.week?.number || this.calculateCurrentWeek();
 
 					// Only auto-advance if requested (for scoring, not for pick reminders)
-					if (autoAdvance && data.events && data.events.length > 0) {
-						const allGamesCompleted = data.events.every((event: EspnEvent) => {
-							const status = event.status?.type?.state?.toLowerCase();
-							return status === 'post' || status === 'final';
-						});
+					if (autoAdvance && espnWeek < 18) {
+						// Explicitly fetch the current week's games to check completion status
+						// This ensures we're checking the correct week, not whatever ESPN's default returns
+						const weekGames = await this.getWeeklyGames(espnWeek, effectiveSeason);
 
-						if (allGamesCompleted && espnWeek < 18) {
-							console.log(`[NFLService] All Week ${espnWeek} games completed, advancing to Week ${espnWeek + 1}`);
-							return espnWeek + 1;
+						if (weekGames.length > 0) {
+							const allGamesCompleted = weekGames.every((game) => {
+								const status = game.status?.toLowerCase();
+								return status === 'post' || status === 'final';
+							});
+
+							if (allGamesCompleted) {
+								console.log(`[NFLService] All Week ${espnWeek} games completed, advancing to Week ${espnWeek + 1}`);
+								return espnWeek + 1;
+							}
 						}
 					}
 
@@ -138,15 +144,20 @@ export class NFLService {
 				const espnWeek = data.week?.number || this.calculateCurrentWeek();
 
 				// Only auto-advance if requested
-				if (autoAdvance && data.events && data.events.length > 0) {
-					const allGamesCompleted = data.events.every((event: EspnEvent) => {
-						const status = event.status?.type?.state?.toLowerCase();
-						return status === 'post' || status === 'final';
-					});
+				if (autoAdvance && espnWeek < 18) {
+					// Explicitly fetch the current week's games to check completion status
+					const weekGames = await this.getWeeklyGames(espnWeek);
 
-					if (allGamesCompleted && espnWeek < 18) {
-						console.log(`[NFLService] All Week ${espnWeek} games completed, advancing to Week ${espnWeek + 1}`);
-						return espnWeek + 1;
+					if (weekGames.length > 0) {
+						const allGamesCompleted = weekGames.every((game) => {
+							const status = game.status?.toLowerCase();
+							return status === 'post' || status === 'final';
+						});
+
+						if (allGamesCompleted) {
+							console.log(`[NFLService] All Week ${espnWeek} games completed, advancing to Week ${espnWeek + 1}`);
+							return espnWeek + 1;
+						}
 					}
 				}
 

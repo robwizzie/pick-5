@@ -164,21 +164,33 @@ export async function GET(req: Request) {
 						// Find user's rank (1-indexed)
 						const userRank = leaderboard.findIndex(entry => entry.userId === user._id.toString()) + 1;
 
-						// Calculate total possible points
-						const completedGames = gameResults.filter(g => g.status === 'post' || g.status === 'final');
+						// Calculate total possible points for the games THIS USER picked
+						// Only count completed games from the user's picks
 						let maxPossiblePoints = 0;
 
 						if (leagueMode === 'steve') {
 							// Steve mode: 2 points per correct pick
-							maxPossiblePoints = completedGames.length * 2;
+							// Count only the user's picks that have finished
+							const userCompletedPicks = userPick.picks.filter((p: { gameId: string }) => {
+								const game = gameResults.find(g => g.id === p.gameId);
+								return game && (game.status === 'post' || game.status === 'final');
+							});
+							maxPossiblePoints = userCompletedPicks.length * 2;
 						} else {
-							// Standard mode: sum the max points for each game based on odds
-							// For each completed game, find the maximum points possible (higher odds team)
-							for (const game of completedGames) {
-								// Find picks for this game to get the odds
-								let maxGamePoints = 5; // Default max if no odds found
+							// Standard mode: sum the max points for each game the user picked
+							// For each of the user's picks, calculate the maximum possible points
+							for (const userGamePick of userPick.picks) {
+								// Check if this game has finished
+								const game = gameResults.find(g => g.id === userGamePick.gameId);
+								if (!game || (game.status !== 'post' && game.status !== 'final')) {
+									continue; // Skip incomplete games
+								}
+
+								// Find the maximum odds for this game across all picks (both teams)
+								// This represents the highest possible points for this game
+								let maxGamePoints = 5; // Default if no odds found
 								for (const pick of allPicks) {
-									const gamePick = pick.picks.find((p: { gameId: string }) => p.gameId === game.id);
+									const gamePick = pick.picks.find((p: { gameId: string }) => p.gameId === userGamePick.gameId);
 									if (gamePick && gamePick.odds) {
 										const points = calculatePointsFromOdds(gamePick.odds);
 										maxGamePoints = Math.max(maxGamePoints, points);
