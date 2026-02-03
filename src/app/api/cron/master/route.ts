@@ -32,21 +32,9 @@ export async function GET(req: Request) {
 
 		console.log(`[Master Cron] Running at ${now.toISOString()}, day of week: ${dayOfWeek}`);
 
-		// Check if season is active before running most tasks
+		// Log season status (individual handlers have their own checks)
 		const seasonStatus = await SeasonService.getSeasonStatus();
-		console.log(`[Master Cron] Season status: active=${seasonStatus.isActive}, week=${seasonStatus.currentWeek}, year=${seasonStatus.seasonYear}`);
-
-		if (!seasonStatus.isActive) {
-			console.log('[Master Cron] Season is not active, skipping email/notification tasks');
-			return NextResponse.json({
-				success: true,
-				timestamp: now.toISOString(),
-				dayOfWeek,
-				seasonActive: false,
-				message: seasonStatus.message || 'Season is not active',
-				tasksExecuted: []
-			});
-		}
+		console.log(`[Master Cron] Season status: active=${seasonStatus.isActive}, canSendNotifications=${seasonStatus.canSendNotifications}, week=${seasonStatus.currentWeek}, year=${seasonStatus.seasonYear}`);
 
 		// Tuesday (2): Send score emails, weekly recap notifications, and fetch odds
 		if (dayOfWeek === 2) {
