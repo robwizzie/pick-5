@@ -7,6 +7,7 @@ import { PushSubscription } from '@/models/PushSubscription';
 import { GameNotification } from '@/models/GameNotification';
 import webPush from 'web-push';
 import { NFLService } from '@/services/nflService';
+import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
 export const dynamic = 'force-dynamic';
@@ -58,6 +59,16 @@ export async function GET(req: Request) {
 
 		const now = new Date();
 		console.log(`[Game Notifications] Running at ${now.toISOString()}`);
+
+		// Check if season is active
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		if (!seasonStatus.isActive) {
+			console.log('[Game Notifications] Season is not active, skipping');
+			return NextResponse.json({
+				message: 'Season is not active',
+				seasonActive: false
+			});
+		}
 
 		// Get current week (without auto-advance to check actual current week)
 		const currentWeek = await NFLService.getCurrentWeek(false);

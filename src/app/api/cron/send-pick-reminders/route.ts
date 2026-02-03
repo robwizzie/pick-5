@@ -10,6 +10,7 @@ import webPush from 'web-push';
 import ThursdayReminderEmail from '@/emails/ThursdayReminderEmail';
 import SaturdayReminderEmail from '@/emails/SaturdayReminderEmail';
 import { NFLService } from '@/services/nflService';
+import { SeasonService } from '@/services/seasonService';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -83,6 +84,16 @@ export async function GET(req: Request) {
 		}
 
 		await connectDB();
+
+		// Check if season is active
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		if (!seasonStatus.isActive) {
+			console.log('[Pick Reminders] Season is not active, skipping');
+			return NextResponse.json({
+				message: 'Season is not active',
+				seasonActive: false
+			});
+		}
 
 		// Determine which day it is
 		const now = new Date();
