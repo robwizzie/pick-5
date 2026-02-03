@@ -18,6 +18,15 @@ import { hasGameStarted, hasGameFinished, haveAllPickedGamesStarted } from '@/se
 import { Toast } from '@/components/ui/toast';
 import { calculatePointsFromOdds, formatOdds, getOddsColorClass } from '@/utils/oddsUtils';
 import type { Game } from './GameCard';
+import { Calendar } from 'lucide-react';
+
+interface SeasonStatus {
+	isActive: boolean;
+	seasonYear: number;
+	currentWeek: number;
+	canSubmitPicks: boolean;
+	message?: string;
+}
 
 interface UserPick {
 	userId: string;
@@ -54,6 +63,7 @@ export function WeeklyPicks() {
 	const [leagueMode, setLeagueMode] = useState<string>('');
 	const [tfsError, setTfsError] = useState<string | null>(null);
 	const [picksLoaded, setPicksLoaded] = useState(false);
+	const [seasonStatus, setSeasonStatus] = useState<SeasonStatus | null>(null);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -71,6 +81,22 @@ export function WeeklyPicks() {
 		};
 		fetchLeagueDetails();
 	}, [leagueId]);
+
+	// Fetch season status
+	useEffect(() => {
+		const fetchSeasonStatus = async () => {
+			try {
+				const response = await fetch('/api/season/status');
+				if (response.ok) {
+					const data = await response.json();
+					setSeasonStatus(data);
+				}
+			} catch (error) {
+				console.error('[WeeklyPicks] Error fetching season status:', error);
+			}
+		};
+		fetchSeasonStatus();
+	}, []);
 
 	useEffect(() => {
 		console.log('[WeeklyPicks] currentWeek or leagueMode changed:', currentWeek, leagueMode);
@@ -569,6 +595,16 @@ export function WeeklyPicks() {
 				{error && (
 					<Alert className='mb-4' variant='destructive'>
 						<AlertDescription>{error}</AlertDescription>
+					</Alert>
+				)}
+
+				{/* Season Ended Banner */}
+				{seasonStatus && !seasonStatus.canSubmitPicks && (
+					<Alert className='mb-4 bg-amber-500/10 border-amber-500/30'>
+						<Calendar className='h-4 w-4 text-amber-500' />
+						<AlertDescription className='text-amber-500 ml-2'>
+							{seasonStatus.message || 'The NFL regular season has ended. Check out the League History to see past season standings!'}
+						</AlertDescription>
 					</Alert>
 				)}
 

@@ -8,6 +8,7 @@ import { League } from '@/models/League';
 import { authOptions } from '@/lib/auth';
 import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
+import { SeasonService } from '@/services/seasonService';
 import { hasGameStarted } from '@/services/gameUtils';
 import type { Game } from '@/components/games/GameCard';
 
@@ -24,6 +25,30 @@ export async function POST(req: Request) {
 		const { week, picks, tfsGame, tfsScore, leagueId } = body;
 
 		await connectDB();
+
+		// Check if season is active and accepting picks
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		if (!seasonStatus.canSubmitPicks) {
+			console.log('[Picks API] Season is not active, rejecting picks submission');
+			return NextResponse.json(
+				{
+					error: 'Season has ended',
+					message: seasonStatus.message || 'Pick 5 is currently between seasons. Picks cannot be submitted at this time.'
+				},
+				{ status: 400 }
+			);
+		}
+
+		// Prevent picks for weeks beyond 18
+		if (week > 18) {
+			return NextResponse.json(
+				{
+					error: 'Invalid week',
+					message: 'Picks can only be submitted for weeks 1-18 of the NFL regular season.'
+				},
+				{ status: 400 }
+			);
+		}
 
 		// Basic validation
 		if (!week || !picks || picks.length !== 5 || !leagueId) {
