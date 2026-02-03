@@ -59,10 +59,11 @@ export async function GET(req: Request) {
 		const now = new Date();
 		console.log(`[Score Emails] Running cron job at ${now.toISOString()}`);
 
-		// Check if season is active
+		// Check if season can still send notifications
+		// This allows week 18 scoring emails even if ESPN reports week 19 (playoffs)
 		const seasonStatus = await SeasonService.getSeasonStatus();
-		if (!seasonStatus.isActive) {
-			console.log('[Score Emails] Season is not active, skipping');
+		if (!seasonStatus.canSendNotifications) {
+			console.log('[Score Emails] Season is not active for notifications, skipping');
 			return NextResponse.json({
 				message: 'Season is not active',
 				seasonActive: false
@@ -77,6 +78,12 @@ export async function GET(req: Request) {
 		if (weekToScore < 1) {
 			console.log('[Score Emails] No previous week to score yet');
 			return NextResponse.json({ message: 'No previous week to score' });
+		}
+
+		// Don't score weeks beyond 18 (regular season only)
+		if (weekToScore > 18) {
+			console.log('[Score Emails] Week to score is beyond regular season, skipping');
+			return NextResponse.json({ message: 'Week is beyond regular season' });
 		}
 
 		console.log(`[Score Emails] Sending score emails for week ${weekToScore}`);

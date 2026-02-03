@@ -39,10 +39,11 @@ export async function GET(req: Request) {
 		const now = new Date();
 		console.log(`[Weekly Recap Notifications] Running at ${now.toISOString()}`);
 
-		// Check if season is active
+		// Check if season can still send notifications
+		// This allows week 18 recap notifications even if ESPN reports week 19 (playoffs)
 		const seasonStatus = await SeasonService.getSeasonStatus();
-		if (!seasonStatus.isActive) {
-			console.log('[Weekly Recap Notifications] Season is not active, skipping');
+		if (!seasonStatus.canSendNotifications) {
+			console.log('[Weekly Recap Notifications] Season is not active for notifications, skipping');
 			return NextResponse.json({
 				message: 'Season is not active',
 				seasonActive: false
@@ -56,6 +57,12 @@ export async function GET(req: Request) {
 		if (completedWeek < 1) {
 			console.log('[Weekly Recap Notifications] No previous week to recap yet');
 			return NextResponse.json({ message: 'No previous week to recap' });
+		}
+
+		// Don't send recaps for weeks beyond 18 (regular season only)
+		if (completedWeek > 18) {
+			console.log('[Weekly Recap Notifications] Completed week is beyond regular season, skipping');
+			return NextResponse.json({ message: 'Week is beyond regular season' });
 		}
 
 		console.log(`[Weekly Recap Notifications] Sending recaps for Week ${completedWeek}`);
