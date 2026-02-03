@@ -7,6 +7,7 @@ import { Resend } from 'resend';
 import { render } from '@react-email/render';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
+import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import SteveScoreEmail from '@/emails/SteveScoreEmail';
 import StandardScoreEmail from '@/emails/StandardScoreEmail';
@@ -57,6 +58,16 @@ export async function GET(req: Request) {
 
 		const now = new Date();
 		console.log(`[Score Emails] Running cron job at ${now.toISOString()}`);
+
+		// Check if season is active
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		if (!seasonStatus.isActive) {
+			console.log('[Score Emails] Season is not active, skipping');
+			return NextResponse.json({
+				message: 'Season is not active',
+				seasonActive: false
+			});
+		}
 
 		// Get the current week from NFLService (which auto-advances after all games complete)
 		const currentWeek = await NFLService.getCurrentWeek();

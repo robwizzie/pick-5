@@ -7,6 +7,7 @@ import { PushSubscription } from '@/models/PushSubscription';
 import { GameNotification } from '@/models/GameNotification';
 import webPush from 'web-push';
 import { NFLService } from '@/services/nflService';
+import { SeasonService } from '@/services/seasonService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
@@ -37,6 +38,16 @@ export async function GET(req: Request) {
 
 		const now = new Date();
 		console.log(`[Weekly Recap Notifications] Running at ${now.toISOString()}`);
+
+		// Check if season is active
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		if (!seasonStatus.isActive) {
+			console.log('[Weekly Recap Notifications] Season is not active, skipping');
+			return NextResponse.json({
+				message: 'Season is not active',
+				seasonActive: false
+			});
+		}
 
 		// Get the completed week (use auto-advance since we're scoring the previous week)
 		const currentWeek = await NFLService.getCurrentWeek(true);
