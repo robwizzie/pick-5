@@ -2,11 +2,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { ADMIN_USER_ID } from '@/lib/constants';
 import { SeasonService } from '@/services/seasonService';
 
 export const dynamic = 'force-dynamic';
-
-const ADMIN_USER_ID = '67c124e9cce9530ce4c1a655';
 
 /**
  * GET /api/admin/season
@@ -76,15 +75,9 @@ export async function POST(req: Request) {
 				});
 			}
 
-			case 'status': {
-				// Just get the status
-				const status = await SeasonService.getSeasonStatus();
-				return NextResponse.json(status);
-			}
-
 			default:
 				return NextResponse.json(
-					{ error: 'Invalid action. Valid actions: deactivate, archive, start_new, status' },
+					{ error: 'Invalid action. Valid actions: deactivate, archive, start_new' },
 					{ status: 400 }
 				);
 		}
