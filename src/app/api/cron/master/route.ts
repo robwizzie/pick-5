@@ -4,6 +4,7 @@ import { GET as sendScoreEmailsHandler } from '../send-score-emails/route';
 import { GET as fetchOddsHandler } from '../fetch-odds/route';
 import { GET as sendGameNotificationsHandler } from '../send-game-notifications/route';
 import { GET as sendWeeklyRecapNotificationsHandler } from '../send-weekly-recap-notifications/route';
+import { SeasonService } from '@/services/seasonService';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,22 @@ export async function GET(req: Request) {
 		const results: any[] = [];
 
 		console.log(`[Master Cron] Running at ${now.toISOString()}, day of week: ${dayOfWeek}`);
+
+		// Check if season is active before running most tasks
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		console.log(`[Master Cron] Season status: active=${seasonStatus.isActive}, week=${seasonStatus.currentWeek}, year=${seasonStatus.seasonYear}`);
+
+		if (!seasonStatus.isActive) {
+			console.log('[Master Cron] Season is not active, skipping email/notification tasks');
+			return NextResponse.json({
+				success: true,
+				timestamp: now.toISOString(),
+				dayOfWeek,
+				seasonActive: false,
+				message: seasonStatus.message || 'Season is not active',
+				tasksExecuted: []
+			});
+		}
 
 		// Tuesday (2): Send score emails, weekly recap notifications, and fetch odds
 		if (dayOfWeek === 2) {
