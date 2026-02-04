@@ -60,10 +60,11 @@ export async function GET(req: Request) {
 		const now = new Date();
 		console.log(`[Game Notifications] Running at ${now.toISOString()}`);
 
-		// Check if season is active
+		// Check if season can still send notifications
+		// This allows week 18 game notifications even if ESPN reports week 19 (playoffs)
 		const seasonStatus = await SeasonService.getSeasonStatus();
-		if (!seasonStatus.isActive) {
-			console.log('[Game Notifications] Season is not active, skipping');
+		if (!seasonStatus.canSendNotifications) {
+			console.log('[Game Notifications] Season is not active for notifications, skipping');
 			return NextResponse.json({
 				message: 'Season is not active',
 				seasonActive: false
@@ -73,6 +74,12 @@ export async function GET(req: Request) {
 		// Get current week (without auto-advance to check actual current week)
 		const currentWeek = await NFLService.getCurrentWeek(false);
 		console.log(`[Game Notifications] Checking Week ${currentWeek}`);
+
+		// Don't send notifications for weeks beyond 18 (regular season only)
+		if (currentWeek > 18) {
+			console.log('[Game Notifications] Week is beyond regular season, skipping');
+			return NextResponse.json({ message: 'Week is beyond regular season' });
+		}
 
 		// Get all games for current week
 		const games = await NFLService.getWeeklyGames(currentWeek);

@@ -16,6 +16,7 @@ export interface SeasonStatus {
 	lastCompletedWeek: number;
 	isArchived: boolean;
 	canSubmitPicks: boolean;
+	canSendNotifications: boolean; // For cron jobs - allows week 18 notifications even if ESPN shows week 19
 	message?: string;
 }
 
@@ -71,6 +72,12 @@ export class SeasonService {
 		// 2. Current week <= 18
 		const canSubmitPicks = isSeasonActive && currentWeek <= 18;
 
+		// Can send notifications if:
+		// 1. Config isActive is true (admin hasn't manually deactivated)
+		// 2. Current week is <= 19 (allows week 18 scoring emails even if ESPN reports week 19/playoffs)
+		// This handles the case where ESPN shows week 19 before Tuesday cron runs after week 18 MNF
+		const canSendNotifications = config.isActive && currentWeek <= 19;
+
 		let message: string | undefined;
 		if (!isSeasonActive) {
 			if (currentWeek > 18) {
@@ -87,16 +94,9 @@ export class SeasonService {
 			lastCompletedWeek: config.lastCompletedWeek,
 			isArchived: config.isArchived,
 			canSubmitPicks,
+			canSendNotifications,
 			message
 		};
-	}
-
-	/**
-	 * Check if the season is active (for cron jobs and pick submission)
-	 */
-	static async isSeasonActive(): Promise<boolean> {
-		const status = await this.getSeasonStatus();
-		return status.isActive;
 	}
 
 	/**
@@ -142,14 +142,17 @@ export class SeasonService {
 			}
 		}
 
-		// Mark season as archived
-		config.isArchived = true;
-		config.archivedAt = new Date();
-		await config.save();
-
-		console.log(`[SeasonService] Archived ${leaguesArchived} leagues for season ${config.seasonYear}`);
-
-		return { success: true, leaguesArchived, errors };
+		// Only mark season as archived if at least one league was successfully archived
+		if (leaguesArchived > 0) {
+			config.isArchived = true;
+			config.archivedAt = new Date();
+			await config.save();
+			console.log(`[SeasonService] Archived ${leaguesArchived} leagues for season ${config.seasonYear}`);
+			return { success: true, leaguesArchived, errors };
+		} else {
+			console.error(`[SeasonService] Failed to archive any leagues for season ${config.seasonYear}`);
+			return { success: false, leaguesArchived: 0, errors };
+		}
 	}
 
 	/**
@@ -207,6 +210,11 @@ export class SeasonService {
 		}
 
 		// Calculate stats for each member
+		// Note: The Pick model currently doesn't have a seasonYear field.
+		// This works because picks are tied to game IDs from the ESPN API,
+		// which are unique per season. The scoring calculation uses game results
+		// fetched for the specific seasonYear, so mismatched picks will simply
+		// not match any game IDs and won't be scored incorrectly.
 		for (const memberId of memberIds) {
 			const user = await User.findById(memberId);
 			if (!user) continue;

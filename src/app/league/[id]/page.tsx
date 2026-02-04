@@ -313,8 +313,7 @@ export default function LeagueDetails() {
 					<div className='flex items-center gap-2 flex-shrink-0'>
 						<Button onClick={() => router.push(`/league/${id}/history`)} variant='outline' className='flex items-center gap-1.5 md:gap-2 border-primary/50 hover:bg-primary/10 text-sm md:text-base px-3 md:px-4'>
 							<History className='h-3.5 w-3.5 md:h-4 md:w-4' />
-							<span className='hidden sm:inline'>History</span>
-							<span className='sm:hidden'>History</span>
+							<span>History</span>
 						</Button>
 						<Button onClick={() => setShowRulesModal(true)} variant='outline' className='flex items-center gap-1.5 md:gap-2 border-primary/50 hover:bg-primary/10 text-sm md:text-base px-3 md:px-4'>
 							<Info className='h-3.5 w-3.5 md:h-4 md:w-4' />
