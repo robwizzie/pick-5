@@ -9,6 +9,7 @@ import { PushSubscription } from '@/models/PushSubscription';
 import { GameNotification } from '@/models/GameNotification';
 import webPush from 'web-push';
 import { NFLService } from '@/services/nflService';
+import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
 export const dynamic = 'force-dynamic';
@@ -63,6 +64,12 @@ export async function GET() {
 		// Check if user has notifications enabled
 		if (!user.pushNotificationsEnabled) {
 			return NextResponse.json({ message: 'Push notifications disabled', notificationsSent: 0 });
+		}
+
+		// Check if season is active for notifications
+		const seasonStatus = await SeasonService.getSeasonStatus();
+		if (!seasonStatus.canSendNotifications) {
+			return NextResponse.json({ message: 'Season is not active', notificationsSent: 0 });
 		}
 
 		// Check if user has game results enabled
