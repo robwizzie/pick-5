@@ -174,6 +174,15 @@ export class NFLService {
 	}
 
 	static calculateCurrentWeek(): number {
+		return Math.max(1, Math.min(18, this.calculateRawWeekNumber()));
+	}
+
+	/**
+	 * Calculate the raw (uncapped) week number based on date.
+	 * Returns values > 18 when we're past the regular season.
+	 * Used by SeasonService to detect off-season.
+	 */
+	static calculateRawWeekNumber(): number {
 		const now = new Date();
 		const seasonYear = this.getCurrentSeason();
 		// Approx season start: first Thursday of September
@@ -183,7 +192,7 @@ export class NFLService {
 		const seasonStart = new Date(sepFirst);
 		seasonStart.setDate(sepFirst.getDate() + deltaToThu);
 		const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-		return Math.max(1, Math.min(18, weeksSinceStart + 1));
+		return Math.max(1, weeksSinceStart + 1);
 	}
 
 	private static formatGameData(events: EspnEvent[]): Game[] {
