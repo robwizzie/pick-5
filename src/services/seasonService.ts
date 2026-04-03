@@ -61,26 +61,33 @@ export class SeasonService {
 		const config = await this.getOrCreateSeasonConfig();
 		const currentWeek = await NFLService.getCurrentWeek(false);
 
+		// Use the raw (uncapped) week number to detect if we're past the regular season.
+		// calculateCurrentWeek() caps at 18, which makes it impossible to detect the off-season.
+		// The raw week number continues past 18 (e.g., week 30 in April) so we can tell
+		// the regular season is truly over and stop all notifications/scoring.
+		const rawWeek = NFLService.calculateRawWeekNumber();
+		const isPastRegularSeason = rawWeek > 19;
+
 		// Season is not active if:
 		// 1. isActive is false in config
 		// 2. Current week is > 18 (after the regular season)
-		// 3. The season has been archived and we're past week 18
-		const isSeasonActive = config.isActive && currentWeek <= 18;
+		// 3. We're well past the regular season window (raw week > 19)
+		const isSeasonActive = config.isActive && currentWeek <= 18 && !isPastRegularSeason;
 
-		// Can submit picks if:
-		// 1. Season is active
-		// 2. Current week <= 18
-		const canSubmitPicks = isSeasonActive && currentWeek <= 18;
+		// Can submit picks if season is active
+		const canSubmitPicks = isSeasonActive;
 
 		// Can send notifications if:
 		// 1. Config isActive is true (admin hasn't manually deactivated)
 		// 2. Current week is <= 19 (allows week 18 scoring emails even if ESPN reports week 19/playoffs)
-		// This handles the case where ESPN shows week 19 before Tuesday cron runs after week 18 MNF
-		const canSendNotifications = config.isActive && currentWeek <= 19;
+		// 3. We're NOT past the regular season window (raw week <= 19)
+		// This handles the case where ESPN shows week 19 before Tuesday cron runs after week 18 MNF,
+		// but prevents notifications from continuing indefinitely in the off-season.
+		const canSendNotifications = config.isActive && currentWeek <= 19 && !isPastRegularSeason;
 
 		let message: string | undefined;
 		if (!isSeasonActive) {
-			if (currentWeek > 18) {
+			if (isPastRegularSeason || currentWeek > 18) {
 				message = 'The NFL regular season has ended. Pick 5 will return next season!';
 			} else if (!config.isActive) {
 				message = 'Pick 5 is currently on break between seasons.';
