@@ -13,12 +13,15 @@ import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
 
-// Configure web-push
-webPush.setVapidDetails(
-	process.env.VAPID_SUBJECT || 'mailto:noreply@sportspick5.com',
-	process.env.VAPID_PUBLIC_KEY || '',
-	process.env.VAPID_PRIVATE_KEY || ''
-);
+// Configure web-push (guarded so `next build` doesn't need the VAPID keys;
+// at runtime this module loads on first request, after env vars are available)
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+	webPush.setVapidDetails(
+		process.env.VAPID_SUBJECT || 'mailto:noreply@sportspick5.com',
+		process.env.VAPID_PUBLIC_KEY,
+		process.env.VAPID_PRIVATE_KEY
+	);
+}
 
 interface GameResult {
 	gameId: string;

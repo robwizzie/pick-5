@@ -6,7 +6,7 @@ import { League } from '@/models/League';
 
 export const dynamic = 'force-dynamic'; // Ensure dynamic behavior
 
-export async function GET(req: Request, context: { params: { id: string } }) {
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
 	try {
 		// Connect to the database
 		await connectDB();
@@ -43,7 +43,7 @@ export async function GET(req: Request, context: { params: { id: string } }) {
 	}
 }
 
-export async function PATCH(req: Request, context: { params: { id: string } }) {
+export async function PATCH(req: Request, context: { params: Promise<{ id: string }> }) {
 	try {
 		// Check authentication
 		const session = await getServerSession(authOptions);

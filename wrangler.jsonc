@@ -1,0 +1,33 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "pick-5",
+	// Custom entry = OpenNext's generated worker + a `scheduled` handler for Cron Triggers.
+	"main": "cloudflare/worker.ts",
+	"compatibility_date": "2026-09-01",
+	// nodejs_compat provides node:net / node:tls / node:dns / node:crypto that the
+	// MongoDB driver, next-auth and web-push need.
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference required by OpenNext (must match "name" above).
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "pick-5"
+		}
+	],
+	// Same schedules as vercel.json (UTC). Both hit /api/cron/master, which decides
+	// what to do from the day of week.
+	"triggers": {
+		"crons": ["0 9 * * 0", "0 14 * * 1,2,4,5,6"]
+	},
+	"observability": {
+		"enabled": true
+	},
+	// Variables and secrets are managed in the dashboard (or `wrangler secret put`);
+	// keep_vars stops `wrangler deploy` from wiping dashboard-set plain vars.
+	// See DEPLOY-CLOUDFLARE.md for the full list.
+	"keep_vars": true
+}

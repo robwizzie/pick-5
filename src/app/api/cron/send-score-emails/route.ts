@@ -15,7 +15,10 @@ import StandardScoreEmail from '@/emails/StandardScoreEmail';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Created lazily: the Resend constructor throws without an API key, which would
+// break `next build` page-data collection when secrets only exist at runtime.
+let resendClient: Resend | null = null;
+const getResend = () => (resendClient ??= new Resend(process.env.RESEND_API_KEY));
 
 interface GameResult {
 	id: string;
@@ -343,7 +346,7 @@ export async function GET(req: Request) {
 										})
 							);
 
-							await resend.emails.send({
+							await getResend().emails.send({
 								from: 'Pick 5 <noreply@sportspick5.com>',
 								to: user.email,
 								subject: `📊 Week ${weekToScore} Results - ${league.name}`,

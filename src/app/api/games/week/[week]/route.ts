@@ -4,7 +4,7 @@ import { NFLService } from '@/services/nflService';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, context: { params: { week: string } }) {
+export async function GET(_req: Request, context: { params: Promise<{ week: string }> }) {
 	try {
 		const session = await checkAdminAuth();
 

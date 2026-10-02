@@ -1,5 +1,6 @@
 // Track which game result notifications have been sent to prevent duplicates
 import mongoose from 'mongoose';
+import { requestScoped } from '@/lib/db';
 
 const GameNotificationSchema = new mongoose.Schema({
 	userId: {
@@ -34,4 +35,5 @@ const GameNotificationSchema = new mongoose.Schema({
 // Compound index to quickly check if notification was already sent
 GameNotificationSchema.index({ userId: 1, gameId: 1, leagueId: 1, week: 1 }, { unique: true });
 
-export const GameNotification = mongoose.models?.GameNotification || mongoose.model('GameNotification', GameNotificationSchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const GameNotification = requestScoped(mongoose.models?.GameNotification || mongoose.model('GameNotification', GameNotificationSchema));

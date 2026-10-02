@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { requestScoped } from '@/lib/db';
 
 const PushSubscriptionSchema = new mongoose.Schema({
 	userId: {
@@ -30,5 +31,5 @@ const PushSubscriptionSchema = new mongoose.Schema({
 // Index for finding subscriptions by user
 PushSubscriptionSchema.index({ userId: 1 });
 
-export const PushSubscription =
-	mongoose.models?.PushSubscription || mongoose.model('PushSubscription', PushSubscriptionSchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const PushSubscription = requestScoped(mongoose.models?.PushSubscription || mongoose.model('PushSubscription', PushSubscriptionSchema));

@@ -7,14 +7,14 @@ import { Pick } from '@/models/Pick';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {
 			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const leagueId = params.id;
+		const { id: leagueId } = await params;
 
 		await connectDB();
 
