@@ -24,7 +24,8 @@ export async function POST(req: Request) {
 		await connectDB();
 
 		// Find the league by ID and verify password
-		const league = await League.findById(leagueId);
+		// The hash is `select: false` on the model; this is the one place that needs it.
+		const league = await League.findById(leagueId).select('+password');
 
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
