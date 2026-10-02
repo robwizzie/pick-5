@@ -1,5 +1,6 @@
 // src/models/SeasonHistory.ts
 import mongoose from 'mongoose';
+import { requestScoped } from '@/lib/db';
 
 /**
  * SeasonHistory stores the final standings and stats for each league
@@ -137,4 +138,5 @@ SeasonHistorySchema.index({ leagueId: 1 });
 // Index for querying by season year
 SeasonHistorySchema.index({ seasonYear: 1 });
 
-export const SeasonHistory = mongoose.models?.SeasonHistory || mongoose.model('SeasonHistory', SeasonHistorySchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const SeasonHistory = requestScoped(mongoose.models?.SeasonHistory || mongoose.model('SeasonHistory', SeasonHistorySchema));

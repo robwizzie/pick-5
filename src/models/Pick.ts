@@ -1,5 +1,6 @@
 // src/models/Pick.ts
 import mongoose from 'mongoose';
+import { requestScoped } from '@/lib/db';
 
 const PickSchema = new mongoose.Schema({
 	userId: {
@@ -53,4 +54,5 @@ const PickSchema = new mongoose.Schema({
 PickSchema.index({ userId: 1, week: 1, leagueId: 1 }, { unique: true });
 
 // Check if model exists before creating new one
-export const Pick = mongoose.models?.Pick || mongoose.model('Pick', PickSchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const Pick = requestScoped(mongoose.models?.Pick || mongoose.model('Pick', PickSchema));

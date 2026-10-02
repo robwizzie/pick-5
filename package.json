@@ -6,7 +6,12 @@
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start",
-		"lint": "next lint"
+		"lint": "next lint",
+		"cf:build": "opennextjs-cloudflare build",
+		"preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+		"deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+		"upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+		"cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
 	},
 	"dependencies": {
 		"@auth/mongodb-adapter": "^2.5.0",
@@ -29,11 +34,11 @@
 		"lucide-react": "^0.460.0",
 		"mongodb": "^6.10.0",
 		"mongoose": "^8.0.0",
-		"next": "14.2.15",
-		"next-auth": "^4.24.10",
-		"react": "^18.3.1",
+		"next": "15.5.27",
+		"next-auth": "^4.24.15",
+		"react": "^19.3.0",
 		"react-countup": "^6.5.3",
-		"react-dom": "^18.3.1",
+		"react-dom": "^19.3.0",
 		"react-email": "^5.0.1",
 		"react-icons": "^5.4.0",
 		"resend": "^6.4.2",
@@ -43,21 +48,23 @@
 		"web-push": "^3.6.7"
 	},
 	"devDependencies": {
+		"@opennextjs/cloudflare": "^1.20.7",
 		"@types/bcryptjs": "^2.4.6",
 		"@types/canvas-confetti": "^1.9.0",
 		"@types/mongoose": "^5.11.97",
 		"@types/node": "^20.17.6",
-		"@types/react": "^18.3.17",
-		"@types/react-dom": "^18.3.5",
+		"@types/react": "^19.3.0",
+		"@types/react-dom": "^19.3.0",
 		"@types/web-push": "^3.6.4",
 		"@typescript-eslint/eslint-plugin": "^7.18.0",
 		"@typescript-eslint/parser": "^7.18.0",
 		"autoprefixer": "^10.4.21",
 		"eslint": "^8.57.1",
-		"eslint-config-next": "14.2.15",
+		"eslint-config-next": "15.5.27",
 		"postcss": "^8.4.49",
 		"sharp": "^0.34.5",
 		"tailwindcss": "^3.4.17",
-		"typescript": "^5.7.2"
+		"typescript": "^5.7.2",
+		"wrangler": "^4.147.0"
 	}
 }

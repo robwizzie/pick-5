@@ -1,6 +1,7 @@
 // src/models/User.ts
 import mongoose from 'mongoose';
 import { randomBytes } from 'crypto';
+import { requestScoped } from '@/lib/db';
 
 const UserSchema = new mongoose.Schema({
 	name: String,
@@ -78,4 +79,5 @@ const UserSchema = new mongoose.Schema({
 	}
 });
 
-export const User = mongoose.models?.User || mongoose.model('User', UserSchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const User = requestScoped(mongoose.models?.User || mongoose.model('User', UserSchema));

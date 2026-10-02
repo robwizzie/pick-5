@@ -4,6 +4,7 @@ import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
 import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
+import { GET as getOddsSnapshot } from '@/app/api/odds/snapshot/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,7 +44,10 @@ export async function GET(req: Request) {
 		// Fetch odds from snapshot for Standard mode leagues
 		if (leagueMode === 'standard') {
 			try {
-				const oddsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/odds/snapshot?week=${week}`);
+				// Call the snapshot handler in-process instead of fetching our own public URL:
+				// one fewer request against the hosting quota, and a Worker fetching its own
+				// hostname is not guaranteed to route back to itself on Cloudflare.
+				const oddsResponse = await getOddsSnapshot(new Request(`http://internal/api/odds/snapshot?week=${week}`));
 				if (oddsResponse.ok) {
 					const oddsData = await oddsResponse.json();
 					const snapshotOdds = oddsData.odds || [];
