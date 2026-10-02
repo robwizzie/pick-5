@@ -1,0 +1,12 @@
+# Copy to .dev.vars for `npm run preview` (local workerd). Never commit .dev.vars.
+MONGODB_URI=mongodb+srv://USER:PASSWORD@CLUSTER.mongodb.net/pick5?retryWrites=true&w=majority
+NEXTAUTH_URL=http://localhost:8787
+NEXTAUTH_SECRET=change-me
+GOOGLE_ID=xxxxxxxx.apps.googleusercontent.com
+GOOGLE_SECRET=change-me
+CRON_SECRET=change-me
+RESEND_API_KEY=re_xxx
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com
+ODDS_API_KEY=

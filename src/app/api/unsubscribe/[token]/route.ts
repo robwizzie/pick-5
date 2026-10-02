@@ -4,9 +4,9 @@ import { User } from '@/models/User';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
 	try {
-		const { token } = params;
+		const { token } = await params;
 
 		if (!token) {
 			return NextResponse.json({ error: 'Invalid unsubscribe link' }, { status: 400 });

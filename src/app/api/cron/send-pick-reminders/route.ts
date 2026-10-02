@@ -15,14 +15,20 @@ import { SeasonService } from '@/services/seasonService';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Created lazily: the Resend constructor throws without an API key, which would
+// break `next build` page-data collection when secrets only exist at runtime.
+let resendClient: Resend | null = null;
+const getResend = () => (resendClient ??= new Resend(process.env.RESEND_API_KEY));
 
-// Configure web-push
-webPush.setVapidDetails(
-	process.env.VAPID_SUBJECT || 'mailto:noreply@sportspick5.com',
-	process.env.VAPID_PUBLIC_KEY || '',
-	process.env.VAPID_PRIVATE_KEY || ''
-);
+// Configure web-push (guarded so `next build` doesn't need the VAPID keys;
+// at runtime this module loads on first request, after env vars are available)
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+	webPush.setVapidDetails(
+		process.env.VAPID_SUBJECT || 'mailto:noreply@sportspick5.com',
+		process.env.VAPID_PUBLIC_KEY,
+		process.env.VAPID_PRIVATE_KEY
+	);
+}
 
 
 // Helper to get Thursday night game from actual NFL data
@@ -194,7 +200,7 @@ export async function GET(req: Request) {
 									})
 						);
 
-						const emailResult = await resend.emails.send({
+						const emailResult = await getResend().emails.send({
 							from: 'Pick 5 <noreply@sportspick5.com>',
 							to: user.email,
 							subject: isThursday

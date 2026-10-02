@@ -6,7 +6,7 @@ import { League } from '@/models/League';
 import { User } from '@/models/User';
 import { Pick } from '@/models/Pick';
 
-export async function GET(req: Request, context: { params: { id: string } }) {
+export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user) {
@@ -41,7 +41,7 @@ export async function GET(req: Request, context: { params: { id: string } }) {
 	}
 }
 
-export async function DELETE(req: Request, context: { params: { id: string } }) {
+export async function DELETE(req: Request, context: { params: Promise<{ id: string }> }) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {

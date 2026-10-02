@@ -1,5 +1,6 @@
 import { Schema, model, models, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { requestScoped } from '@/lib/db';
 
 // Define interface for League document with comparePassword method
 interface ILeague extends Document {
@@ -56,4 +57,5 @@ LeagueSchema.methods.comparePassword = async function (candidatePassword: string
 	return bcrypt.compare(candidatePassword, this.password);
 };
 
-export const League = models.League || model<ILeague>('League', LeagueSchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const League = requestScoped(models.League || model<ILeague>('League', LeagueSchema));
