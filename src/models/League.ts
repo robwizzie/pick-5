@@ -16,18 +16,31 @@ interface ILeague extends Document {
 	comparePassword(candidatePassword: string): Promise<boolean>;
 }
 
+function stripPassword(_doc: unknown, ret: Record<string, unknown>) {
+	delete ret.password;
+	return ret;
+}
+
 const LeagueSchema = new Schema<ILeague>(
 	{
 		name: { type: String, required: true },
 		sport: { type: String, required: true },
 		mode: { type: String, required: true },
-		password: { type: String, required: true },
+		// Never loaded by default: the bcrypt hash would otherwise ride along on every
+		// League document a route returns, and a hash in a client's hands can be
+		// brute-forced offline. Only the join flow asks for it (`.select('+password')`).
+		password: { type: String, required: true, select: false },
 		creatorId: { type: String, required: true },
 		members: { type: [String], default: [] },
 		inviteCode: { type: String, required: true, unique: true, index: true }
 	},
 	{
-		timestamps: true // Adds createdAt and updatedAt
+		timestamps: true, // Adds createdAt and updatedAt
+		// `select: false` only governs queries. A document from `League.create()`, or one
+		// whose password was just set and saved, still holds the hash in memory — so
+		// strip it at serialization too, which is what NextResponse.json() goes through.
+		toJSON: { transform: stripPassword },
+		toObject: { transform: stripPassword }
 	}
 );
 
