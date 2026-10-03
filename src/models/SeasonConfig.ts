@@ -1,5 +1,6 @@
 // src/models/SeasonConfig.ts
 import mongoose from 'mongoose';
+import { requestScoped } from '@/lib/db';
 
 /**
  * SeasonConfig stores the global season state for Pick 5.
@@ -70,4 +71,5 @@ SeasonConfigSchema.pre('save', function (next) {
 // Ensure only one season config document exists (use seasonYear as unique identifier)
 SeasonConfigSchema.index({ seasonYear: 1 }, { unique: true });
 
-export const SeasonConfig = mongoose.models?.SeasonConfig || mongoose.model('SeasonConfig', SeasonConfigSchema);
+// requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)
+export const SeasonConfig = requestScoped(mongoose.models?.SeasonConfig || mongoose.model('SeasonConfig', SeasonConfigSchema));

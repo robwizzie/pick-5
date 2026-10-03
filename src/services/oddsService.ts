@@ -45,7 +45,8 @@ export interface OddsFetchResult {
 }
 
 export class OddsService {
-	private static API_KEY = process.env.NEXT_PUBLIC_ODDS_API_KEY;
+	// ODDS_API_KEY is preferred (server-only, read at runtime); NEXT_PUBLIC_ODDS_API_KEY kept for existing deployments.
+	private static API_KEY = process.env.ODDS_API_KEY || process.env.NEXT_PUBLIC_ODDS_API_KEY;
 	private static BASE_URL = 'https://api.the-odds-api.com/v4';
 	private static oddsCache: Record<string, { data: OddsData; timestamp: number }> = {};
 
@@ -132,7 +133,7 @@ export class OddsService {
 		try {
 			console.log('[OddsService] Starting odds snapshot fetch...');
 
-			const apiKey = process.env.NEXT_PUBLIC_ODDS_API_KEY;
+			const apiKey = process.env.ODDS_API_KEY || process.env.NEXT_PUBLIC_ODDS_API_KEY;
 			if (!apiKey) {
 				console.error('[OddsService] No API key configured');
 				return { success: false, error: 'Odds API not configured' };

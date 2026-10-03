@@ -7,7 +7,7 @@ import { League } from '@/models/League';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
 	try {
 		const session = await getServerSession(authOptions);
 		if (!session?.user?.id) {
@@ -16,7 +16,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 
 		await connectDB();
 
-		const league = await League.findById(params.id);
+		const league = await League.findById((await params).id);
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
