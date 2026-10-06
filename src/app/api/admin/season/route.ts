@@ -67,15 +67,22 @@ export async function POST(req: Request) {
 						{ status: 400 }
 					);
 				}
-				const result = await SeasonService.archiveSeason(seasonYear);
+				const dryRun = body.dryRun === true;
+				const replace = body.replace === true;
+				const result = await SeasonService.archiveSeason(seasonYear, { dryRun, replace });
 				return NextResponse.json({
 					success: result.success,
 					seasonYear,
+					dryRun,
 					leaguesArchived: result.leaguesArchived,
+					skipped: result.skipped,
+					previews: result.previews,
 					errors: result.errors,
-					message: result.success
-						? `Successfully archived ${result.leaguesArchived} leagues for season ${seasonYear}`
-						: `Failed to archive season ${seasonYear}`
+					message: dryRun
+						? `Preview: ${result.previews.length} league${result.previews.length === 1 ? '' : 's'} with picks in ${seasonYear}`
+						: result.success
+							? `Archived ${result.leaguesArchived} league${result.leaguesArchived === 1 ? '' : 's'} for ${seasonYear}${result.skipped ? ` (${result.skipped} skipped: no picks that season or already archived)` : ''}`
+							: result.errors[0] || `Failed to archive season ${seasonYear}`
 				});
 			}
 

@@ -3,12 +3,18 @@ import { connectDB } from '@/lib/db';
 import { SeasonConfig } from '@/models/SeasonConfig';
 import { SeasonHistory } from '@/models/SeasonHistory';
 import { League } from '@/models/League';
-import { Pick } from '@/models/Pick';
-import { User } from '@/models/User';
 import { NFLService } from './nflService';
-import { ScoringService } from './scoringService';
-import { calculatePointsFromOdds } from '@/utils/oddsUtils';
-import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
+import { ensurePickSeasonMigration, getCurrentSeasonYear } from '@/lib/season';
+import { loadLeagueSeason } from '@/lib/leagueSeason';
+
+export interface ArchivePreview {
+	leagueId: string;
+	leagueName: string;
+	players: number;
+	weeksPlayed: number;
+	champions: string[];
+	podium: Array<{ rank: number; name: string; points: number }>;
+}
 
 export interface SeasonStatus {
 	isActive: boolean;
@@ -120,251 +126,153 @@ export class SeasonService {
 	}
 
 	/**
-	 * Archive the season standings for all leagues
-	 * This saves the final standings to SeasonHistory
-	 * @param seasonYear season to archive (default: current). Pass the previous year to
-	 *   archive last season after the new one has started.
+	 * Archive (or preview) a season's final standings into League History.
+	 * - dryRun: compute and return previews without writing anything
+	 * - replace: rebuild leagues that already have history for this season
+	 * Leagues with no picks that season are skipped (no empty "everyone tied at 0" history).
 	 */
 	static async archiveSeason(
-		seasonYear: number = getCurrentSeasonYear()
-	): Promise<{ success: boolean; leaguesArchived: number; errors: string[] }> {
+		seasonYear: number = getCurrentSeasonYear(),
+		{ dryRun = false, replace = false }: { dryRun?: boolean; replace?: boolean } = {}
+	): Promise<{ success: boolean; leaguesArchived: number; skipped: number; previews: ArchivePreview[]; errors: string[] }> {
 		await connectDB();
+		// Picks must be season-tagged before they can be attributed to a season
+		await ensurePickSeasonMigration();
 
 		const config = await this.getOrCreateSeasonConfig(seasonYear);
-
-		if (config.isArchived) {
-			return { success: false, leaguesArchived: 0, errors: ['Season already archived'] };
+		if (config.isArchived && !dryRun && !replace) {
+			return { success: false, leaguesArchived: 0, skipped: 0, previews: [], errors: ['Season already archived. Use "Replace existing" to rebuild it.'] };
 		}
 
-		const leagues = await League.find({});
-		let leaguesArchived = 0;
+		const leagues = await League.find({}, '_id name').lean<Array<{ _id: unknown; name: string }>>();
 		const errors: string[] = [];
+		const previews: ArchivePreview[] = [];
+		let leaguesArchived = 0;
+		let skipped = 0;
 
-		for (const league of leagues) {
-			try {
-				await this.archiveLeagueSeason(league._id.toString(), config.seasonYear);
-				leaguesArchived++;
-			} catch (error) {
-				const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-				errors.push(`Failed to archive league ${league.name}: ${errorMsg}`);
-				console.error(`[SeasonService] Error archiving league ${league.name}:`, error);
-			}
+		// A few leagues at a time: each one fans out to up to 18 ESPN requests
+		for (let i = 0; i < leagues.length; i += 4) {
+			await Promise.all(
+				leagues.slice(i, i + 4).map(async league => {
+					const leagueId = String(league._id);
+					try {
+						const outcome = await this.archiveLeagueSeason(leagueId, seasonYear, { dryRun, replace });
+						if (outcome.preview) previews.push(outcome.preview);
+						if (outcome.status === 'archived') leaguesArchived++;
+						else skipped++;
+					} catch (error) {
+						const message = error instanceof Error ? error.message : 'Unknown error';
+						errors.push(`Failed to archive league ${league.name}: ${message}`);
+						console.error(`[SeasonService] Error archiving league ${league.name}:`, error);
+					}
+				})
+			);
 		}
+		previews.sort((a, b) => a.leagueName.localeCompare(b.leagueName));
 
-		// Only mark season as archived if at least one league was successfully archived
-		if (leaguesArchived > 0) {
+		if (!dryRun && leaguesArchived > 0) {
 			config.isArchived = true;
 			config.archivedAt = new Date();
 			await config.save();
-			console.log(`[SeasonService] Archived ${leaguesArchived} leagues for season ${config.seasonYear}`);
-			return { success: true, leaguesArchived, errors };
-		} else {
-			console.error(`[SeasonService] Failed to archive any leagues for season ${config.seasonYear}`);
-			return { success: false, leaguesArchived: 0, errors };
 		}
+		return { success: dryRun ? errors.length === 0 : leaguesArchived > 0 || (skipped > 0 && errors.length === 0), leaguesArchived, skipped, previews, errors };
 	}
 
 	/**
-	 * Archive a single league's season standings
+	 * Build one league's final standings for a season from live-scored picks, and save them to
+	 * SeasonHistory unless dryRun. Only players who made picks that season are included.
 	 */
-	static async archiveLeagueSeason(leagueId: string, seasonYear: number): Promise<void> {
+	static async archiveLeagueSeason(
+		leagueId: string,
+		seasonYear: number,
+		{ dryRun = false, replace = false }: { dryRun?: boolean; replace?: boolean } = {}
+	): Promise<{ status: 'archived' | 'previewed' | 'skipped_existing' | 'skipped_empty'; preview?: ArchivePreview }> {
 		await connectDB();
 
-		const league = await League.findById(leagueId);
-		if (!league) {
-			throw new Error('League not found');
+		if (!replace && !dryRun && (await SeasonHistory.exists({ leagueId, seasonYear }))) {
+			return { status: 'skipped_existing' };
 		}
 
-		// Check if already archived
-		const existingHistory = await SeasonHistory.findOne({ leagueId, seasonYear });
-		if (existingHistory) {
-			return;
-		}
+		const season = await loadLeagueSeason(leagueId, seasonYear);
+		if (!season) throw new Error('League not found');
 
-		// Get all members
-		const memberIds = league.members;
+		const regularWeeks = Array.from(season.weeks.keys()).filter(w => w >= 1 && w <= 18).sort((a, b) => a - b);
+		if (regularWeeks.length === 0) return { status: 'skipped_empty' };
 
-		// Calculate final standings
-		const standings = [];
-		const weeklyWinners: Map<number, { userId: string; points: number }[]> = new Map();
+		// Per-player totals
+		const players = new Map<string, { totalPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number; weeksWon: number; weeklyStats: Array<{ week: number; points: number; correctPicks: number; totalPicks: number; tfsPoints: number }> }>();
+		let highestWeeklyScore: { userId: string; userName: string; week: number; points: number } | null = null;
+		const nameOf = (id: string) => season.members.find(m => m.userId === id)?.name || 'Unknown';
 
-		// Cache game results for all weeks
-		const gameResultsCache: Map<number, Array<{
-			id: string;
-			homeScore: number;
-			awayScore: number;
-			homeTeam: string;
-			awayTeam: string;
-			status: string;
-		}>> = new Map();
-
-		// Pre-fetch all game results
-		for (let week = 1; week <= 18; week++) {
-			try {
-				const games = await NFLService.getWeeklyGames(week, seasonYear);
-				const results = games.map(g => ({
-					id: g.id,
-					homeScore: g.home.score || 0,
-					awayScore: g.away.score || 0,
-					homeTeam: g.home.team,
-					awayTeam: g.away.team,
-					status: g.status || 'Unknown'
-				}));
-				gameResultsCache.set(week, results);
-			} catch (error) {
-				console.error(`[SeasonService] Error fetching games for week ${week}:`, error);
-				gameResultsCache.set(week, []);
-			}
-		}
-
-		// Calculate stats for each member (only this season's picks)
-		const seasonFilter = seasonPickFilter(seasonYear);
-		for (const memberId of memberIds) {
-			const user = await User.findById(memberId);
-			if (!user) continue;
-
-			const userPicks = await Pick.find({
-				userId: memberId,
-				leagueId,
-				week: { $lte: 18 },
-				...seasonFilter
-			}).lean();
-
-			let totalPoints = 0;
-			let totalCorrectPicks = 0;
-			let totalPicksCount = 0;
-			let totalTfsPoints = 0;
-			const weeklyStats: Array<{
-				week: number;
-				points: number;
-				correctPicks: number;
-				totalPicks: number;
-				tfsPoints: number;
-			}> = [];
-
-			for (const pick of userPicks) {
-				const gameResults = gameResultsCache.get(pick.week) || [];
-
-				const { weeklyPoints, correctPicks, tfsPoints, completedGames } = ScoringService.calculateWeekScore(
-					pick.picks,
-					gameResults,
-					pick.tfsGame,
-					pick.tfsScore,
-					league.mode || 'standard',
-					calculatePointsFromOdds,
-				pick.lockGameId
-				);
-
-				totalPoints += weeklyPoints;
-				totalCorrectPicks += correctPicks;
-				totalPicksCount += completedGames;
-				totalTfsPoints += tfsPoints;
-
-				weeklyStats.push({
-					week: pick.week,
-					points: weeklyPoints,
-					correctPicks,
-					totalPicks: completedGames,
-					tfsPoints
-				});
-
-				// Track weekly winners for "weeks won" calculation
-				if (!weeklyWinners.has(pick.week)) {
-					weeklyWinners.set(pick.week, []);
+		for (const week of regularWeeks) {
+			const byUser = season.weeks.get(week)!;
+			let max = 0;
+			byUser.forEach(w => (max = Math.max(max, w.weeklyPoints)));
+			byUser.forEach((w, userId) => {
+				const p = players.get(userId) ?? { totalPoints: 0, correctPicks: 0, totalPicks: 0, tfsPoints: 0, weeksWon: 0, weeklyStats: [] };
+				p.totalPoints += w.weeklyPoints;
+				p.correctPicks += w.correctPicks;
+				p.totalPicks += w.completedGames;
+				p.tfsPoints += w.tfsPoints;
+				if (max > 0 && w.weeklyPoints === max) p.weeksWon++;
+				p.weeklyStats.push({ week, points: w.weeklyPoints, correctPicks: w.correctPicks, totalPicks: w.completedGames, tfsPoints: w.tfsPoints });
+				players.set(userId, p);
+				if (!highestWeeklyScore || w.weeklyPoints > highestWeeklyScore.points) {
+					highestWeeklyScore = { userId, userName: nameOf(userId), week, points: w.weeklyPoints };
 				}
-				weeklyWinners.get(pick.week)!.push({ userId: memberId, points: weeklyPoints });
-			}
-
-			const winPercentage = totalPicksCount > 0 ? Math.round((totalCorrectPicks / totalPicksCount) * 100) : 0;
-
-			standings.push({
-				userId: memberId,
-				userName: user.name || 'Unknown',
-				userImage: user.image || null,
-				rank: 0, // Will be calculated after sorting
-				totalPoints,
-				correctPicks: totalCorrectPicks,
-				totalPicks: totalPicksCount,
-				tfsPoints: totalTfsPoints,
-				weeksWon: 0, // Will be calculated below
-				winPercentage,
-				weeklyStats
 			});
 		}
 
-		// Calculate weeks won for each player
-		for (const [, weekResults] of Array.from(weeklyWinners.entries())) {
-			if (weekResults.length === 0) continue;
-
-			const maxPoints = Math.max(...weekResults.map(r => r.points));
-			const winners = weekResults.filter(r => r.points === maxPoints);
-
-			for (const winner of winners) {
-				const standing = standings.find(s => s.userId === winner.userId);
-				if (standing) {
-					standing.weeksWon++;
-				}
-			}
-		}
-
-		// Sort by total points and assign ranks
-		standings.sort((a, b) => b.totalPoints - a.totalPoints);
-		standings.forEach((standing, index) => {
-			standing.rank = index + 1;
+		// Competition ranking: ties share a rank (1, 1, 3)
+		const sorted = Array.from(players.entries()).sort((a, b) => b[1].totalPoints - a[1].totalPoints);
+		const standings = sorted.map(([userId, p], i) => {
+			const member = season.members.find(m => m.userId === userId);
+			const rank = sorted.findIndex(([, q]) => q.totalPoints === p.totalPoints) + 1;
+			return {
+				userId,
+				userName: member?.name || 'Unknown',
+				userImage: member?.image ?? null,
+				rank: rank || i + 1,
+				totalPoints: p.totalPoints,
+				correctPicks: p.correctPicks,
+				totalPicks: p.totalPicks,
+				tfsPoints: p.tfsPoints,
+				weeksWon: p.weeksWon,
+				winPercentage: p.totalPicks > 0 ? Math.round((p.correctPicks / p.totalPicks) * 100) : 0,
+				weeklyStats: p.weeklyStats
+			};
 		});
-
-		// Determine champions (handle ties)
-		const maxPoints = standings.length > 0 ? standings[0].totalPoints : 0;
-		const champions = standings
-			.filter(s => s.totalPoints === maxPoints)
-			.map(s => ({
-				userId: s.userId,
-				userName: s.userName,
-				totalPoints: s.totalPoints
-			}));
-
-		// Find highest weekly score
-		let highestWeeklyScore: {
-			userId: string;
-			userName: string;
-			week: number;
-			points: number;
-		} | null = null;
-
-		for (const standing of standings) {
-			for (const weekStat of standing.weeklyStats) {
-				if (!highestWeeklyScore || weekStat.points > highestWeeklyScore.points) {
-					highestWeeklyScore = {
-						userId: standing.userId,
-						userName: standing.userName,
-						week: weekStat.week,
-						points: weekStat.points
-					};
-				}
-			}
-		}
-
-		// Calculate season stats
+		const top = standings[0]?.totalPoints ?? 0;
+		const champions = standings.filter(s => s.totalPoints === top).map(s => ({ userId: s.userId, userName: s.userName, totalPoints: s.totalPoints }));
 		const totalPicksMade = standings.reduce((sum, s) => sum + s.totalPicks, 0);
 
-		// Create the season history record
-		await SeasonHistory.create({
+		const preview: ArchivePreview = {
 			leagueId,
-			leagueName: league.name,
-			leagueMode: league.mode || 'standard',
+			leagueName: season.leagueName,
+			players: standings.length,
+			weeksPlayed: regularWeeks.length,
+			champions: champions.map(c => c.userName),
+			podium: standings.slice(0, 3).map(s => ({ rank: s.rank, name: s.userName, points: s.totalPoints }))
+		};
+		if (dryRun) return { status: 'previewed', preview };
+
+		const record = {
+			leagueId,
+			leagueName: season.leagueName,
+			leagueMode: season.mode,
 			seasonYear,
 			standings,
 			champions,
 			seasonStats: {
-				totalWeeksPlayed: 18,
+				totalWeeksPlayed: regularWeeks.length,
 				totalGamesPlayed: totalPicksMade,
 				totalPicksMade,
-				highestWeeklyScore: highestWeeklyScore || undefined
+				highestWeeklyScore: highestWeeklyScore ?? undefined
 			},
 			archivedAt: new Date()
-		});
-
-		console.log(`[SeasonService] Archived league ${league.name} for season ${seasonYear}`);
+		};
+		await SeasonHistory.findOneAndUpdate({ leagueId, seasonYear }, record, { upsert: true });
+		return { status: 'archived', preview };
 	}
 
 	/**
