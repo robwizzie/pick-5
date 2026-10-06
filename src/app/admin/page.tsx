@@ -13,6 +13,7 @@ import {
 	Clock,
 	Crosshair,
 	DatabaseZap,
+	Eye,
 	Info,
 	PauseCircle,
 	PenLine,
@@ -28,6 +29,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -116,7 +118,19 @@ interface SeasonActionResponse {
 	// archive
 	seasonYear?: number;
 	leaguesArchived?: number;
+	skipped?: number;
+	dryRun?: boolean;
+	previews?: ArchivePreview[];
 	errors?: string[];
+}
+
+interface ArchivePreview {
+	leagueId: string;
+	leagueName: string;
+	players: number;
+	weeksPlayed: number;
+	champions: string[];
+	podium: Array<{ rank: number; name: string; points: number }>;
 }
 
 interface ActionResult {
@@ -146,7 +160,8 @@ function buildFacts(action: SeasonAction, data: SeasonActionResponse): ActionRes
 	if (action === 'archive') {
 		return [
 			{ label: 'Season', value: data.seasonYear !== undefined ? String(data.seasonYear) : '—' },
-			{ label: 'Leagues archived', value: String(data.leaguesArchived ?? 0) }
+			data.dryRun ? { label: 'Leagues with picks', value: String(data.previews?.length ?? 0) } : { label: 'Leagues archived', value: String(data.leaguesArchived ?? 0) },
+			{ label: 'Skipped', value: String(data.skipped ?? 0) }
 		];
 	}
 	return [];
@@ -204,6 +219,8 @@ function SeasonManagement() {
 	const [archiveYear, setArchiveYear] = useState<string>(String(getCurrentSeasonYear() - 1));
 	const [confirmAction, setConfirmAction] = useState<'deactivate' | 'start_new' | null>(null);
 	const [lastResult, setLastResult] = useState<ActionResult | null>(null);
+	const [archiveReplace, setArchiveReplace] = useState(false);
+	const [archivePreviews, setArchivePreviews] = useState<{ seasonYear: number; dryRun: boolean; leagues: ArchivePreview[] } | null>(null);
 
 	const loadStatus = useCallback(async () => {
 		setStatusLoading(true);
@@ -225,8 +242,8 @@ function SeasonManagement() {
 		loadStatus();
 	}, [loadStatus]);
 
-	const runAction = async (action: SeasonAction) => {
-		const body: { action: SeasonAction; seasonYear?: number } = { action };
+	const runAction = async (action: SeasonAction, { dryRun = false }: { dryRun?: boolean } = {}) => {
+		const body: { action: SeasonAction; seasonYear?: number; dryRun?: boolean; replace?: boolean } = { action };
 		if (action === 'archive') {
 			const year = Number(archiveYear);
 			if (!Number.isInteger(year) || year < 2000) {
@@ -234,6 +251,8 @@ function SeasonManagement() {
 				return;
 			}
 			body.seasonYear = year;
+			body.dryRun = dryRun;
+			body.replace = archiveReplace;
 		}
 
 		setRunning(action);
@@ -250,6 +269,9 @@ function SeasonManagement() {
 				: [data.error || data.message || `${ACTION_LABELS[action]} failed`, data.details].filter(Boolean).join(': ');
 
 			setLastResult({ action, ok, message, facts: response.ok ? buildFacts(action, data) : [], errors: data.errors ?? [], at: new Date() });
+			if (action === 'archive' && data.previews) {
+				setArchivePreviews({ seasonYear: data.seasonYear ?? Number(archiveYear), dryRun: !!data.dryRun, leagues: data.previews });
+			}
 			if (ok) toast.success(message);
 			else toast.error(message);
 		} catch (err) {
@@ -366,11 +388,58 @@ function SeasonManagement() {
 									className='tabular h-10'
 								/>
 							</div>
+							<label className='flex items-center gap-2 text-xs text-muted-foreground'>
+								<Switch checked={archiveReplace} onCheckedChange={setArchiveReplace} disabled={busy} aria-label='Replace existing history' />
+								Replace existing
+							</label>
+							<Button variant='ghost' onClick={() => runAction('archive', { dryRun: true })} disabled={busy || !archiveYear}>
+								<Eye /> Preview
+							</Button>
 							<Button variant='outline' onClick={() => runAction('archive')} disabled={busy || !archiveYear}>
 								{running === 'archive' ? <RefreshCw className='animate-spin' /> : <Archive />}
-								{running === 'archive' ? 'Archiving…' : 'Archive'}
+								{running === 'archive' ? 'Working…' : 'Archive'}
 							</Button>
 						</ActionRow>
+
+						{archivePreviews && (
+							<div className='rounded-xl border border-white/[0.07] bg-white/[0.02] p-4'>
+								<p className='eyebrow mb-3'>
+									{archivePreviews.dryRun ? 'Preview' : 'Archived'} · {archivePreviews.seasonYear} season · {archivePreviews.leagues.length} league{archivePreviews.leagues.length === 1 ? '' : 's'} with picks
+								</p>
+								{archivePreviews.leagues.length === 0 ? (
+									<p className='text-sm text-muted-foreground'>No league has picks tagged to {archivePreviews.seasonYear}. Run the pick migration first, or check the season year.</p>
+								) : (
+									<div className='overflow-x-auto'>
+										<table className='w-full text-sm'>
+											<thead className='text-left text-[11px] uppercase tracking-wider text-muted-foreground'>
+												<tr>
+													<th className='py-2 pr-3 font-semibold'>League</th>
+													<th className='py-2 pr-3 font-semibold'>Players</th>
+													<th className='py-2 pr-3 font-semibold'>Weeks</th>
+													<th className='py-2 font-semibold'>Final podium</th>
+												</tr>
+											</thead>
+											<tbody className='divide-y divide-white/[0.05]'>
+												{archivePreviews.leagues.map(l => (
+													<tr key={l.leagueId} className='align-top'>
+														<td className='py-2 pr-3 font-semibold'>{l.leagueName}</td>
+														<td className='py-2 pr-3 tabular'>{l.players}</td>
+														<td className='py-2 pr-3 tabular'>{l.weeksPlayed}</td>
+														<td className='py-2'>
+															{l.podium.map(p => (
+																<div key={`${p.rank}-${p.name}`} className='tabular'>
+																	<span className={cn('font-bold', p.rank === 1 ? 'text-[#FFD66B]' : p.rank === 2 ? 'text-[#D5DCE6]' : 'text-[#E7A16B]')}>#{p.rank}</span> {p.name} · {p.points} pts
+																</div>
+															))}
+														</td>
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</div>
+								)}
+							</div>
+						)}
 
 						<ActionRow
 							icon={PlayCircle}
