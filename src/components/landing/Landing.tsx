@@ -191,7 +191,7 @@ export function Landing({ error, callbackUrl = '/dashboard' }: { error?: string;
 
 				<div className='mt-14 grid gap-4 md:grid-cols-3'>
 					{[
-						{ icon: Target, step: '01', title: 'Pick five games', body: 'Each week, choose the winners of any five NFL matchups. Change your mind any time before kickoff.', tone: 'text-primary bg-primary/10' },
+						{ icon: Target, step: '01', title: 'Pick five games', body: 'Each week, choose the winners of any five NFL matchups and make one your Lock for double points. Change your mind any time before kickoff.', tone: 'text-primary bg-primary/10' },
 						{ icon: Flame, step: '02', title: 'Back the underdogs', body: 'Points come from the moneyline. Favorites are safe, but one upset can be worth a whole week of chalk.', tone: 'text-accent-2 bg-accent-2/10' },
 						{ icon: Crown, step: '03', title: 'Climb the board', body: 'Scores update live on game day. Weekly recaps crown the winner and track who’s rising all season.', tone: 'text-accent bg-accent/10' }
 					].map(({ icon: Icon, step, title, body, tone }) => (

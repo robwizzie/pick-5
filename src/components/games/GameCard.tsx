@@ -1,11 +1,12 @@
 'use client';
 
 import CountUp from 'react-countup';
-import { Check, X, Flame } from 'lucide-react';
+import { Check, X, Flame, Lock } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { TeamLogo } from '@/components/ui/team-logo';
 import { cn } from '@/lib/utils';
 import { calculatePointsFromOdds, formatOdds, getOddsBadgeClass } from '@/utils/oddsUtils';
+import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
 
 interface TeamInfo {
 	team: string;
@@ -49,6 +50,7 @@ interface GameCardProps {
 	leaguePicks?: GamePicksData;
 	leagueMode?: string;
 	forceShowOdds?: boolean; // Always show odds regardless of league mode
+	lockedTeam?: string; // The team picked as this week's Lock (scores double if correct)
 }
 
 type GamePhase = 'pre' | 'live' | 'final';
@@ -101,6 +103,23 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 	);
 }
 
+/** Gold "LOCK 2×" marker for a player's lock of the week. `compact` drops the word for tight spots. */
+export function LockBadge({ compact = false, className }: { compact?: boolean; className?: string }) {
+	return (
+		<span
+			className={cn(
+				'inline-flex shrink-0 items-center gap-1 rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-extrabold uppercase leading-none tracking-wider text-warning-foreground shadow-[0_6px_18px_-6px_hsl(var(--warning)/0.8)]',
+				className
+			)}
+			title={`Lock of the week: scores ${LOCK_MULTIPLIER}× if correct`}
+		>
+			<Lock className='h-2.5 w-2.5' strokeWidth={3} aria-hidden />
+			{compact ? '' : 'Lock '}
+			<span className='tabular'>{LOCK_MULTIPLIER}×</span>
+		</span>
+	);
+}
+
 function StatusBar({ game, phase }: { game: Game; phase: GamePhase }) {
 	if (phase === 'live') {
 		const period = game.periodDisplay || (game.period ? `Q${game.period}` : '');
@@ -141,6 +160,7 @@ interface TeamTileProps {
 	team: TeamInfo;
 	side: 'away' | 'home';
 	isSelected: boolean;
+	isLock: boolean;
 	result: boolean | null; // graded result for the selected team
 	isWinner: boolean;
 	isLoser: boolean;
@@ -152,19 +172,22 @@ interface TeamTileProps {
 	onClick?: () => void;
 }
 
-function TeamTile({ team, side, isSelected, result, isWinner, isLoser, showScore, showOdds, interactive, dimmed, pickers, onClick }: TeamTileProps) {
+function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, showScore, showOdds, interactive, dimmed, pickers, onClick }: TeamTileProps) {
 	const graded = isSelected && typeof result === 'boolean';
 	const tone = graded ? (result ? 'win' : 'loss') : isSelected ? 'selected' : isWinner ? 'winner' : 'idle';
 
 	const toneClasses = {
 		idle: 'border-white/[0.07] bg-white/[0.025]',
 		winner: 'border-accent/25 bg-accent/[0.06]',
-		selected: 'border-primary/70 bg-primary/[0.12] shadow-[0_0_0_1px_hsl(var(--primary)/0.4),0_12px_40px_-12px_hsl(var(--primary)/0.6)]',
+		selected: isLock
+			? 'border-warning/70 bg-warning/[0.10] shadow-[0_0_0_1px_hsl(var(--warning)/0.4),0_12px_40px_-12px_hsl(var(--warning)/0.55)]'
+			: 'border-primary/70 bg-primary/[0.12] shadow-[0_0_0_1px_hsl(var(--primary)/0.4),0_12px_40px_-12px_hsl(var(--primary)/0.6)]',
 		win: 'border-accent/60 bg-accent/[0.12] shadow-[0_0_0_1px_hsl(var(--accent)/0.3),0_12px_40px_-14px_hsl(var(--accent)/0.55)]',
 		loss: 'border-accent-2/50 bg-accent-2/[0.10]'
 	}[tone];
 
-	const points = showOdds && team.odds !== undefined ? calculatePointsFromOdds(team.odds) : null;
+	// The lock's line pays double
+	const points = showOdds && team.odds !== undefined ? ScoringService.pointsForPick({ odds: team.odds }, 'standard', calculatePointsFromOdds, isLock) : null;
 	const Tag = interactive ? 'button' : 'div';
 
 	return (
@@ -192,6 +215,8 @@ function TeamTile({ team, side, isSelected, result, isWinner, isLoser, showScore
 					{tone === 'loss' ? <X className='h-3 w-3' strokeWidth={3} /> : <Check className='h-3 w-3' strokeWidth={3} />}
 				</span>
 			)}
+
+			{isLock && <LockBadge compact className={cn('absolute -top-2 animate-scale-in', side === 'away' ? '-right-1.5' : '-left-1.5')} />}
 
 			<TeamLogo src={team.logo} alt={team.team} size={44} />
 
@@ -223,7 +248,7 @@ function TeamTile({ team, side, isSelected, result, isWinner, isLoser, showScore
 	);
 }
 
-export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode, forceShowOdds }: GameCardProps) {
+export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode, forceShowOdds, lockedTeam }: GameCardProps) {
 	if (!game) return null;
 
 	const phase = getPhase(game.status);
@@ -249,6 +274,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				team={team}
 				side={side}
 				isSelected={isSelected}
+				isLock={isSelected && lockedTeam === team.team}
 				result={isSelected ? (isCorrect ?? null) : null}
 				// Only highlight the winner when the viewer has no pick in this game
 				isWinner={!selected && (side === 'away' ? awayWon : homeWon)}

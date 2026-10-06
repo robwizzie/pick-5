@@ -32,6 +32,7 @@ interface PendingResult {
 	team: string;
 	outcome: 'win' | 'loss' | 'tie';
 	points: number;
+	isLock: boolean;
 }
 
 export interface GameResultsJobResult {
@@ -126,6 +127,7 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 			const game = finishedById.get(pick.gameId);
 			if (!game || alreadySent.has(`${userId}|${pick.gameId}|${leagueId}`)) continue;
 			const outcome = game.winner === null ? 'tie' : game.winner === pick.team ? 'win' : 'loss';
+			const isLock = !!doc.lockGameId && doc.lockGameId === pick.gameId;
 			const entry: PendingResult = {
 				userId,
 				leagueId,
@@ -133,7 +135,8 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 				gameId: pick.gameId,
 				team: pick.team,
 				outcome,
-				points: outcome === 'win' ? pointsForCorrectPick(league.mode, pick.odds, doc.lockGameId === pick.gameId) : 0
+				points: outcome === 'win' ? pointsForCorrectPick(league.mode, pick.odds, isLock) : 0,
+				isLock
 			};
 			const key = `${userId}|${leagueId}`;
 			groups.set(key, [...(groups.get(key) ?? []), entry]);
@@ -227,13 +230,15 @@ function buildPayload(group: PendingResult[]) {
 
 	if (group.length === 1) {
 		const r = group[0];
-		title = r.outcome === 'win' ? `✅ ${r.team} Won!` : r.outcome === 'tie' ? `➖ ${r.team} Tied` : `❌ ${r.team} Lost`;
+		const lockHit = r.isLock && r.outcome === 'win';
+		title = lockHit ? `🔒 Lock hit! ${r.team} Won!` : r.outcome === 'win' ? `✅ ${r.team} Won!` : r.outcome === 'tie' ? `➖ ${r.team} Tied` : `❌ ${r.team} Lost`;
 		body = r.outcome === 'win' ? `+${pts(r.points)} in "${leagueName}"` : `0 pts in "${leagueName}"`;
 	} else {
 		const wins = group.filter(r => r.outcome === 'win').length;
 		const total = group.reduce((sum, r) => sum + r.points, 0);
 		title = `${group.length} Games Finished!`;
-		body = `${'✅'.repeat(wins)}${'❌'.repeat(group.length - wins)} +${pts(total)} in "${leagueName}"`;
+		const lockHit = group.find(r => r.isLock && r.outcome === 'win');
+		body = `${'✅'.repeat(wins)}${'❌'.repeat(group.length - wins)} +${pts(total)} in "${leagueName}"${lockHit ? ` · 🔒 Lock hit! +${pts(lockHit.points)}` : ''}`;
 	}
 
 	return {

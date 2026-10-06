@@ -1,5 +1,6 @@
 import { Body, Button, Column, Container, Head, Heading, Html, Img, Link, Preview, Row, Section, Text } from '@react-email/components';
 import * as React from 'react';
+import { LOCK_MULTIPLIER } from '@/services/scoringService';
 import { baseUrl, brandStripe, colors, display, fonts, modeLabel, ordinal, plural, rankColor, tabular } from './theme';
 
 /* ------------------------------------------------------------------ */
@@ -299,9 +300,33 @@ export interface PickResult {
 	isCorrect?: boolean | null;
 	/** American odds at the time of the pick (Standard mode). */
 	odds?: number;
-	/** Points earned for this pick. */
+	/** Points earned for this pick (already doubled for the lock). */
 	points?: number;
+	/** The player's lock of the week (scores double if correct). */
+	isLock?: boolean;
 }
+
+const LockTag = () => (
+	<span
+		style={{
+			display: 'inline-block',
+			marginLeft: '8px',
+			padding: '2px 7px',
+			borderRadius: '999px',
+			backgroundColor: colors.gold,
+			color: colors.primaryInk,
+			fontSize: '10px',
+			lineHeight: '14px',
+			fontWeight: 800,
+			letterSpacing: '0.08em',
+			textTransform: 'uppercase',
+			verticalAlign: '2px',
+			...tabular
+		}}
+	>
+		Lock {LOCK_MULTIPLIER}×
+	</span>
+);
 
 const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
@@ -325,7 +350,10 @@ export const PicksList = ({ picks, showOdds }: { picks: PickResult[]; showOdds: 
 								</Text>
 							</Column>
 							<Column style={{ padding: '12px 8px', verticalAlign: 'middle' }}>
-								<Text style={{ margin: 0, color: colors.text, fontSize: '15px', lineHeight: '20px', fontWeight: 700 }}>{pick.team}</Text>
+								<Text style={{ margin: 0, color: colors.text, fontSize: '15px', lineHeight: '20px', fontWeight: 700 }}>
+									{pick.team}
+									{pick.isLock ? <LockTag /> : null}
+								</Text>
 								<Text style={{ margin: 0, color: colors.muted, fontSize: '12px', lineHeight: '16px' }}>
 									vs {pick.opponent}
 									{showOdds && pick.odds !== undefined ? <span style={tabular}>&nbsp;·&nbsp;{formatOdds(pick.odds)}</span> : null}

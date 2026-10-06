@@ -299,7 +299,7 @@ export async function GET(req: Request) {
 			picks.tfsScore,
 			leagueMode,
 			calculatePointsFromOdds,
-		picks.lockGameId
+			picks.lockGameId
 		);
 
 		// Update picks with current scores if they've changed
