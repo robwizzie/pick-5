@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from '@/components/ui/skeleton';
 import { Pill } from '@/components/ui/page';
 import { cn } from '@/lib/utils';
+import { MatchupMini, type MatchupMiniData } from './MatchupMini';
 
 export interface DashboardLeague {
 	_id: string;
@@ -60,7 +61,21 @@ function PickChip({ pick }: { pick: PickedTeam }) {
 	);
 }
 
-function LeagueCard({ league, summary, isCommissioner, index }: { league: DashboardLeague; summary?: LeagueSummary; isCommissioner: boolean; index: number }) {
+function LeagueCard({
+	league,
+	summary,
+	isCommissioner,
+	index,
+	matchup,
+	userId
+}: {
+	league: DashboardLeague;
+	summary?: LeagueSummary;
+	isCommissioner: boolean;
+	index: number;
+	matchup?: MatchupMiniData;
+	userId?: string;
+}) {
 	const rank = summary?.rank ?? null;
 	const rankStyle = rank ? RANK_STYLES[rank] : undefined;
 
@@ -129,6 +144,8 @@ function LeagueCard({ league, summary, isCommissioner, index }: { league: Dashbo
 							{league.mode === 'steve' && summary.tfsPoints > 0 && <Pill tone='warning'>+{summary.tfsPoints} TFS</Pill>}
 						</div>
 					)}
+
+					{matchup && userId && <MatchupMini data={matchup} userId={userId} />}
 				</div>
 
 				{/* Points */}
@@ -175,11 +192,30 @@ function LeagueCard({ league, summary, isCommissioner, index }: { league: Dashbo
 	);
 }
 
-export default function ActiveLeagues({ leagues, summaries, userId }: { leagues: DashboardLeague[]; summaries: Map<string, LeagueSummary>; userId?: string }) {
+export default function ActiveLeagues({
+	leagues,
+	summaries,
+	userId,
+	matchups
+}: {
+	leagues: DashboardLeague[];
+	summaries: Map<string, LeagueSummary>;
+	userId?: string;
+	/** Viewer's head-to-head matchup per league id (optional) */
+	matchups?: Map<string, MatchupMiniData>;
+}) {
 	return (
 		<div className='grid gap-3'>
 			{leagues.map((league, i) => (
-				<LeagueCard key={league._id} league={league} summary={summaries.get(league._id)} isCommissioner={!!userId && league.creatorId === userId} index={i} />
+				<LeagueCard
+					key={league._id}
+					league={league}
+					summary={summaries.get(league._id)}
+					isCommissioner={!!userId && league.creatorId === userId}
+					index={i}
+					matchup={matchups?.get(league._id)}
+					userId={userId}
+				/>
 			))}
 		</div>
 	);
