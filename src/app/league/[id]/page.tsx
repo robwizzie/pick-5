@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { BarChart3, BookOpen, Check, Copy, Gamepad2, History, LogOut, Settings, Share2, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
+import { ArrowLeft, BarChart3, BookOpen, Check, Copy, Gamepad2, History, LogOut, Radio, Settings, Share2, Sparkles, TrendingUp, Trophy, Users } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,8 @@ import { Recap } from '@/components/games/Recap';
 import LeagueStats from '@/components/league/LeagueStats';
 import { LeagueRulesDialog } from '@/components/league/LeagueRulesDialog';
 import { LeagueSettingsDialog } from '@/components/league/LeagueSettingsDialog';
+import { SweatView } from '@/components/league/SweatView';
+import { useWeekLiveStatus } from '@/components/sweat/useSweat';
 import { useWeek } from '@/contexts/WeekContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { cn } from '@/lib/utils';
@@ -31,7 +33,8 @@ interface League {
 	members?: string[];
 }
 
-type MobileView = 'picks' | 'results' | 'leaderboard' | 'stats' | 'recap';
+type MobileView = 'live' | 'picks' | 'results' | 'leaderboard' | 'stats' | 'recap';
+type DesktopTab = 'live' | 'picks' | 'results' | 'recap';
 
 const RECAP_POLL_MS = 120_000;
 
@@ -39,13 +42,22 @@ export default function LeagueDetails() {
 	const params = useParams();
 	const id = (params?.id as string) || '';
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	// Deep link from the dashboard's live banner: /league/{id}?view=live
+	const wantsLive = searchParams?.get('view') === 'live';
 	const { data: session } = useSession();
 	const { currentWeek, liveWeek } = useWeek();
 	// Mount only one layout so data components don't fetch and poll twice
 	const isDesktop = useMediaQuery('(min-width: 1024px)');
 
 	const [league, setLeague] = useState<League | null>(null);
-	const [mobileView, setMobileView] = useState<MobileView>('picks');
+	const [mobileView, setMobileView] = useState<MobileView>(wantsLive ? 'live' : 'picks');
+	const [desktopTab, setDesktopTab] = useState<DesktopTab>(wantsLive ? 'live' : 'picks');
+	const liveStatus = useWeekLiveStatus(currentWeek);
+	// The Live view exists while the viewed week's slate is underway (or when deep-linked)
+	const showLive = wantsLive || !!liveStatus?.sweatable;
+	// Open on Live once per page load when games are in progress — unless the user already chose a view
+	const autoView = useRef(wantsLive);
 	const [recapWeek, setRecapWeek] = useState<number | null>(null);
 
 	const [inviteOpen, setInviteOpen] = useState(false);
@@ -93,6 +105,28 @@ export default function LeagueDetails() {
 	useEffect(() => {
 		if (!recapWeek && mobileView === 'recap') setMobileView('picks');
 	}, [recapWeek, mobileView]);
+
+	useEffect(() => {
+		if (!liveStatus || autoView.current) return;
+		autoView.current = true;
+		if (liveStatus.liveGames > 0) {
+			setMobileView('live');
+			setDesktopTab('live');
+		}
+	}, [liveStatus]);
+
+	// Live went away (slate finished, or the user changed weeks): fall back to Results
+	useEffect(() => {
+		if (!liveStatus || showLive) return;
+		setMobileView(view => (view === 'live' ? 'results' : view));
+		setDesktopTab(tab => (tab === 'live' ? 'results' : tab));
+	}, [liveStatus, showLive]);
+
+	const chooseMobileView = (view: MobileView) => {
+		autoView.current = true;
+		setMobileView(view);
+		window.scrollTo({ top: 0, behavior: 'smooth' });
+	};
 
 	const isCommissioner = !!league && !!session?.user?.id && league.creatorId === session.user.id;
 
@@ -157,7 +191,8 @@ export default function LeagueDetails() {
 
 	const mobileTabs: Array<{ id: MobileView; label: string; icon: typeof Gamepad2 }> = [
 		{ id: 'picks', label: 'Picks', icon: Gamepad2 },
-		{ id: 'results', label: 'Results', icon: BarChart3 },
+		// Keep the bar at ≤ 5 items: while games are live, Live takes Results' slot (Results is linked from Live)
+		showLive ? { id: 'live', label: 'Live', icon: Radio } : { id: 'results', label: 'Results', icon: BarChart3 },
 		{ id: 'leaderboard', label: 'Board', icon: Trophy },
 		{ id: 'stats', label: 'Stats', icon: TrendingUp },
 		...(recapWeek ? [{ id: 'recap' as const, label: 'Recap', icon: Sparkles }] : [])
@@ -218,8 +253,20 @@ export default function LeagueDetails() {
 
 			{isDesktop ? (
 				<div className='grid grid-cols-[minmax(0,1fr)_380px] gap-6'>
-					<Tabs defaultValue='picks' className='min-w-0'>
-						<TabsList className={cn('grid w-full', recapWeek ? 'grid-cols-3' : 'grid-cols-2')}>
+					<Tabs
+						value={desktopTab}
+						onValueChange={value => {
+							autoView.current = true;
+							setDesktopTab(value as DesktopTab);
+						}}
+						className='min-w-0'
+					>
+						<TabsList className={cn('grid w-full', ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][(showLive ? 1 : 0) + (recapWeek ? 1 : 0)])}>
+							{showLive && (
+								<TabsTrigger value='live' className='data-[state=active]:text-live'>
+									<span className='live-dot' /> Live
+								</TabsTrigger>
+							)}
 							<TabsTrigger value='picks'>
 								<Gamepad2 /> Make picks
 							</TabsTrigger>
@@ -232,6 +279,11 @@ export default function LeagueDetails() {
 								</TabsTrigger>
 							)}
 						</TabsList>
+						{showLive && (
+							<TabsContent value='live'>
+								<SweatView leagueId={id} week={currentWeek} onShowResults={() => setDesktopTab('results')} onMakePicks={() => setDesktopTab('picks')} />
+							</TabsContent>
+						)}
 						<TabsContent value='picks'>
 							<WeeklyPicks />
 						</TabsContent>
@@ -252,7 +304,13 @@ export default function LeagueDetails() {
 			) : (
 				<>
 					<div key={mobileView} className='animate-fade-in'>
+						{mobileView === 'live' && <SweatView leagueId={id} week={currentWeek} onShowResults={() => chooseMobileView('results')} onMakePicks={() => chooseMobileView('picks')} />}
 						{mobileView === 'picks' && <WeeklyPicks />}
+						{mobileView === 'results' && showLive && (
+							<button type='button' onClick={() => chooseMobileView('live')} className='mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-semibold text-primary'>
+								<ArrowLeft className='h-4 w-4' /> Back to Live
+							</button>
+						)}
 						{mobileView === 'results' && <Results />}
 						{mobileView === 'leaderboard' && <Leaderboard />}
 						{mobileView === 'stats' && <LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />}
@@ -262,15 +320,13 @@ export default function LeagueDetails() {
 					<nav className='fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40' aria-label='League sections'>
 						<div className='glass-strong mx-auto flex max-w-md items-stretch gap-1 rounded-2xl p-1.5'>
 							{mobileTabs.map(({ id: tabId, label, icon: Icon }) => {
-								const active = mobileView === tabId;
+								// Results is a sub-view of Live while games are live
+								const active = mobileView === tabId || (tabId === 'live' && mobileView === 'results');
 								return (
 									<button
 										key={tabId}
 										type='button'
-										onClick={() => {
-											setMobileView(tabId);
-											window.scrollTo({ top: 0, behavior: 'smooth' });
-										}}
+										onClick={() => chooseMobileView(tabId)}
 										aria-current={active ? 'page' : undefined}
 										className={cn(
 											'flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-95',
