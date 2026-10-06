@@ -63,7 +63,7 @@ export function Nav() {
 		<nav
 			className={cn(
 				'sticky top-0 z-40 transition-[background-color,border-color,backdrop-filter] duration-300',
-				scrolled ? 'border-b border-white/[0.07] bg-background/70 backdrop-blur-xl' : 'border-b border-transparent'
+				scrolled ? 'border-b border-white/[0.07] bg-background/95 backdrop-blur-xl' : 'border-b border-transparent'
 			)}
 		>
 			<div className='mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8'>

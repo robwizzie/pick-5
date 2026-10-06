@@ -154,6 +154,15 @@
 			0 30px 80px -20px rgba(0, 0, 0, 0.9);
 	}
 
+	/* Solid floating bar (bottom nav, sticky action bars): never let content show through */
+	.dock {
+		background: hsl(var(--surface-raised));
+		@apply border border-white/10;
+		box-shadow:
+			0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+			0 -10px 40px -12px rgba(0, 0, 0, 0.9);
+	}
+
 	/* Card with a 1px brand-gradient border */
 	.gradient-border {
 		position: relative;

@@ -198,56 +198,66 @@ export default function LeagueDetails() {
 		...(recapWeek ? [{ id: 'recap' as const, label: 'Recap', icon: Sparkles }] : [])
 	];
 
+	// Header actions; `compact` renders icon-only buttons for phones
+	const headerActions = (compact: boolean) => (
+		<>
+			{isCommissioner && (
+				<Button onClick={openInvite} disabled={inviteLoading} size={compact ? 'icon' : 'sm'} className={cn(compact && 'h-9 w-9')} aria-label='Invite'>
+					<Share2 /> {!compact && 'Invite'}
+				</Button>
+			)}
+			<Button onClick={() => setRulesOpen(true)} size={compact ? 'icon' : 'sm'} variant='outline' className={cn(compact && 'h-9 w-9')} aria-label='Rules'>
+				<BookOpen /> {!compact && 'Rules'}
+			</Button>
+			<Button asChild size={compact ? 'icon' : 'sm'} variant='outline' className={cn(compact && 'h-9 w-9')}>
+				<Link href={`/league/${id}/history`} aria-label='History'>
+					<History /> {!compact && 'History'}
+				</Link>
+			</Button>
+			{isCommissioner ? (
+				<Button onClick={() => setSettingsOpen(true)} size='icon' variant='outline' className='h-9 w-9' aria-label='League settings'>
+					<Settings />
+				</Button>
+			) : (
+				<Button onClick={() => setLeaveOpen(true)} size={compact ? 'icon' : 'sm'} variant='ghost' className={cn('text-muted-foreground hover:text-destructive', compact && 'h-9 w-9')} aria-label='Leave league'>
+					<LogOut /> {!compact && 'Leave'}
+				</Button>
+			)}
+		</>
+	);
+
 	return (
 		<div className='mx-auto w-full max-w-7xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-16'>
 			{/* League header */}
-			<header className='glass relative mb-4 overflow-hidden rounded-3xl p-4 sm:mb-6 sm:p-7'>
+			<header className='glass relative mb-4 overflow-hidden rounded-3xl px-4 py-3.5 sm:mb-6 sm:p-7'>
 				<div className='pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-primary/20 blur-3xl' />
 				<div className='pointer-events-none absolute -bottom-24 right-0 h-56 w-56 rounded-full bg-accent-2/15 blur-3xl' />
 				<div className='pointer-events-none absolute inset-x-0 top-0 h-px bg-brand-gradient opacity-60' />
 
-				<div className='relative flex flex-col gap-3 sm:gap-5 md:flex-row md:items-end md:justify-between'>
+				<div className='relative flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-5'>
 					<div className='min-w-0'>
-						<div className='mb-2 flex flex-wrap items-center gap-2 sm:mb-3'>
-							<Pill tone={league.mode === 'steve' ? 'accent' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : 'Standard'}</Pill>
-							{league.members && (
-								<Pill>
-									<Users className='h-3 w-3' /> {league.members.length} members
-								</Pill>
-							)}
-							{isCommissioner && (
-								<Pill tone='warning' className='hidden sm:inline-flex'>
-									Commissioner
-								</Pill>
-							)}
+						<div className='flex items-center justify-between gap-2 md:mb-3 md:justify-start'>
+							<div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2'>
+								<Pill tone={league.mode === 'steve' ? 'accent' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : 'Standard'}</Pill>
+								{league.members && (
+									<Pill>
+										<Users className='h-3 w-3' /> {league.members.length}
+										<span className='hidden sm:inline'> members</span>
+									</Pill>
+								)}
+								{isCommissioner && (
+									<Pill tone='warning' className='hidden sm:inline-flex'>
+										Commissioner
+									</Pill>
+								)}
+							</div>
+							{/* Phones: icon actions share the badge row so the header stays short */}
+							<div className='flex shrink-0 gap-1.5 md:hidden'>{headerActions(true)}</div>
 						</div>
-						<h1 className='display-heading break-words text-[2rem] sm:text-6xl'>{league.name}</h1>
+						<h1 className='display-heading mt-1 break-words text-[1.9rem] md:mt-0 md:text-6xl'>{league.name}</h1>
 					</div>
 
-					<div className='flex gap-2'>
-						{isCommissioner && (
-							<Button onClick={openInvite} disabled={inviteLoading} size='sm'>
-								<Share2 /> Invite
-							</Button>
-						)}
-						<Button onClick={() => setRulesOpen(true)} size='sm' variant='outline' aria-label='Rules'>
-							<BookOpen /> <span className='hidden sm:inline'>Rules</span>
-						</Button>
-						<Button asChild size='sm' variant='outline'>
-							<Link href={`/league/${id}/history`} aria-label='History'>
-								<History /> <span className='hidden sm:inline'>History</span>
-							</Link>
-						</Button>
-						{isCommissioner ? (
-							<Button onClick={() => setSettingsOpen(true)} size='icon' variant='outline' className='h-9 w-9' aria-label='League settings'>
-								<Settings />
-							</Button>
-						) : (
-							<Button onClick={() => setLeaveOpen(true)} size='sm' variant='ghost' className='text-muted-foreground hover:text-destructive'>
-								<LogOut /> Leave
-							</Button>
-						)}
-					</div>
+					<div className='hidden gap-2 md:flex'>{headerActions(false)}</div>
 				</div>
 			</header>
 
@@ -318,7 +328,7 @@ export default function LeagueDetails() {
 					</div>
 
 					<nav className='fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40' aria-label='League sections'>
-						<div className='glass-strong mx-auto flex max-w-md items-stretch gap-1 rounded-2xl p-1.5'>
+						<div className='dock mx-auto flex max-w-md items-stretch gap-1 rounded-2xl p-1.5'>
 							{mobileTabs.map(({ id: tabId, label, icon: Icon }) => {
 								// Results is a sub-view of Live while games are live
 								const active = mobileView === tabId || (tabId === 'live' && mobileView === 'results');
