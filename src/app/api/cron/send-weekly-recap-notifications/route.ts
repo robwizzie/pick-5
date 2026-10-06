@@ -10,6 +10,7 @@ import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { seasonPickFilter, seasonWindow } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -39,9 +40,6 @@ export async function GET(req: Request) {
 
 		await connectDB();
 
-		const now = new Date();
-		console.log(`[Weekly Recap Notifications] Running at ${now.toISOString()}`);
-
 		// Check if season can still send notifications
 		// This allows week 18 recap notifications even if ESPN reports week 19 (playoffs)
 		const seasonStatus = await SeasonService.getSeasonStatus();
@@ -56,6 +54,12 @@ export async function GET(req: Request) {
 		// Get the completed week (use auto-advance since we're scoring the previous week)
 		const currentWeek = await NFLService.getCurrentWeek(true);
 		const completedWeek = currentWeek - 1;
+		const season = seasonStatus.seasonYear;
+		const seasonFilter = seasonPickFilter(season);
+		// Recap markers are keyed per season; legacy markers ('week-N-recap') count only
+		// if sent during this season, so last season's week N doesn't suppress this one.
+		const recapMarkerId = `${season}-week-${completedWeek}-recap`;
+		const legacyRecapMarkerId = `week-${completedWeek}-recap`;
 
 		if (completedWeek < 1) {
 			console.log('[Weekly Recap Notifications] No previous week to recap yet');
@@ -71,7 +75,7 @@ export async function GET(req: Request) {
 		console.log(`[Weekly Recap Notifications] Sending recaps for Week ${completedWeek}`);
 
 		// Get game results for the completed week
-		const games = await NFLService.getWeeklyGames(completedWeek);
+		const games = await NFLService.getWeeklyGames(completedWeek, season);
 		const gameResults = games.map(game => ({
 			id: game.id,
 			homeScore: game.home.score || 0,
@@ -135,7 +139,8 @@ export async function GET(req: Request) {
 							userId: user._id.toString(),
 							leagueId,
 							week: completedWeek,
-							notificationType: 'weekly_recap'
+							notificationType: 'weekly_recap',
+							$or: [{ gameId: recapMarkerId }, { gameId: legacyRecapMarkerId, sentAt: { $gte: seasonWindow(season).start } }]
 						});
 
 						if (alreadySent) continue;
@@ -143,7 +148,8 @@ export async function GET(req: Request) {
 						// Get all picks for this week and league
 						const allPicks = await Pick.find({
 							week: completedWeek,
-							leagueId
+							leagueId,
+							...seasonFilter
 						}).lean();
 
 						if (allPicks.length === 0) continue;
@@ -179,7 +185,8 @@ export async function GET(req: Request) {
 							const allUserPicks = await Pick.find({
 								userId: pick.userId,
 								leagueId,
-								week: { $lte: completedWeek }
+								week: { $lte: completedWeek },
+								...seasonFilter
 							}).lean();
 
 							let seasonPoints = 0;
@@ -189,7 +196,7 @@ export async function GET(req: Request) {
 								// Check cache first, fetch if not cached
 								let weekGameResults = gameResultsCache.get(weekNum);
 								if (!weekGameResults) {
-									const weekGames = await NFLService.getWeeklyGames(weekNum);
+									const weekGames = await NFLService.getWeeklyGames(weekNum, season);
 									weekGameResults = weekGames.map(g => ({
 										id: g.id,
 										homeScore: g.home.score || 0,
@@ -255,7 +262,6 @@ export async function GET(req: Request) {
 								);
 
 								notificationsSent++;
-								console.log(`[Weekly Recap Notifications] Sent to ${user.email} for league ${league.name}`);
 							} catch (pushError: any) {
 								if (pushError.statusCode === 410) {
 									await PushSubscription.deleteOne({ _id: subscription._id });
@@ -270,7 +276,7 @@ export async function GET(req: Request) {
 						try {
 							await GameNotification.create({
 								userId: user._id.toString(),
-								gameId: `week-${completedWeek}-recap`,
+								gameId: recapMarkerId,
 								leagueId,
 								week: completedWeek,
 								notificationType: 'weekly_recap'

@@ -5,6 +5,7 @@ import { User } from '@/models/User';
 import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
 import { GET as getOddsSnapshot } from '@/app/api/odds/snapshot/route';
+import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,8 @@ export async function GET(req: Request) {
 		const { searchParams } = new URL(req.url);
 		const week = parseInt(searchParams.get('week') || '0', 10);
 		const leagueId = searchParams.get('leagueId');
+		// Optional ?season=YYYY; defaults to the current season
+		const season = parseSeasonParam(searchParams.get('season'));
 
 		if (!leagueId || !week) {
 			return NextResponse.json({ error: 'League ID and week are required' }, { status: 400 });
@@ -28,7 +31,7 @@ export async function GET(req: Request) {
 		const leagueMode = (league as any).mode || 'standard';
 
 		// Get all picks for this week and league
-		const allPicksForWeek = await Pick.find({ week, leagueId }).lean();
+		const allPicksForWeek = await Pick.find({ week, leagueId, ...seasonPickFilter(season) }).lean();
 
 		// If no picks exist for this week, return early
 		if (allPicksForWeek.length === 0) {
@@ -39,7 +42,7 @@ export async function GET(req: Request) {
 		}
 
 		// Get game results for the week
-		let games = await NFLService.getWeeklyGames(week);
+		let games = await NFLService.getWeeklyGames(week, season);
 
 		// Fetch odds from snapshot for Standard mode leagues
 		if (leagueMode === 'standard') {

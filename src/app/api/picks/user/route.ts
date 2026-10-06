@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { authOptions } from '@/lib/auth';
+import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,8 @@ export async function GET(req: Request) {
 		const week = searchParams.get('week');
 		const leagueId = searchParams.get('leagueId');
 		const userId = searchParams.get('userId') || (session.user as any).id;
+		// Optional ?season=YYYY; defaults to the current season
+		const seasonFilter = seasonPickFilter(parseSeasonParam(searchParams.get('season')));
 
 		await connectDB();
 
@@ -30,7 +33,8 @@ export async function GET(req: Request) {
 			const picks = await Pick.findOne({
 				userId,
 				week: parseInt(week, 10),
-				leagueId
+				leagueId,
+				...seasonFilter
 			});
 
 			if (!picks) {
@@ -51,14 +55,15 @@ export async function GET(req: Request) {
 		if (leagueId) {
 			const picks = await Pick.find({
 				userId,
-				leagueId
+				leagueId,
+				...seasonFilter
 			}).sort({ week: 1 });
 
 			return NextResponse.json(picks);
 		}
 
 		// If no params provided, return all picks for the user
-		const picks = await Pick.find({ userId }).sort({ week: 1 });
+		const picks = await Pick.find({ userId, ...seasonFilter }).sort({ week: 1 });
 		return NextResponse.json(picks);
 	} catch (error) {
 		console.error('Error fetching user picks:', error);

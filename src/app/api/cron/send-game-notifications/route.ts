@@ -9,6 +9,7 @@ import webPush from 'web-push';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -60,8 +61,6 @@ export async function GET(req: Request) {
 
 		await connectDB();
 
-		const now = new Date();
-		console.log(`[Game Notifications] Running at ${now.toISOString()}`);
 
 		// Check if season can still send notifications
 		// This allows week 18 game notifications even if ESPN reports week 19 (playoffs)
@@ -85,7 +84,7 @@ export async function GET(req: Request) {
 		}
 
 		// Get all games for current week
-		const games = await NFLService.getWeeklyGames(currentWeek);
+		const games = await NFLService.getWeeklyGames(currentWeek, seasonStatus.seasonYear);
 
 		// Find newly completed games (status = final or post)
 		const completedGames: GameResult[] = games
@@ -114,16 +113,13 @@ export async function GET(req: Request) {
 			return NextResponse.json({ message: 'No completed games', notificationsSent: 0 });
 		}
 
-		console.log(`[Game Notifications] Found ${completedGames.length} completed games`);
-
 		// Get all picks for these games
 		const gameIds = completedGames.map(g => g.gameId);
 		const allPicks = await Pick.find({
 			week: currentWeek,
-			'picks.gameId': { $in: gameIds }
+			'picks.gameId': { $in: gameIds },
+			...seasonPickFilter(seasonStatus.seasonYear)
 		}).lean();
-
-		console.log(`[Game Notifications] Found ${allPicks.length} picks for completed games`);
 
 		// Build list of user-game-league combinations that need notifications
 		const notificationsToSend: UserGamePick[] = [];
@@ -214,7 +210,6 @@ export async function GET(req: Request) {
 				const subscriptions = await PushSubscription.find({ userId });
 
 				if (subscriptions.length === 0) {
-					console.log(`[Game Notifications] No subscriptions for user ${userId}`);
 					continue;
 				}
 
@@ -269,7 +264,6 @@ export async function GET(req: Request) {
 						);
 
 						notificationsSent++;
-						console.log(`[Game Notifications] Sent to user ${userId} for league ${leagueName}`);
 					} catch (pushError: any) {
 						if (pushError.statusCode === 410) {
 							await PushSubscription.deleteOne({ _id: subscription._id });
