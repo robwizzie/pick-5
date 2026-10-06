@@ -587,30 +587,32 @@ function TrendChart({ type, series, highlighted }: { type: 'bar' | 'line'; serie
 				</div>
 			)}
 
-			{/* Table view for assistive tech */}
-			<table className='sr-only'>
-				<caption>Weekly points</caption>
-				<thead>
-					<tr>
-						<th scope='col'>Player</th>
-						{weeks.map(w => (
-							<th key={w} scope='col'>
-								Week {w}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>
-					{series.map(s => (
-						<tr key={s.id}>
-							<th scope='row'>{s.player}</th>
+			{/* Table view for assistive tech (tables ignore sr-only's 1px width, so a wrapper hides it) */}
+			<div className='sr-only'>
+				<table>
+					<caption>Weekly points</caption>
+					<thead>
+						<tr>
+							<th scope='col'>Player</th>
 							{weeks.map(w => (
-								<td key={w}>{valueAt(s, w)}</td>
+								<th key={w} scope='col'>
+									Week {w}
+								</th>
 							))}
 						</tr>
-					))}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{series.map(s => (
+							<tr key={s.id}>
+								<th scope='row'>{s.player}</th>
+								{weeks.map(w => (
+									<td key={w}>{valueAt(s, w)}</td>
+								))}
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	);
 }

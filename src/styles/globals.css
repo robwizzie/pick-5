@@ -70,6 +70,8 @@
 	body {
 		@apply bg-background text-foreground font-sans antialiased;
 		min-height: 100dvh;
+		/* Never scroll sideways on phones; clip (unlike hidden) keeps position: sticky working */
+		overflow-x: clip;
 		font-feature-settings: 'cv11', 'ss01', 'ss03';
 	}
 
