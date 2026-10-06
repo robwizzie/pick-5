@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
@@ -12,6 +14,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
 	try {
+		const session = await getServerSession(authOptions);
+		const viewerId = session?.user?.id;
+		if (!viewerId) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
 		const { searchParams } = new URL(req.url);
 		const week = parseInt(searchParams.get('week') || '0', 10);
 		const leagueId = searchParams.get('leagueId');
@@ -29,6 +37,9 @@ export async function GET(req: Request) {
 		const league = await League.findById(leagueId);
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
+		}
+		if (!league.members.map(String).includes(viewerId)) {
+			return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
 		}
 		const leagueMode = (league as any).mode || 'standard';
 
@@ -117,6 +128,9 @@ export async function GET(req: Request) {
 		const resultsWithUsernames = allUsers.map(user => {
 			const result = weeklyResultsMap.get(user._id.toString());
 			const hasPicks = userIdsWithPicks.has(user._id.toString());
+			// Don't reveal other members' picks for games that haven't kicked off
+			const isViewer = user._id.toString() === viewerId;
+			const pickedTeams = (result?.pickedTeams || []).filter((t: { gameStatus: string }) => isViewer || t.gameStatus !== 'scheduled');
 			return {
 				userId: user._id.toString(),
 				player: user.name || 'Unknown Player',
@@ -125,7 +139,7 @@ export async function GET(req: Request) {
 				correct: result?.correct || 0,
 				tfsPoints: result?.tfsPoints || 0,
 				hasPicks,
-				pickedTeams: result?.pickedTeams || [] // Include picked teams
+				pickedTeams
 			};
 		});
 
@@ -137,20 +151,22 @@ export async function GET(req: Request) {
 		allPicksForSeason.forEach(p => weekSet.add(p.week));
 		const uniqueWeeks = Array.from(weekSet);
 
-		// Fetch game results for all weeks (cache them)
-		const gameResultsByWeek = new Map();
-		for (const weekNum of uniqueWeeks) {
-			const weekGames = await NFLService.getWeeklyGames(weekNum, season);
-			const results = weekGames.map(game => ({
-				id: game.id,
-				homeScore: game.home.score || 0,
-				awayScore: game.away.score || 0,
-				homeTeam: game.home.team,
-				awayTeam: game.away.team,
-				status: game.status // Include game status for accurate scoring
-			}));
-			gameResultsByWeek.set(weekNum, results);
-		}
+		// Fetch game results for every week in parallel (reusing the requested week's)
+		const weekResultsList = await Promise.all(
+			uniqueWeeks.map(async weekNum => {
+				if (weekNum === week) return gameResults;
+				const weekGames = await NFLService.getWeeklyGames(weekNum, season);
+				return weekGames.map(game => ({
+					id: game.id,
+					homeScore: game.home.score || 0,
+					awayScore: game.away.score || 0,
+					homeTeam: game.home.team,
+					awayTeam: game.away.team,
+					status: game.status
+				}));
+			})
+		);
+		const gameResultsByWeek = new Map(uniqueWeeks.map((weekNum, i) => [weekNum, weekResultsList[i]]));
 
 		// Re-calculate season stats for each user
 		const seasonStatsMap = new Map();
@@ -226,6 +242,7 @@ export async function GET(req: Request) {
 		const seasonStatsFormatted = allUsers.map(user => {
 			const stat = seasonStatsMap.get(user._id.toString());
 			return {
+				userId: user._id.toString(),
 				player: user.name || 'Unknown Player',
 				image: user.image || null,
 				totalPoints: stat?.totalPoints || 0,
