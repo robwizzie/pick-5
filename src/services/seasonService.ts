@@ -251,7 +251,8 @@ export class SeasonService {
 					pick.tfsGame,
 					pick.tfsScore,
 					league.mode || 'standard',
-					calculatePointsFromOdds
+					calculatePointsFromOdds,
+				pick.lockGameId
 				);
 
 				totalPoints += weeklyPoints;

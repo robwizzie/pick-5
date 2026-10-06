@@ -36,6 +36,7 @@ interface LeanPickDoc {
 	picks: Array<{ gameId: string; team: string; isHome: boolean; odds?: number }>;
 	tfsGame?: string | null;
 	tfsScore?: number | null;
+	lockGameId?: string | null;
 }
 
 export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Promise<WeeklyRecapJobResult> {
@@ -84,7 +85,7 @@ export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Pro
 
 	// Season-to-date picks for these leagues, in one query; results per week fetched once.
 	const seasonPicks = (await Pick.find({ leagueId: { $in: leagueIds }, week: { $lte: week }, ...seasonPickFilter(season) })
-		.select('userId leagueId week picks tfsGame tfsScore')
+		.select('userId leagueId week picks tfsGame tfsScore lockGameId')
 		.lean()) as unknown as LeanPickDoc[];
 	const resultsByWeek = new Map<number, GameResultRow[]>([[week, toGameResults(completed.games)]]);
 	const weeksNeeded = Array.from(new Set(seasonPicks.map(p => p.week))).filter(w => !resultsByWeek.has(w));
@@ -112,7 +113,7 @@ export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Pro
 		const totals = new Map<string, { weekly: number; season: number; pickedThisWeek: boolean }>();
 		for (const doc of leaguePicks) {
 			const userId = String(doc.userId);
-			const { weeklyPoints } = ScoringService.calculateWeekScore(doc.picks, resultsByWeek.get(doc.week) ?? [], doc.tfsGame ?? null, doc.tfsScore ?? null, mode, calculatePointsFromOdds);
+			const { weeklyPoints } = ScoringService.calculateWeekScore(doc.picks, resultsByWeek.get(doc.week) ?? [], doc.tfsGame ?? null, doc.tfsScore ?? null, mode, calculatePointsFromOdds, doc.lockGameId);
 			const row = totals.get(userId) ?? { weekly: 0, season: 0, pickedThisWeek: false };
 			row.season += weeklyPoints;
 			if (doc.week === week) {

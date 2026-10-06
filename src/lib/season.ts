@@ -3,6 +3,7 @@
 import { connectDB, isWorkersRuntime } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { getCurrentSeasonYear } from '@/lib/seasonYear';
+import { NFLService } from '@/services/nflService';
 
 export { getCurrentSeasonYear };
 
@@ -33,6 +34,65 @@ export function seasonPickFilter(season: number): SeasonPickFilter {
 	return {
 		$or: [{ season }, { season: { $exists: false }, createdAt: { $gte: start, $lt: end } }]
 	};
+}
+
+/** Season a date falls in: before Mar 1 (UTC) belongs to the previous year's season. */
+function seasonFromDate(date: Date): number {
+	return date.getUTCMonth() < 2 ? date.getUTCFullYear() - 1 : date.getUTCFullYear();
+}
+
+/**
+ * Tag legacy picks with their season. The creation date gives a first guess, which is then
+ * confirmed against that season's ESPN schedule (game ids are unique per season), trying the
+ * neighbouring seasons if it doesn't match. Falls back to the date when ESPN can't confirm.
+ */
+async function backfillSeasons(): Promise<number> {
+	type LegacyDoc = { _id: { getTimestamp(): Date }; week?: number; createdAt?: Date; picks?: Array<{ gameId?: string }> };
+	const legacy = (await Pick.collection
+		.find({ season: { $exists: false } }, { projection: { week: 1, createdAt: 1, 'picks.gameId': 1 } })
+		.toArray()) as unknown as LegacyDoc[];
+	if (legacy.length === 0) return 0;
+
+	const current = getCurrentSeasonYear();
+	const schedules = new Map<string, Promise<Set<string>>>();
+	const scheduleFor = (season: number, week: number) => {
+		const key = `${season}:${week}`;
+		if (!schedules.has(key)) {
+			schedules.set(
+				key,
+				NFLService.getWeeklyGames(week, season).then(
+					games => new Set(games.map(g => g.id)),
+					() => new Set<string>()
+				)
+			);
+		}
+		return schedules.get(key)!;
+	};
+
+	const guessOf = (doc: LegacyDoc) => seasonFromDate(doc.createdAt ? new Date(doc.createdAt) : doc._id.getTimestamp());
+	// Warm the likely schedules in parallel; neighbours are fetched only when needed
+	await Promise.all(legacy.filter(d => d.week).map(d => scheduleFor(guessOf(d), d.week!)));
+
+	const ops = [];
+	for (const doc of legacy) {
+		const guess = guessOf(doc);
+		const ids = (doc.picks ?? []).map(p => p.gameId).filter((id): id is string => !!id);
+		let season = guess;
+		if (doc.week && ids.length) {
+			for (const candidate of [guess, guess - 1, guess + 1]) {
+				if (candidate > current) continue;
+				const schedule = await scheduleFor(candidate, doc.week);
+				if (ids.some(id => schedule.has(id))) {
+					season = candidate;
+					break;
+				}
+			}
+		}
+		ops.push({ updateOne: { filter: { _id: doc._id, season: { $exists: false } }, update: { $set: { season } } } });
+	}
+
+	const result = await Pick.collection.bulkWrite(ops as Parameters<typeof Pick.collection.bulkWrite>[0], { ordered: false });
+	return result.modifiedCount;
 }
 
 export interface PickSeasonMigrationResult {
@@ -82,25 +142,7 @@ export async function runPickSeasonMigration(): Promise<PickSeasonMigrationResul
 	}
 
 	let backfilled = 0;
-	if (needsBackfill) {
-		// Season from createdAt (fallback: ObjectId timestamp); before Mar 1 (UTC) -> previous year.
-		const date = { $ifNull: [{ $toDate: '$createdAt' }, { $toDate: '$_id' }] };
-		const result = await Pick.collection.updateMany({ season: { $exists: false } }, [
-			{
-				$set: {
-					season: {
-						$let: {
-							vars: { d: date },
-							in: {
-								$cond: [{ $lt: [{ $month: '$$d' }, 3] }, { $subtract: [{ $year: '$$d' }, 1] }, { $year: '$$d' }]
-							}
-						}
-					}
-				}
-			}
-		]);
-		backfilled = result.modifiedCount;
-	}
+	if (needsBackfill) backfilled = await backfillSeasons();
 
 	let droppedLegacyIndex = false;
 	if (legacyIndexName) {

@@ -40,6 +40,7 @@ interface LeanPickDoc {
 	picks: Array<{ gameId: string; team: string; opponent: string; isHome: boolean; odds?: number }>;
 	tfsGame?: string | null;
 	tfsScore?: number | null;
+	lockGameId?: string | null;
 }
 
 interface LeaderboardEntry {
@@ -100,7 +101,7 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 		.lean()) as unknown as Array<{ _id: unknown; name: string; mode?: string }>;
 	const leagueIds = leagues.map(l => String(l._id));
 	const allPicks = (await Pick.find({ week, leagueId: { $in: leagueIds }, ...seasonPickFilter(season) })
-		.select('userId leagueId picks tfsGame tfsScore')
+		.select('userId leagueId picks tfsGame tfsScore lockGameId')
 		.lean()) as unknown as LeanPickDoc[];
 
 	const pickerIds = Array.from(new Set(allPicks.map(p => String(p.userId))));
@@ -127,7 +128,7 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 
 		const mode = league.mode || 'standard';
 		const scored: ScoredEntry[] = leaguePicks.map(doc => {
-			const score = ScoringService.calculateWeekScore(doc.picks, gameResults, doc.tfsGame ?? null, doc.tfsScore ?? null, mode, calculatePointsFromOdds);
+			const score = ScoringService.calculateWeekScore(doc.picks, gameResults, doc.tfsGame ?? null, doc.tfsScore ?? null, mode, calculatePointsFromOdds, doc.lockGameId);
 			return {
 				doc,
 				isCorrect: score.scoredPicks.map(p => p.isCorrect ?? null),
@@ -211,7 +212,7 @@ function pickResults(mode: string, entry: ScoredEntry): PickResult[] {
 			opponent: pick.opponent,
 			isCorrect,
 			odds: typeof pick.odds === 'number' ? pick.odds : undefined,
-			points: isCorrect ? pointsForCorrectPick(mode, pick.odds) : 0
+			points: isCorrect ? pointsForCorrectPick(mode, pick.odds, entry.doc.lockGameId === pick.gameId) : 0
 		};
 	});
 }

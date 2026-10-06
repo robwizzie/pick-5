@@ -83,7 +83,8 @@ export async function GET(req: Request) {
 				pick.tfsGame,
 				pick.tfsScore,
 				leagueMode,
-				calculatePointsFromOdds
+				calculatePointsFromOdds,
+			pick.lockGameId
 			);
 
 			// Store weekly stats
@@ -117,7 +118,8 @@ export async function GET(req: Request) {
 					pick.tfsGame,
 					pick.tfsScore,
 					leagueMode,
-					calculatePointsFromOdds
+					calculatePointsFromOdds,
+				pick.lockGameId
 				);
 
 				if (pick.userId.toString() === session.user.id) {
