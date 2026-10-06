@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { toast } from 'sonner';
-import { ArrowLeftRight, CalendarX, Check, Eye, EyeOff, Lock, LogIn, Pencil, Target, TrendingUp, X } from 'lucide-react';
+import { ArrowLeftRight, CalendarX, Check, Eye, EyeOff, Lock, LogIn, Pencil, RefreshCw, Target, TrendingUp, TriangleAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -671,6 +671,10 @@ export function WeeklyPicks() {
 	const lockedPick = activeLock ? picks.find(p => p.gameId === activeLock) : undefined;
 	const tfsReady = !!tfsGame && !!tfsScore && !tfsError;
 	const canSubmit = slateFull && !isSaving && (!isSteve || tfsReady);
+	// Saved picks auto-save; show where that stands instead of a redundant Update button
+	const saved = lastSavedRef.current;
+	const isDirty = !!saved && JSON.stringify({ picks, tfsGame, tfsScore, lockGameId: activeLock }) !== JSON.stringify({ picks: saved.picks, tfsGame: saved.tfsGame, tfsScore: saved.tfsScore, lockGameId: saved.lockGameId });
+	const saveState: 'saving' | 'saved' | 'incomplete' | 'pending' = isSaving ? 'saving' : !isDirty ? 'saved' : canSubmit ? 'pending' : 'incomplete';
 	const showActionBar = !submitted && (pickCount > 0 || !!swapCandidate);
 
 	const renderPickCard = (pick: Pick, index: number, game: Game) => {
@@ -745,13 +749,14 @@ export function WeeklyPicks() {
 	// When 5 picks are made, only show picked games to reduce clutter (unless the user asks for all)
 	const gamesToShow = slateFull && !showAllGames ? games.filter(g => picks.some(p => p.gameId === g.id)) : games;
 	const groups = [
-		{ key: 'live', title: 'Live', live: true, games: gamesToShow.filter(g => isLiveStatus(g.status)) },
+		// Pickable games first; started games can't be picked any more
 		{ key: 'upcoming', title: 'Upcoming', live: false, games: gamesToShow.filter(g => isUpcomingStatus(g.status)) },
+		{ key: 'live', title: 'Live', live: true, games: gamesToShow.filter(g => isLiveStatus(g.status)) },
 		{ key: 'final', title: 'Final', live: false, games: gamesToShow.filter(g => isFinalStatus(g.status)) }
 	].filter(group => group.games.length > 0);
 
 	const actionHint = (() => {
-		if (!slateFull) return `Pick ${MAX_PICKS - pickCount} more game${MAX_PICKS - pickCount === 1 ? '' : 's'}`;
+		if (!slateFull) return hasExistingPicks ? `Pick ${MAX_PICKS - pickCount} more to save your changes` : `Pick ${MAX_PICKS - pickCount} more game${MAX_PICKS - pickCount === 1 ? '' : 's'}`;
 		if (isSteve) {
 			if (!tfsGame) return 'Choose your TFS game below';
 			if (!tfsScore || tfsError) return 'Enter your total score below';
@@ -767,12 +772,13 @@ export function WeeklyPicks() {
 			{/* Header */}
 			<div className='glass relative overflow-hidden rounded-2xl p-4 sm:p-5'>
 				<div className='pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary/20 blur-3xl' />
-				<div className='relative flex items-end justify-between gap-3'>
+				<div className='relative flex items-center justify-between gap-3'>
 					<div className='min-w-0'>
-						<p className='eyebrow mb-1.5'>{submitted ? 'Your slate' : 'Make your picks'}</p>
-						<h2 className='display-heading text-[2.5rem] sm:text-5xl'>
+						<p className='eyebrow mb-1'>{submitted ? 'Your slate' : 'Make your picks'}</p>
+						<h2 className='font-display text-2xl font-extrabold uppercase italic leading-none tracking-tight sm:text-4xl'>
 							Week <span className='text-primary tabular'>{currentWeek}</span>
 						</h2>
+						{!submitted && <p className='mt-1.5 text-xs text-muted-foreground'>Tap a team to pick it. You can change picks until your first picked game kicks off.</p>}
 					</div>
 					<div className='flex shrink-0 flex-col items-end gap-1.5'>
 						{isSteve ? (
@@ -784,21 +790,14 @@ export function WeeklyPicks() {
 								<TrendingUp className='h-3 w-3' /> Standard · Odds
 							</Pill>
 						)}
-						{submitted ? (
+						{submitted && (
 							<Pill tone='muted'>
 								<Lock className='h-3 w-3' /> Locked
 							</Pill>
-						) : (
-							hasExistingPicks && (
-								<span className='flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground'>
-									<span className={cn('h-1.5 w-1.5 rounded-full', isSaving ? 'animate-pulse bg-warning' : 'bg-accent')} />
-									{isSaving ? 'Saving…' : 'Saved'}
-								</span>
-							)
 						)}
 					</div>
 				</div>
-				<div className='relative mt-4 flex items-center gap-3'>
+				<div className='relative mt-3 flex items-center gap-3'>
 					<PickProgress count={pickCount} className='flex-1' />
 					<span className='text-xs font-semibold text-muted-foreground tabular'>
 						<span className='text-foreground'>{pickCount}</span>/{MAX_PICKS}
@@ -1032,8 +1031,8 @@ export function WeeklyPicks() {
 
 			{/* Sticky action bar: above the mobile bottom nav, pinned to the column bottom on desktop */}
 			{showActionBar && (
-				<div className='sticky bottom-24 z-30 animate-slide-up lg:bottom-4'>
-					<div className='glass-strong rounded-2xl p-3 sm:p-4'>
+				<div className='sticky bottom-[5.25rem] z-30 animate-slide-up lg:bottom-4'>
+					<div className='dock rounded-2xl p-2.5 pl-4 sm:p-4'>
 						{swapCandidate ? (
 							<div className='space-y-2.5'>
 								<div className='flex items-center justify-between gap-2'>
@@ -1072,7 +1071,7 @@ export function WeeklyPicks() {
 							<div className='flex items-center gap-3'>
 								<div className='min-w-0 flex-1'>
 									<div className='flex items-baseline gap-2'>
-										<span className='font-display text-2xl font-extrabold italic leading-none tabular'>
+										<span className='font-display text-[1.65rem] font-extrabold italic leading-none tabular'>
 											{pickCount}
 											<span className='text-muted-foreground'>/{MAX_PICKS}</span>
 										</span>
@@ -1084,15 +1083,33 @@ export function WeeklyPicks() {
 											</span>
 										)}
 									</div>
-									<PickProgress count={pickCount} className='mt-2' />
-									<p className={cn('mt-1.5 flex min-w-0 items-center gap-1 text-[11px]', actionHint === LOCK_HINT ? 'text-warning' : 'text-muted-foreground')}>
-										{actionHint === LOCK_HINT && <Lock className='h-3 w-3 shrink-0' aria-hidden />}
-										<span className='truncate'>{actionHint}</span>
-									</p>
+									<PickProgress count={pickCount} className='mt-1.5' />
+									{/* Only hints that add something beyond the count above */}
+									{(slateFull || (hasExistingPicks && isDirty)) && (
+										<p className={cn('mt-1 flex min-w-0 items-center gap-1 text-[11px]', actionHint === LOCK_HINT ? 'text-warning' : 'text-muted-foreground')}>
+											{actionHint === LOCK_HINT && <Lock className='h-3 w-3 shrink-0' aria-hidden />}
+											<span className='truncate'>{actionHint}</span>
+										</p>
+									)}
 								</div>
-								<Button size='lg' className='shrink-0 px-5' disabled={!canSubmit} onClick={handleSubmit}>
-									{isSaving ? 'Saving…' : hasExistingPicks ? 'Update' : 'Submit'}
-								</Button>
+								{hasExistingPicks ? (
+									<span
+										role='status'
+										className={cn(
+											'inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold uppercase tracking-wider',
+											saveState === 'saved' && 'bg-accent/10 text-accent',
+											(saveState === 'saving' || saveState === 'pending') && 'bg-white/[0.05] text-muted-foreground',
+											saveState === 'incomplete' && 'bg-warning/10 text-warning'
+										)}
+									>
+										{saveState === 'saved' ? <Check className='h-4 w-4' /> : saveState === 'incomplete' ? <TriangleAlert className='h-4 w-4' /> : <RefreshCw className='h-3.5 w-3.5 animate-spin' />}
+										{saveState === 'saved' ? 'Saved' : saveState === 'incomplete' ? 'Not saved' : 'Saving'}
+									</span>
+								) : (
+									<Button className='h-11 shrink-0 px-5' disabled={!canSubmit} onClick={handleSubmit}>
+										{isSaving ? 'Saving…' : 'Submit'}
+									</Button>
+								)}
 							</div>
 						)}
 					</div>
