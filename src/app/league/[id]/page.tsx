@@ -166,23 +166,27 @@ export default function LeagueDetails() {
 	return (
 		<div className='mx-auto w-full max-w-7xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-16'>
 			{/* League header */}
-			<header className='glass relative mb-6 overflow-hidden rounded-3xl p-5 sm:p-7'>
+			<header className='glass relative mb-4 overflow-hidden rounded-3xl p-4 sm:mb-6 sm:p-7'>
 				<div className='pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-primary/20 blur-3xl' />
 				<div className='pointer-events-none absolute -bottom-24 right-0 h-56 w-56 rounded-full bg-accent-2/15 blur-3xl' />
 				<div className='pointer-events-none absolute inset-x-0 top-0 h-px bg-brand-gradient opacity-60' />
 
-				<div className='relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between'>
+				<div className='relative flex flex-col gap-3 sm:gap-5 md:flex-row md:items-end md:justify-between'>
 					<div className='min-w-0'>
-						<div className='mb-3 flex flex-wrap items-center gap-2'>
+						<div className='mb-2 flex flex-wrap items-center gap-2 sm:mb-3'>
 							<Pill tone={league.mode === 'steve' ? 'accent' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : 'Standard'}</Pill>
 							{league.members && (
 								<Pill>
 									<Users className='h-3 w-3' /> {league.members.length} members
 								</Pill>
 							)}
-							{isCommissioner && <Pill tone='warning'>Commissioner</Pill>}
+							{isCommissioner && (
+								<Pill tone='warning' className='hidden sm:inline-flex'>
+									Commissioner
+								</Pill>
+							)}
 						</div>
-						<h1 className='display-heading break-words text-4xl sm:text-6xl'>{league.name}</h1>
+						<h1 className='display-heading break-words text-[2rem] sm:text-6xl'>{league.name}</h1>
 					</div>
 
 					<div className='flex gap-2'>
