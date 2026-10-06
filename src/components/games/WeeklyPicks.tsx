@@ -13,7 +13,7 @@ import { TeamLogo } from '@/components/ui/team-logo';
 import { GameCard } from './GameCard';
 import { PickGameCard } from './PickGameCard';
 import { NFLService } from '@/services/nflService';
-import { ScoringService } from '@/services/scoringService';
+import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
 import { useStats } from '@/contexts/StatsContext';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
@@ -94,16 +94,38 @@ function gradePick(pick: Pick, game: Game | undefined): boolean | null {
 	});
 }
 
-function pointsForPick(pick: Pick, isCorrect: boolean | null, leagueMode: string) {
-	if (isCorrect !== true) return 0;
-	if (leagueMode === 'standard' && pick.odds !== undefined) return calculatePointsFromOdds(pick.odds);
-	return 2; // Steve mode or no odds
+/** Points available for a pick at the current line (standard mode), doubled for the lock. */
+function potentialPoints(pick: Pick, game: Game | undefined, isLock = false) {
+	const team = pick.isHome ? game?.home : game?.away;
+	return team?.odds ? ScoringService.pointsForPick({ odds: team.odds }, 'standard', calculatePointsFromOdds, isLock) : 0;
 }
 
-/** Points available for a pick at the current line (standard mode). */
-function potentialPoints(pick: Pick, game: Game | undefined) {
-	const team = pick.isHome ? game?.home : game?.away;
-	return team?.odds ? calculatePointsFromOdds(team.odds) : 0;
+/** Steve mode: 2 per correct pick, doubled for the lock. */
+const STEVE_PICK_POINTS = ScoringService.pointsForPick({}, 'steve');
+const TFS_MAX = 5;
+// Short enough for the sticky bar at 375px
+const LOCK_HINT = 'Pick a Lock to double one pick';
+
+/** Lock of the week toggle: tap to lock this pick (moves the lock), tap the locked pick to clear it. */
+function LockToggle({ active, onToggle, team, compact = false }: { active: boolean; onToggle: () => void; team: string; compact?: boolean }) {
+	return (
+		<button
+			type='button'
+			aria-pressed={active}
+			aria-label={active ? `Remove ${team} as your lock of the week` : `Make ${team} your lock of the week`}
+			onClick={onToggle}
+			className={cn(
+				'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border text-[11px] font-bold uppercase tracking-wider transition-all duration-200 ease-out-expo active:scale-95',
+				compact ? 'w-8 justify-center' : 'px-3',
+				active
+					? 'border-warning/70 bg-warning/15 text-warning shadow-[0_0_0_1px_hsl(var(--warning)/0.35),0_8px_24px_-10px_hsl(var(--warning)/0.7)]'
+					: 'border-white/10 bg-white/[0.04] text-muted-foreground hover:border-warning/40 hover:text-warning'
+			)}
+		>
+			<Lock className='h-3.5 w-3.5' strokeWidth={active ? 3 : 2} aria-hidden />
+			{!compact && (active ? <span className='tabular'>Lock · {LOCK_MULTIPLIER}×</span> : 'Lock')}
+		</button>
+	);
 }
 
 function PickProgress({ count, className }: { count: number; className?: string }) {
@@ -169,7 +191,7 @@ export function WeeklyPicks() {
 	const [isSaving, setIsSaving] = useState(false);
 	const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	const initialLoadRef = useRef(true);
-	const lastSavedRef = useRef<{ picks: Pick[]; tfsGame: string; tfsScore: string } | null>(null);
+	const lastSavedRef = useRef<{ picks: Pick[]; tfsGame: string; tfsScore: string; lockGameId: string | null } | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 	const [leagueMode, setLeagueMode] = useState<string>('');
 	const [tfsError, setTfsError] = useState<string | null>(null);
@@ -177,6 +199,7 @@ export function WeeklyPicks() {
 	const [seasonStatus, setSeasonStatus] = useState<SeasonStatus | null>(null);
 	const [showAllGames, setShowAllGames] = useState(false);
 	const [swapCandidate, setSwapCandidate] = useState<Pick | null>(null);
+	const [lockGameId, setLockGameId] = useState<string | null>(null);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -346,19 +369,22 @@ export function WeeklyPicks() {
 				const loadedPicks: Pick[] = data.picks || [];
 				const loadedTfsGame = data.tfsGame || '';
 				const loadedTfsScore = data.tfsScore?.toString() || '';
+				const loadedLock: string | null = typeof data.lockGameId === 'string' && loadedPicks.some(p => p.gameId === data.lockGameId) ? data.lockGameId : null;
 
 				setPicks(loadedPicks);
+				setLockGameId(loadedLock);
 				setTfsGame(loadedTfsGame);
 				setTfsScore(loadedTfsScore);
 				setHasExistingPicks(true);
 
 				// Update last saved ref to match loaded data
-				lastSavedRef.current = { picks: [...loadedPicks], tfsGame: loadedTfsGame, tfsScore: loadedTfsScore };
+				lastSavedRef.current = { picks: [...loadedPicks], tfsGame: loadedTfsGame, tfsScore: loadedTfsScore, lockGameId: loadedLock };
 
 				// Only lock the slate once all picked games have started; edits are allowed until then
 				setSubmitted(haveAllPickedGamesStarted(loadedPicks, gamesList));
 			} else {
 				setPicks([]);
+				setLockGameId(null);
 				setTfsGame('');
 				setTfsScore('');
 				setSubmitted(false);
@@ -407,17 +433,22 @@ export function WeeklyPicks() {
 		setTfsError(value ? validateTfsScore(value) : null);
 	};
 
+	// The lock must be one of the current picks (the server enforces this too)
+	const activeLock = lockGameId && picks.some(p => p.gameId === lockGameId) ? lockGameId : null;
+
 	const buildRequestBody = () => {
 		const requestBody: {
 			week: number;
 			picks: Pick[];
 			leagueId: string;
+			lockGameId: string | null;
 			tfsGame?: string;
 			tfsScore?: number;
 		} = {
 			week: currentWeek,
 			picks,
-			leagueId: leagueId as string
+			leagueId: leagueId as string,
+			lockGameId: activeLock
 		};
 
 		// Only include TFS for Steve mode
@@ -440,9 +471,10 @@ export function WeeklyPicks() {
 		if (!session || !leagueId || !hasRequiredFields) return; // Don't save if incomplete
 
 		// Check if picks have actually changed
-		const currentState = JSON.stringify({ picks, tfsGame, tfsScore });
+		const currentState = JSON.stringify({ picks, tfsGame, tfsScore, lockGameId: activeLock });
 		if (lastSavedRef.current) {
-			const lastSavedState = JSON.stringify({ picks: lastSavedRef.current.picks, tfsGame: lastSavedRef.current.tfsGame, tfsScore: lastSavedRef.current.tfsScore });
+			const { picks: savedPicks, tfsGame: savedTfsGame, tfsScore: savedTfsScore, lockGameId: savedLock } = lastSavedRef.current;
+			const lastSavedState = JSON.stringify({ picks: savedPicks, tfsGame: savedTfsGame, tfsScore: savedTfsScore, lockGameId: savedLock });
 			if (currentState === lastSavedState) return; // No changes, skip save
 		}
 
@@ -459,7 +491,7 @@ export function WeeklyPicks() {
 				toast.success(isUpdate ? 'Picks updated successfully!' : 'Picks saved!');
 
 				// Update last saved ref to prevent loop
-				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore };
+				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore, lockGameId: activeLock };
 
 				// Dispatch refresh events (don't reload picks to avoid triggering loop)
 				dispatchRefreshEvents();
@@ -490,6 +522,10 @@ export function WeeklyPicks() {
 		}
 		setSwapCandidate(null);
 
+		// Unpicking the locked game clears the lock
+		const existingPick = picks.find(p => p.gameId === gameId);
+		if (existingPick && existingPick.team === selectedTeam && lockGameId === gameId) setLockGameId(null);
+
 		setPicks(current => {
 			const existing = current.findIndex(p => p.gameId === gameId);
 			// If clicking already selected team, remove it
@@ -514,6 +550,8 @@ export function WeeklyPicks() {
 		setPicks(current => current.map((p, i) => (i === index ? incoming : p)));
 		// The TFS game must be one of the picks
 		if (outgoing && tfsGame === outgoing.gameId) setTfsGame('');
+		// So must the lock
+		if (outgoing && lockGameId === outgoing.gameId) setLockGameId(null);
 		setSwapCandidate(null);
 	};
 
@@ -537,7 +575,9 @@ export function WeeklyPicks() {
 			if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [picks, tfsGame, tfsScore, hasExistingPicks]);
+	}, [picks, tfsGame, tfsScore, lockGameId, hasExistingPicks]);
+
+	const toggleLock = (gameId: string) => setLockGameId(current => (current === gameId ? null : gameId));
 
 	const handleSubmit = async () => {
 		if (!session) {
@@ -588,7 +628,7 @@ export function WeeklyPicks() {
 				if (!hasExistingPicks) import('@/lib/confetti').then(m => m.picksLockedConfetti());
 
 				// Update last saved ref to prevent duplicate saves
-				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore };
+				lastSavedRef.current = { picks: [...picks], tfsGame, tfsScore, lockGameId: activeLock };
 
 				// Reload games and picks (silently) to check if all games have started
 				const refreshed = await loadWeeklyGames(true);
@@ -620,7 +660,15 @@ export function WeeklyPicks() {
 	const isSteve = leagueMode === 'steve';
 	const pickCount = picks.length;
 	const slateFull = pickCount === MAX_PICKS;
-	const totalPotential = picks.reduce((total, pick) => total + potentialPoints(pick, games.find(g => g.id === pick.gameId)), 0);
+	const totalPotential = isSteve
+		? picks.reduce((total, pick) => total + ScoringService.pointsForPick(pick, 'steve', undefined, pick.gameId === activeLock), 0) + (tfsGame ? TFS_MAX : 0)
+		: picks.reduce((total, pick) => total + potentialPoints(pick, games.find(g => g.id === pick.gameId), pick.gameId === activeLock), 0);
+	// Picks (and the lock) can be changed until the first picked game kicks off (server rule)
+	const slateEditable = !picks.some(p => {
+		const game = games.find(g => g.id === p.gameId);
+		return !!game && hasGameStarted(game);
+	});
+	const lockedPick = activeLock ? picks.find(p => p.gameId === activeLock) : undefined;
 	const tfsReady = !!tfsGame && !!tfsScore && !tfsError;
 	const canSubmit = slateFull && !isSaving && (!isSteve || tfsReady);
 	const showActionBar = !submitted && (pickCount > 0 || !!swapCandidate);
@@ -639,7 +687,8 @@ export function WeeklyPicks() {
 				gameInProgress={gameInProgress}
 				showScores
 				isCorrect={isCorrect}
-				pickPoints={gameFinished ? pointsForPick(pick, isCorrect, leagueMode) : 0}
+				pickPoints={gameFinished && isCorrect ? ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, pick.gameId === activeLock) : 0}
+				isLock={pick.gameId === activeLock}
 				leaguePicks={gameFinished || gameInProgress ? leaguePicks[game.id] : undefined}
 				leagueMode={leagueMode}
 				variant='results'
@@ -659,13 +708,15 @@ export function WeeklyPicks() {
 		// When browsing all games with a full slate, unpicked games stay tappable to start a swap
 		const lockedBySlate = slateFull && !pick && !showAllGames;
 		const isSwapTarget = swapCandidate?.gameId === game.id;
+		const isLock = !!pick && pick.gameId === activeLock;
 
 		return (
 			<div
 				key={game.id}
 				className={cn(
 					'glass rounded-2xl transition-shadow duration-300',
-					pick && 'border-primary/30 shadow-[0_0_0_1px_hsl(var(--primary)/0.15),0_18px_40px_-24px_hsl(var(--primary)/0.6)]',
+					pick && !isLock && 'border-primary/30 shadow-[0_0_0_1px_hsl(var(--primary)/0.15),0_18px_40px_-24px_hsl(var(--primary)/0.6)]',
+					isLock && 'border-warning/40 shadow-[0_0_0_1px_hsl(var(--warning)/0.2),0_18px_40px_-24px_hsl(var(--warning)/0.6)]',
 					isSwapTarget && 'border-warning/40 ring-1 ring-warning/40'
 				)}
 			>
@@ -677,7 +728,16 @@ export function WeeklyPicks() {
 					showScores={gameStarted}
 					leaguePicks={gameStarted || gameFinished ? leaguePicks[game.id] : undefined}
 					leagueMode={leagueMode}
+					lockedTeam={isLock ? pick.team : undefined}
 				/>
+				{pick && slateEditable && (
+					<div className='flex items-center justify-between gap-3 border-t border-white/[0.06] py-2 pl-4 pr-3'>
+						<p className={cn('min-w-0 truncate text-xs', isLock ? 'font-semibold text-warning' : 'text-muted-foreground')}>
+							{isLock ? `${(pick.isHome ? game.home : game.away).abbreviation} is your Lock of the Week` : 'Lock it in for double points'}
+						</p>
+						<LockToggle active={isLock} team={pick.team} onToggle={() => toggleLock(pick.gameId)} />
+					</div>
+				)}
 			</div>
 		);
 	};
@@ -695,8 +755,10 @@ export function WeeklyPicks() {
 		if (isSteve) {
 			if (!tfsGame) return 'Choose your TFS game below';
 			if (!tfsScore || tfsError) return 'Enter your total score below';
+			if (!activeLock && slateEditable) return LOCK_HINT;
 			return `TFS locked in: ${tfsScore}`;
 		}
+		if (!activeLock && slateEditable) return LOCK_HINT;
 		return hasExistingPicks ? 'Changes save automatically' : 'Ready to submit';
 	})();
 
@@ -830,19 +892,32 @@ export function WeeklyPicks() {
 								{picks.map((pick, index) => {
 									const game = games.find(g => g.id === pick.gameId);
 									const team = pick.isHome ? game?.home : game?.away;
+									const isLock = pick.gameId === activeLock;
 									return (
-										<li key={pick.gameId} className='flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/[0.04]'>
-											<span className='w-4 text-xs font-semibold text-muted-foreground tabular'>{index + 1}</span>
+										<li
+											key={pick.gameId}
+											className={cn('flex items-center gap-2.5 rounded-xl px-2 py-1.5 sm:gap-3', isLock ? 'bg-warning/[0.08] ring-1 ring-warning/30' : 'hover:bg-white/[0.04]')}
+										>
+											<span className='w-3 text-xs font-semibold text-muted-foreground tabular'>{index + 1}</span>
 											<TeamLogo src={team?.logo} alt={pick.team} size={28} />
-											<span className='min-w-0 flex-1 truncate text-sm font-medium'>{pick.team}</span>
+											<span className='min-w-0 flex-1 truncate text-sm font-medium'>{team?.abbreviation ?? pick.team}</span>
 											{team?.odds !== undefined && (
 												<span className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold', getOddsBadgeClass(team.odds))}>{formatOdds(team.odds)}</span>
 											)}
-											<span className='w-14 text-right text-sm font-bold text-primary tabular'>{potentialPoints(pick, game)} pts</span>
+											<span className={cn('min-w-14 text-right text-sm font-bold tabular', isLock ? 'text-warning' : 'text-primary')}>
+												{isLock && <span className='mr-1 text-[10px] font-extrabold'>{LOCK_MULTIPLIER}×</span>}
+												{potentialPoints(pick, game, isLock)} pts
+											</span>
+											{slateEditable && <LockToggle compact active={isLock} team={pick.team} onToggle={() => toggleLock(pick.gameId)} />}
 										</li>
 									);
 								})}
 							</ul>
+							{!lockedPick && slateEditable && (
+								<p className='mt-3 flex items-center gap-1.5 text-xs text-muted-foreground'>
+									<Lock className='h-3 w-3 text-warning' aria-hidden /> Tap a lock to double one pick: it scores {LOCK_MULTIPLIER}× if it wins.
+								</p>
+							)}
 							<div className='mt-3 flex items-baseline justify-between border-t border-white/[0.07] pt-3'>
 								<span className='text-sm font-semibold'>Total if all win</span>
 								<span className='font-display text-3xl font-extrabold italic text-primary tabular'>{totalPotential} pts</span>
@@ -923,17 +998,30 @@ export function WeeklyPicks() {
 									<p className='eyebrow mb-2'>Potential weekly score</p>
 									<ul className='space-y-1 text-xs'>
 										<li className='flex justify-between'>
-											<span className='text-muted-foreground'>5 picks × 2 pts</span>
-											<span className='font-semibold text-primary tabular'>10</span>
+											<span className='text-muted-foreground'>
+												{MAX_PICKS} picks × {STEVE_PICK_POINTS} pts
+											</span>
+											<span className='font-semibold text-primary tabular'>{MAX_PICKS * STEVE_PICK_POINTS}</span>
+										</li>
+										<li className='flex justify-between gap-2'>
+											<span className={cn('flex min-w-0 items-center gap-1.5', lockedPick ? 'text-warning' : 'text-muted-foreground')}>
+												<Lock className='h-3 w-3 shrink-0' aria-hidden />
+												<span className='truncate'>{lockedPick ? `Lock bonus · ${lockedPick.team}` : 'Lock bonus (no lock yet)'}</span>
+											</span>
+											<span className={cn('font-semibold tabular', lockedPick ? 'text-warning' : 'text-muted-foreground')}>
+												{lockedPick ? `+${STEVE_PICK_POINTS * (LOCK_MULTIPLIER - 1)}` : '0'}
+											</span>
 										</li>
 										<li className='flex justify-between'>
 											<span className='text-muted-foreground'>TFS bonus</span>
-											<span className='font-semibold text-primary tabular'>5</span>
+											<span className='font-semibold text-primary tabular'>{TFS_MAX}</span>
 										</li>
 									</ul>
 									<div className='mt-2 flex items-baseline justify-between border-t border-white/[0.07] pt-2'>
 										<span className='text-xs font-semibold'>Max total</span>
-										<span className='font-display text-2xl font-extrabold italic text-primary tabular'>15</span>
+										<span className='font-display text-2xl font-extrabold italic text-primary tabular'>
+											{MAX_PICKS * STEVE_PICK_POINTS + (lockedPick ? STEVE_PICK_POINTS * (LOCK_MULTIPLIER - 1) : 0) + TFS_MAX}
+										</span>
 									</div>
 								</div>
 							</div>
@@ -989,14 +1077,18 @@ export function WeeklyPicks() {
 											<span className='text-muted-foreground'>/{MAX_PICKS}</span>
 										</span>
 										<span className='eyebrow'>picked</span>
-										{!isSteve && totalPotential > 0 && (
-											<span className='ml-auto text-xs font-semibold text-muted-foreground sm:ml-2'>
+										{totalPotential > 0 && (
+											<span className='ml-auto inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground sm:ml-2'>
+												{activeLock && <Lock className='h-3 w-3 text-warning' aria-label='Includes your lock' />}
 												up to <span className='text-primary tabular'>{totalPotential}</span> pts
 											</span>
 										)}
 									</div>
 									<PickProgress count={pickCount} className='mt-2' />
-									<p className='mt-1.5 truncate text-[11px] text-muted-foreground'>{actionHint}</p>
+									<p className={cn('mt-1.5 flex min-w-0 items-center gap-1 text-[11px]', actionHint === LOCK_HINT ? 'text-warning' : 'text-muted-foreground')}>
+										{actionHint === LOCK_HINT && <Lock className='h-3 w-3 shrink-0' aria-hidden />}
+										<span className='truncate'>{actionHint}</span>
+									</p>
 								</div>
 								<Button size='lg' className='shrink-0 px-5' disabled={!canSubmit} onClick={handleSubmit}>
 									{isSaving ? 'Saving…' : hasExistingPicks ? 'Update' : 'Submit'}

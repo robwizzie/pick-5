@@ -34,6 +34,8 @@ interface WeeklyPicks {
 	tfsGame: string;
 	tfsScore: string;
 	submitted: boolean;
+	/** Lock of the week; for another player it's only revealed once that game kicks off. */
+	lockGameId?: string | null;
 }
 
 interface LeagueMember {
@@ -67,6 +69,7 @@ interface ResultRow {
 	game: Game;
 	isCorrect: boolean | null;
 	points: number;
+	isLock: boolean;
 	finished: boolean;
 	inProgress: boolean;
 }
@@ -298,16 +301,17 @@ export function Results() {
 
 			const isCorrect = checkPickCorrect(pick, game);
 			const finished = hasGameFinished(game);
+			const isLock = !!picks.lockGameId && picks.lockGameId === pick.gameId;
 
-			// Calculate points based on league mode
+			// Points depend on league mode; the lock scores double
 			let points = 0;
 			if (finished && isCorrect === true) {
-				points = leagueMode === 'standard' && pick.odds !== undefined ? calculatePointsFromOdds(pick.odds) : 2;
+				points = ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock);
 				totalPoints += points;
 				correctPicks += 1;
 			}
 
-			rows.push({ pick, index, game, isCorrect, points, finished, inProgress: !finished && isLiveStatus(game.status) });
+			rows.push({ pick, index, game, isCorrect, points, isLock, finished, inProgress: !finished && isLiveStatus(game.status) });
 		});
 
 		// Calculate TFS points (only if game is finished)
@@ -504,6 +508,7 @@ export function Results() {
 										showScores={row.finished || row.inProgress}
 										isCorrect={row.isCorrect}
 										pickPoints={row.points}
+										isLock={row.isLock}
 										leaguePicks={leaguePicks[row.pick.gameId]}
 										leagueMode={leagueMode}
 										variant='results'

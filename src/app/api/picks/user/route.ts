@@ -76,6 +76,7 @@ export async function GET(req: Request) {
 				picks: pick.picks,
 				tfsGame: pick.tfsGame,
 				tfsScore: pick.tfsScore,
+				lockGameId: pick.lockGameId ?? null,
 				weeklyPoints: pick.weeklyPoints,
 				correctPicks: pick.correctPicks,
 				tfsPoints: pick.tfsPoints,

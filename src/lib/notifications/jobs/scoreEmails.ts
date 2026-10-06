@@ -8,7 +8,7 @@ import { seasonPickFilter } from '@/lib/season';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
-import { ScoringService } from '@/services/scoringService';
+import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
 import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import SteveScoreEmail from '@/emails/SteveScoreEmail';
@@ -207,12 +207,14 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 function pickResults(mode: string, entry: ScoredEntry): PickResult[] {
 	return entry.doc.picks.map((pick, i) => {
 		const isCorrect = entry.isCorrect[i];
+		const isLock = !!entry.doc.lockGameId && entry.doc.lockGameId === pick.gameId;
 		return {
 			team: pick.team,
 			opponent: pick.opponent,
 			isCorrect,
 			odds: typeof pick.odds === 'number' ? pick.odds : undefined,
-			points: isCorrect ? pointsForCorrectPick(mode, pick.odds, entry.doc.lockGameId === pick.gameId) : 0
+			points: isCorrect ? pointsForCorrectPick(mode, pick.odds, isLock) : 0,
+			isLock
 		};
 	});
 }
@@ -241,11 +243,15 @@ function maxPossiblePoints(mode: string, userPick: LeanPickDoc, leaguePicks: Lea
 		// 2 per correct pick, plus the TFS tiebreaker when it was graded.
 		const tfsGame = userPick.tfsGame ? gameById.get(userPick.tfsGame) : undefined;
 		const tfsGraded = !!tfsGame && isFinal(tfsGame) && userPick.tfsScore !== null && userPick.tfsScore !== undefined;
-		return finished.length * 2 + (tfsGraded ? MAX_TFS_POINTS : 0);
+		// A winning lock doubles one pick, so it's part of the best possible week
+		const lockBonus = finished.length > 0 ? 2 * (LOCK_MULTIPLIER - 1) : 0;
+		return finished.length * 2 + lockBonus + (tfsGraded ? MAX_TFS_POINTS : 0);
 	}
 
-	// Standard: for each picked game, the best payout anyone in the league could get on it.
+	// Standard: for each picked game, the best payout anyone in the league could get on it,
+	// with the richest one doubled as a winning lock.
 	let max = 0;
+	let bestSingle = 0;
 	for (const pick of finished) {
 		let best = 5; // default if no odds found
 		for (const other of leaguePicks) {
@@ -253,8 +259,9 @@ function maxPossiblePoints(mode: string, userPick: LeanPickDoc, leaguePicks: Lea
 			if (typeof odds === 'number') best = Math.max(best, calculatePointsFromOdds(odds));
 		}
 		max += best;
+		bestSingle = Math.max(bestSingle, best);
 	}
-	return max;
+	return max + bestSingle * (LOCK_MULTIPLIER - 1);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { GameCard } from './GameCard';
+import { GameCard, LockBadge } from './GameCard';
 import type { Game } from './GameCard';
 import { cn } from '@/lib/utils';
 
@@ -31,6 +31,8 @@ interface PickGameCardProps {
 	leaguePicks?: GamePicksData;
 	leagueMode?: string;
 	variant?: 'picks' | 'results'; // 'picks' for WeeklyPicks, 'results' for Results
+	/** This pick is the player's lock of the week (pickPoints should already be doubled). */
+	isLock?: boolean;
 }
 
 /** A game card framed as one of the user's five picks, with its result. */
@@ -45,7 +47,8 @@ export function PickGameCard({
 	pickPoints = 0,
 	leaguePicks,
 	leagueMode = 'standard',
-	variant = 'results'
+	variant = 'results',
+	isLock = false
 }: PickGameCardProps) {
 	// Show the odds locked in when the pick was made, not today's line
 	const gameCardData: Game = {
@@ -70,15 +73,19 @@ export function PickGameCard({
 			className={cn(
 				'glass relative overflow-hidden rounded-2xl',
 				graded && (won ? 'border-accent/30' : 'border-accent-2/25'),
-				gameInProgress && 'border-live/30'
+				gameInProgress && 'border-live/30',
+				isLock && !graded && !gameInProgress && 'border-warning/30'
 			)}
 		>
 			{/* Result accent bar */}
 			<div className={cn('absolute inset-y-0 left-0 w-1', graded ? (won ? 'bg-accent' : 'bg-accent-2') : gameInProgress ? 'bg-live' : 'bg-primary/60')} />
 
 			<div className='flex items-center justify-between gap-2 border-b border-white/[0.06] py-2.5 pl-5 pr-4'>
-				<span className='font-display text-sm font-bold uppercase italic tracking-wide text-muted-foreground'>
-					Pick <span className='text-foreground tabular'>{pickIndex + 1}</span>
+				<span className='flex items-center gap-2'>
+					<span className='font-display text-sm font-bold uppercase italic tracking-wide text-muted-foreground'>
+						Pick <span className='text-foreground tabular'>{pickIndex + 1}</span>
+					</span>
+					{isLock && <LockBadge />}
 				</span>
 
 				{variant === 'results' &&
@@ -110,6 +117,7 @@ export function PickGameCard({
 					noHover
 					leaguePicks={gameFinished || gameInProgress ? leaguePicks : undefined}
 					leagueMode={leagueMode}
+					lockedTeam={isLock ? pick.team : undefined}
 				/>
 			</div>
 		</div>

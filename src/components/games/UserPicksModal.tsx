@@ -10,6 +10,7 @@ import { TeamLogo } from '@/components/ui/team-logo';
 import { PickGameCard } from './PickGameCard';
 import { NFLService } from '@/services/nflService';
 import { hasGameStarted, hasGameFinished } from '@/services/gameUtils';
+import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import { cn } from '@/lib/utils';
 import type { Game } from './GameCard';
@@ -63,6 +64,7 @@ const initials = (name: string) =>
 		.toUpperCase()
 		.slice(0, 2);
 
+/** Graded once final; ties are losses for both sides (mirrors server scoring). */
 const isPickCorrect = (pick: UserPick, game: Game | undefined): boolean | null => {
 	if (!game || !hasGameFinished(game)) return null;
 
@@ -70,9 +72,7 @@ const isPickCorrect = (pick: UserPick, game: Game | undefined): boolean | null =
 	const awayScore = game.away.score;
 	if (typeof homeScore !== 'number' || typeof awayScore !== 'number') return null;
 
-	const homeWon = homeScore > awayScore;
-	const pickedHome = pick.team === game.home.team;
-	return (pickedHome && homeWon) || (!pickedHome && !homeWon);
+	return ScoringService.calculatePickResult(pick, { id: game.id, homeScore, awayScore, homeTeam: game.home.team, awayTeam: game.away.team, status: game.status });
 };
 
 const checkGameStatus = (game: Game): GameStatus => {
@@ -93,6 +93,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 	const [serverHiddenPicks, setServerHiddenPicks] = useState(0);
 	const [tfsGame, setTfsGame] = useState<string>('');
 	const [tfsScore, setTfsScore] = useState<number | null>(null);
+	const [lockGameId, setLockGameId] = useState<string | null>(null);
 	const [games, setGames] = useState<Game[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -139,7 +140,10 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 				setLeaguePicks(leaguePicksData);
 
 				setServerHiddenPicks(0);
+				setLockGameId(null);
 				if (picksData) {
+					// Another player's lock is only sent once that game kicks off
+					setLockGameId(picksData.lockGameId ?? null);
 					setPicks(picksData.picks || []);
 					setServerHiddenPicks(picksData.hiddenPicks || 0);
 					setTfsGame(picksData.tfsGame || '');
@@ -195,13 +199,11 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 			const status = checkGameStatus(game);
 			const gameFinished = status === 'completed';
 			const isCorrect = isPickCorrect(pick, game);
+			const isLock = !!lockGameId && lockGameId === pick.gameId;
 
-			// Points depend on league mode
-			let pickPoints = 0;
-			if (gameFinished && isCorrect === true) {
-				pickPoints = leagueMode === 'standard' && pick.odds !== undefined ? calculatePointsFromOdds(pick.odds) : 2; // Steve mode or no odds
-			}
-			return { pick, game, status, gameFinished, gameInProgress: status === 'in_progress', isCorrect, pickPoints };
+			// Points depend on league mode; the lock scores double
+			const pickPoints = gameFinished && isCorrect === true ? ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock) : 0;
+			return { pick, game, status, gameFinished, gameInProgress: status === 'in_progress', isCorrect, isLock, pickPoints };
 		});
 
 	// Picks for games that haven't kicked off are withheld by the server; it sends the count
@@ -264,6 +266,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 										showScores={p.gameFinished || p.gameInProgress}
 										isCorrect={p.isCorrect}
 										pickPoints={p.pickPoints}
+										isLock={p.isLock}
 										leaguePicks={p.gameFinished || p.gameInProgress ? leaguePicks[p.pick.gameId] : undefined}
 										leagueMode={leagueMode}
 										variant='picks'
