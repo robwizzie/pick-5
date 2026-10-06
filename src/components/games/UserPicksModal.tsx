@@ -2,15 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
+import { Lock, Target } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { TeamLogo } from '@/components/ui/team-logo';
 import { PickGameCard } from './PickGameCard';
 import { NFLService } from '@/services/nflService';
 import { hasGameStarted, hasGameFinished } from '@/services/gameUtils';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { cn } from '@/lib/utils';
 import type { Game } from './GameCard';
-import { X } from 'lucide-react';
 
 interface UserPicksModalProps {
 	userId: string;
@@ -18,6 +20,9 @@ interface UserPicksModalProps {
 	week: number;
 	leagueId: string;
 	onClose: () => void;
+	/** Optional extras for the header; the modal still works without them. */
+	playerImage?: string | null;
+	weekPoints?: number;
 }
 
 interface UserPick {
@@ -48,7 +53,41 @@ interface LeaguePicksData {
 	};
 }
 
-export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: UserPicksModalProps) {
+type GameStatus = 'completed' | 'in_progress' | 'pending';
+
+const initials = (name: string) =>
+	name
+		.split(' ')
+		.map(n => n[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2);
+
+const isPickCorrect = (pick: UserPick, game: Game | undefined): boolean | null => {
+	if (!game || !hasGameFinished(game)) return null;
+
+	const homeScore = game.home.score;
+	const awayScore = game.away.score;
+	if (typeof homeScore !== 'number' || typeof awayScore !== 'number') return null;
+
+	const homeWon = homeScore > awayScore;
+	const pickedHome = pick.team === game.home.team;
+	return (pickedHome && homeWon) || (!pickedHome && !homeWon);
+};
+
+const checkGameStatus = (game: Game): GameStatus => {
+	if (hasGameFinished(game)) return 'completed';
+	const status = game.status?.toLowerCase();
+	if (status === 'in' || status === 'in_progress') return 'in_progress';
+	return 'pending';
+};
+
+const getGameTotal = (game: Game) => {
+	const { home, away } = game;
+	return typeof home.score === 'number' && typeof away.score === 'number' ? home.score + away.score : undefined;
+};
+
+export function UserPicksModal({ userId, playerName, week, leagueId, onClose, playerImage, weekPoints }: UserPicksModalProps) {
 	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
 	const [tfsGame, setTfsGame] = useState<string>('');
@@ -68,8 +107,18 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 				setLoading(true);
 				setError(null);
 
-				// Fetch league mode
-				const leagueResponse = await fetch(`/api/league/${leagueId}`);
+				// League mode, games, this user's picks, the league's picks and the odds snapshot are independent
+				const [leagueResponse, rawGames, picksResponse, leaguePicksResponse, oddsResponse] = await Promise.all([
+					fetch(`/api/league/${leagueId}`),
+					NFLService.getWeeklyGames(week),
+					fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`),
+					fetch(`/api/picks/league?week=${week}&leagueId=${leagueId}`, { cache: 'no-store' }),
+					fetch(`/api/odds/snapshot?week=${week}`).catch((err: unknown) => {
+						console.error('[UserPicksModal] Error fetching odds:', err);
+						return null;
+					})
+				]);
+
 				let fetchedLeagueMode = 'standard';
 				if (leagueResponse.ok) {
 					const leagueData = await leagueResponse.json();
@@ -77,44 +126,35 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 					setLeagueMode(fetchedLeagueMode);
 				}
 
-				let [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
-					NFLService.getWeeklyGames(week),
-					fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`),
-					fetch(`/api/picks/league?week=${week}&leagueId=${leagueId}`, { cache: 'no-store' })
-				]);
-
 				// Enrich live games with clock and period data
-				weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
+				const weeklyGames = await NFLService.enrichGamesWithLiveData(rawGames);
 
 				if (!picksResponse.ok) {
 					throw new Error('Failed to fetch picks');
 				}
 
 				const picksData = await picksResponse.json();
-				const leaguePicksData = leaguePicksResponse.ok ? await leaguePicksResponse.json() : {};
+				const leaguePicksData: LeaguePicksData = leaguePicksResponse.ok ? await leaguePicksResponse.json() : {};
 				setLeaguePicks(leaguePicksData);
 
 				if (picksData) {
 					setPicks(picksData.picks || []);
 					setTfsGame(picksData.tfsGame || '');
-					setTfsScore(picksData.tfsScore || null);
+					setTfsScore(picksData.tfsScore ?? null);
 				}
 
-				// Fetch odds for Standard mode leagues
+				// Odds only matter for Standard mode leagues
 				let gamesWithOdds = weeklyGames;
-				if (fetchedLeagueMode === 'standard') {
+				if (fetchedLeagueMode === 'standard' && oddsResponse) {
 					try {
-						const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}`);
 						let snapshotOdds: SnapshotOdds[] = [];
 						if (oddsResponse.ok) {
 							const data = await oddsResponse.json();
 							snapshotOdds = data.odds || [];
 						}
 
-						// Match odds to games
 						gamesWithOdds = weeklyGames.map(game => {
-							const snapshotGameOdds = snapshotOdds.find((o: SnapshotOdds) => o.id === game.id);
-
+							const snapshotGameOdds = snapshotOdds.find(o => o.id === game.id);
 							const homeOdds = snapshotGameOdds?.home?.odds;
 							const awayOdds = snapshotGameOdds?.away?.odds;
 
@@ -144,173 +184,132 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose }: 
 		loadData();
 	}, [userId, week, leagueId]);
 
-	const isPickCorrect = (pick: UserPick, game: Game | undefined): boolean | null => {
-		if (!game || !hasGameFinished(game)) return null;
+	// For other users: only show picks for games that have started. For own picks: show all.
+	const visiblePicks = picks
+		.map(pick => ({ pick, game: games.find(g => g.id === pick.gameId) }))
+		.filter((p): p is { pick: UserPick; game: Game } => !!p.game && (isViewingOwnPicks || hasGameStarted(p.game)))
+		.map(({ pick, game }) => {
+			const status = checkGameStatus(game);
+			const gameFinished = status === 'completed';
+			const isCorrect = isPickCorrect(pick, game);
 
-		const homeScore = game.home.score;
-		const awayScore = game.away.score;
+			// Points depend on league mode
+			let pickPoints = 0;
+			if (gameFinished && isCorrect === true) {
+				pickPoints = leagueMode === 'standard' && pick.odds !== undefined ? calculatePointsFromOdds(pick.odds) : 2; // Steve mode or no odds
+			}
+			return { pick, game, status, gameFinished, gameInProgress: status === 'in_progress', isCorrect, pickPoints };
+		});
 
-		if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || homeScore === undefined || awayScore === undefined) {
-			return null;
-		}
+	const hiddenCount = picks.length - visiblePicks.length;
+	const computedPoints = visiblePicks.reduce((sum, p) => sum + p.pickPoints, 0);
+	const correctCount = visiblePicks.filter(p => p.gameFinished && p.isCorrect === true).length;
+	const gradedCount = visiblePicks.filter(p => p.gameFinished).length;
+	const headerPoints = weekPoints ?? computedPoints;
 
-		const homeWon = homeScore > awayScore;
-		const pickedHome = pick.team === game.home.team;
-		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
-	};
-
-	const checkGameStatus = (game: Game): 'completed' | 'in_progress' | 'pending' => {
-		if (hasGameFinished(game)) return 'completed';
-		const status = game.status?.toLowerCase();
-		if (status === 'in' || status === 'in_progress') return 'in_progress';
-		return 'pending';
-	};
-
-	const getGameScore = (game: Game) => {
-		const homeScore = typeof game.home.score === 'number' ? game.home.score : undefined;
-		const awayScore = typeof game.away.score === 'number' ? game.away.score : undefined;
-		return {
-			home: homeScore,
-			away: awayScore,
-			total: homeScore !== undefined && awayScore !== undefined ? homeScore + awayScore : undefined
-		};
-	};
-
-	if (loading) {
-		return (
-			<div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50'>
-				<Card className='w-full max-w-2xl mx-4'>
-					<CardContent className='p-6'>
-						<div className='flex items-center justify-center'>
-							<Spinner />
-						</div>
-					</CardContent>
-				</Card>
-			</div>
-		);
-	}
+	// TFS prediction: other users only once that game has started
+	const tfsGameObj = tfsGame ? games.find(g => g.id === tfsGame) : undefined;
+	const tfsGameStarted = tfsGameObj ? hasGameStarted(tfsGameObj) : false;
+	const showTfs = !!tfsGameObj && (isViewingOwnPicks || tfsGameStarted);
+	const tfsTotal = tfsGameObj ? getGameTotal(tfsGameObj) : undefined;
+	const tfsFinished = tfsGameObj ? hasGameFinished(tfsGameObj) : false;
 
 	return (
-		<div className='fixed inset-0 bg-black/50 flex items-start justify-center z-[100] p-4 pt-24' onClick={onClose}>
-			<Card className='w-full max-w-3xl max-h-[calc(90vh-6rem)] flex flex-col bg-card border-primary/20 overflow-hidden' onClick={e => e.stopPropagation()}>
-				<CardHeader className='flex flex-row items-center justify-between border-b border-primary/20 sticky top-0 z-10 bg-card'>
-					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>
-						{playerName}&apos;s Picks - Week {week}
-					</CardTitle>
-					<Button variant='ghost' size='icon' onClick={onClose} className='h-8 w-8'>
-						<X className='h-4 w-4' />
-					</Button>
-				</CardHeader>
-				<CardContent className='p-6 overflow-y-auto flex-1'>
-					{error && <div className='mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive'>{error}</div>}
-
-					<div className='space-y-4'>
-						{/* Game Picks */}
-						<div>
-							<h3 className='text-lg font-medium mb-4'>Game Picks</h3>
-							{picks.length === 0 ? (
-								<div className='text-center text-muted-foreground py-8'>No picks found</div>
-							) : (
-								<div className='space-y-3'>
-									{(() => {
-										// Filter picks based on viewing context
-										const visiblePicks = picks.filter(p => {
-											const g = games.find(g => g.id === p.gameId);
-											if (!g) return false;
-											// For other users: only show picks for games that have started
-											// For own picks: show all picks
-											if (!isViewingOwnPicks && !hasGameStarted(g)) return false;
-											return true;
-										});
-
-										return visiblePicks.map((pick, displayIndex) => {
-											const game = games.find(g => g.id === pick.gameId);
-											if (!game) return null;
-
-											const gameStatus = checkGameStatus(game);
-											const gameFinished = gameStatus === 'completed';
-											const gameInProgress = gameStatus === 'in_progress';
-
-											const isCorrect = isPickCorrect(pick, game);
-
-											// Calculate points based on league mode
-											let pickPoints = 0;
-											if (gameFinished && isCorrect === true) {
-												if (leagueMode === 'standard' && pick.odds !== undefined) {
-													pickPoints = calculatePointsFromOdds(pick.odds);
-												} else {
-													pickPoints = 2; // Steve mode or no odds
-												}
-											}
-
-											// Show scores for finished or in-progress games
-											const shouldShowScores = gameFinished || gameInProgress;
-
-											return (
-												<PickGameCard
-													key={pick.gameId}
-													game={game}
-													pick={pick}
-													pickIndex={displayIndex}
-													gameFinished={gameFinished}
-													gameInProgress={gameInProgress}
-													showScores={shouldShowScores}
-													isCorrect={isCorrect}
-													pickPoints={pickPoints}
-													leaguePicks={(gameFinished || gameInProgress) ? leaguePicks[pick.gameId] : undefined}
-													leagueMode={leagueMode}
-													variant="picks"
-												/>
-											);
-										});
-									})()}
-								</div>
-							)}
-						</div>
-
-						{/* TFS Prediction - Only show if game has started (for other users) or always (for own picks) */}
-						{tfsGame &&
-							(() => {
-								const tfsGameObj = games.find(g => g.id === tfsGame);
-								if (!tfsGameObj) return null;
-
-								const tfsGameStarted = hasGameStarted(tfsGameObj);
-
-								// For other users: only show TFS if game has started
-								// For own picks: always show TFS
-								if (!isViewingOwnPicks && !tfsGameStarted) {
-									return null;
-								}
-
-								const tfsGameFinished = hasGameFinished(tfsGameObj);
-								const scores = getGameScore(tfsGameObj);
-
-								return (
-									<div>
-										<h3 className='text-lg font-medium mb-4'>Total Final Score Prediction</h3>
-										<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
-											<div className='space-y-2'>
-												<div className='font-oswald uppercase text-lg text-primary mb-2'>
-													{tfsGameObj.away.team} vs {tfsGameObj.home.team}
-												</div>
-												<div className='flex justify-between items-center bg-primary/10 p-3 rounded-lg'>
-													<div>
-														<span className='text-primary font-medium'>Predicted: </span>
-														<span className='text-lg font-bold'>{tfsScore}</span>
-													</div>
-													<div>
-														<span className='text-primary font-medium'>Actual: </span>
-														<span className='text-lg font-bold'>{tfsGameFinished && scores.total !== undefined ? scores.total : tfsGameStarted ? 'In Progress' : 'TBD'}</span>
-													</div>
-												</div>
-											</div>
-										</div>
-									</div>
-								);
-							})()}
+		<Dialog open onOpenChange={open => !open && onClose()}>
+			<DialogContent className='gap-0 sm:max-w-2xl'>
+				{/* Player header */}
+				<DialogHeader className='mb-5 flex-row items-center gap-3.5 space-y-0'>
+					<Avatar className='h-14 w-14 ring-2 ring-primary/40 ring-offset-2 ring-offset-[hsl(var(--surface-raised))]'>
+						<AvatarImage src={playerImage || undefined} alt={playerName} />
+						<AvatarFallback className='bg-primary/15 text-sm font-bold text-primary'>{initials(playerName)}</AvatarFallback>
+					</Avatar>
+					<div className='min-w-0 flex-1'>
+						<p className='eyebrow'>Week {week} picks</p>
+						<DialogTitle className='mt-1 truncate'>{playerName}</DialogTitle>
+						<DialogDescription className='mt-1 text-xs tabular'>
+							{loading ? 'Loading picks…' : gradedCount > 0 ? `${correctCount}/${gradedCount} correct so far` : `${visiblePicks.length} pick${visiblePicks.length === 1 ? '' : 's'} shown`}
+						</DialogDescription>
 					</div>
-				</CardContent>
-			</Card>
-		</div>
+					<div className='shrink-0 text-right'>
+						<p className='font-display text-4xl font-extrabold italic leading-none tabular text-accent'>{loading && weekPoints === undefined ? '–' : headerPoints}</p>
+						<p className='mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground'>Points</p>
+					</div>
+				</DialogHeader>
+
+				{error && <div className='mb-4 rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive'>{error}</div>}
+
+				{loading ? (
+					<div className='space-y-3'>
+						{Array.from({ length: 3 }).map((_, i) => (
+							<Skeleton key={i} className='h-36 rounded-2xl' />
+						))}
+					</div>
+				) : (
+					<div className='space-y-3'>
+						{picks.length === 0 ? (
+							<div className='rounded-xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-muted-foreground'>No picks found</div>
+						) : (
+							visiblePicks.map((p, displayIndex) => (
+								<div key={p.pick.gameId} className='animate-slide-up' style={{ animationDelay: `${displayIndex * 60}ms` }}>
+									<PickGameCard
+										game={p.game}
+										pick={p.pick}
+										pickIndex={displayIndex}
+										gameFinished={p.gameFinished}
+										gameInProgress={p.gameInProgress}
+										showScores={p.gameFinished || p.gameInProgress}
+										isCorrect={p.isCorrect}
+										pickPoints={p.pickPoints}
+										leaguePicks={p.gameFinished || p.gameInProgress ? leaguePicks[p.pick.gameId] : undefined}
+										leagueMode={leagueMode}
+										variant='picks'
+									/>
+								</div>
+							))
+						)}
+
+						{hiddenCount > 0 && !isViewingOwnPicks && (
+							<div className='flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3 text-sm text-muted-foreground'>
+								<Lock className='h-4 w-4 shrink-0' />
+								<span>
+									<span className='font-semibold text-foreground tabular'>{hiddenCount}</span> more pick{hiddenCount === 1 ? '' : 's'} revealed at kickoff
+								</span>
+							</div>
+						)}
+
+						{/* Total Final Score prediction */}
+						{showTfs && tfsGameObj && (
+							<div className='rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4'>
+								<div className='mb-3 flex items-center gap-2'>
+									<span className='grid h-7 w-7 place-items-center rounded-lg bg-primary/10 text-primary'>
+										<Target className='h-3.5 w-3.5' />
+									</span>
+									<p className='eyebrow'>Total final score</p>
+								</div>
+								<div className='mb-4 flex items-center gap-2'>
+									<TeamLogo src={tfsGameObj.away.logo} alt={tfsGameObj.away.team} size={28} />
+									<span className='font-display text-base font-bold uppercase italic tracking-tight'>{tfsGameObj.away.abbreviation}</span>
+									<span className='font-display text-sm italic text-muted-foreground'>@</span>
+									<span className='font-display text-base font-bold uppercase italic tracking-tight'>{tfsGameObj.home.abbreviation}</span>
+									<TeamLogo src={tfsGameObj.home.logo} alt={tfsGameObj.home.team} size={28} />
+								</div>
+								<div className='grid grid-cols-2 gap-2'>
+									<div className='rounded-xl bg-primary/[0.08] px-3 py-2.5 ring-1 ring-primary/20'>
+										<p className='eyebrow text-[10px]'>Predicted</p>
+										<p className='mt-1 font-display text-3xl font-extrabold italic leading-none tabular text-primary'>{tfsScore ?? '–'}</p>
+									</div>
+									<div className='rounded-xl bg-white/[0.04] px-3 py-2.5 ring-1 ring-white/[0.07]'>
+										<p className='eyebrow text-[10px]'>Actual</p>
+										<p className={cn('mt-1 font-display font-extrabold italic leading-none tabular', tfsFinished && tfsTotal !== undefined ? 'text-3xl' : 'pt-1.5 text-lg text-muted-foreground')}>
+											{tfsFinished && tfsTotal !== undefined ? tfsTotal : tfsGameStarted ? 'In progress' : 'TBD'}
+										</p>
+									</div>
+								</div>
+							</div>
+						)}
+					</div>
+				)}
+			</DialogContent>
+		</Dialog>
 	);
 }

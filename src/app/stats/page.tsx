@@ -1,12 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Spinner } from '@/components/ui/spinner';
-import { Trophy, Target, TrendingUp, Flame, Star, Award, Zap, Crown, Medal, Shield, Rocket, Crosshair, Calendar, Sparkles, Users } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Award, BarChart3, Calendar, ChevronRight, Crosshair, Crown, Flame, Medal, Rocket, Shield, Sparkles, Star, Target, TrendingUp, Trophy, Users, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { EmptyState, PageContainer, PageHeader, Pill, SectionHeader, StatTile } from '@/components/ui/page';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface LeagueStats {
 	leagueId: string;
@@ -59,25 +63,65 @@ interface LeagueData {
 	mode?: string;
 }
 
+interface WeeklyStat {
+	weeklyPoints: number;
+	correctPicks: number;
+	totalPicks: number;
+	tfsPoints: number;
+}
+
+interface SeasonStatsResponse {
+	weeksWon?: number;
+	weeklyStats?: Record<string, WeeklyStat>;
+}
+
+/** One finished week in one league, used for streak + perfect-week math. */
+interface WeekData {
+	week: number;
+	leagueId: string;
+	correctPicks: number;
+	totalPicks: number;
+	weeklyPoints: number;
+	isPerfectWeek: boolean;
+	allGamesFinished: boolean;
+}
+
+/** Points per week summed across leagues (from the recalculated season stats). */
+interface WeekTotal {
+	week: number;
+	points: number;
+	correct: number;
+	total: number;
+}
+
+interface Achievement {
+	icon: LucideIcon;
+	label: string;
+	value: string;
+	tone: 'gold' | 'primary' | 'accent' | 'hot' | 'warning' | 'violet';
+	description: string;
+}
+
+const ACHIEVEMENT_TONES: Record<Achievement['tone'], string> = {
+	gold: 'text-[#FFD66B] bg-[#FFD66B]/10',
+	primary: 'text-primary bg-primary/10',
+	accent: 'text-accent bg-accent/10',
+	hot: 'text-accent-2 bg-accent-2/10',
+	warning: 'text-warning bg-warning/10',
+	violet: 'text-chart-5 bg-chart-5/10'
+};
+
+const isFinished = (p: { isCorrect?: boolean | null }) => p.isCorrect !== undefined && p.isCorrect !== null;
+
 const StatsPage = () => {
 	const router = useRouter();
 	const { status } = useSession();
 	const [loading, setLoading] = useState(true);
 	const [allTimeStats, setAllTimeStats] = useState<AllTimeStats | null>(null);
 	const [leagueStats, setLeagueStats] = useState<LeagueStats[]>([]);
+	const [weekTotals, setWeekTotals] = useState<WeekTotal[]>([]);
 
-	useEffect(() => {
-		if (status === 'unauthenticated') {
-			router.push('/login');
-			return;
-		}
-
-		if (status === 'authenticated') {
-			fetchStats();
-		}
-	}, [status, router]);
-
-	const fetchStats = async () => {
+	const fetchStats = useCallback(async () => {
 		try {
 			setLoading(true);
 
@@ -86,7 +130,29 @@ const StatsPage = () => {
 			if (!leaguesResponse.ok) throw new Error('Failed to fetch leagues');
 			const leagues: LeagueData[] = await leaguesResponse.json();
 
-			// Fetch picks for all leagues
+			// Fetch picks + season stats for every league concurrently
+			const perLeague = await Promise.all(
+				leagues.map(async league => {
+					try {
+						const [picksResponse, seasonStats] = await Promise.all([
+							fetch(`/api/picks/user?leagueId=${league._id}`),
+							fetch(`/api/seasonStats?leagueId=${league._id}`)
+								.then(res => (res.ok ? (res.json() as Promise<SeasonStatsResponse>) : null))
+								.catch(error => {
+									console.error('Error fetching weeks won for league:', league._id, error);
+									return null;
+								})
+						]);
+						if (!picksResponse.ok) return null;
+						const picks: PickData[] = await picksResponse.json();
+						return { league, picks, seasonStats };
+					} catch (error) {
+						console.error('Error fetching stats for league:', league._id, error);
+						return null;
+					}
+				})
+			);
+
 			const leagueStatsData: LeagueStats[] = [];
 			const allTimeData = {
 				totalPoints: 0,
@@ -103,188 +169,140 @@ const StatsPage = () => {
 				totalLosses: 0
 			};
 
-			// Track all weeks across all leagues for proper streak and perfect week calculation
-			interface WeekData {
-				week: number;
-				leagueId: string;
-				correctPicks: number;
-				totalPicks: number;
-				weeklyPoints: number;
-				isPerfectWeek: boolean;
-				allGamesFinished: boolean;
-			}
 			const allWeeks: WeekData[] = [];
-			const perfectWeeksSet = new Set<string>(); // Track unique perfect weeks to avoid double-counting
+			const perfectWeeksSet = new Set<string>(); // Same week across multiple leagues counts once
+			const weekTotalsMap = new Map<number, WeekTotal>();
 
-			for (const league of leagues) {
-				try {
-					// Fetch all picks for this league
-					const picksResponse = await fetch(`/api/picks/user?leagueId=${league._id}`);
-					if (picksResponse.ok) {
-						const picks = await picksResponse.json();
+			// Aggregate in league order so tie-breaks match the original sequential behavior
+			for (const result of perLeague) {
+				if (!result) continue;
+				const { league, picks, seasonStats } = result;
 
-						let leagueTotalPoints = 0;
-						let leagueCorrectPicks = 0;
-						let leagueTotalPicks = 0;
-						let leagueTotalTFSPoints = 0;
-						let leagueBestWeekPoints = 0;
-						let leagueWeeksWon = 0;
+				let leagueTotalPoints = 0;
+				let leagueCorrectPicks = 0;
+				let leagueTotalPicks = 0;
+				let leagueTotalTFSPoints = 0;
+				let leagueBestWeekPoints = 0;
 
-						picks.forEach((pick: PickData) => {
-							// Count how many games are finished vs total picks
-							const finishedGamesCount = pick.picks.filter(p => p.isCorrect !== undefined && p.isCorrect !== null).length;
-							const totalPicksInWeek = pick.picks.length;
-							const allGamesFinished = finishedGamesCount === totalPicksInWeek && totalPicksInWeek === 5;
-							// Only count picks that are definitively correct (game finished and won)
-							const correctInWeek = pick.picks.filter(p => p.isCorrect === true).length;
+				picks.forEach(pick => {
+					const finishedGamesCount = pick.picks.filter(isFinished).length;
+					const totalPicksInWeek = pick.picks.length;
+					const allGamesFinished = finishedGamesCount === totalPicksInWeek && totalPicksInWeek === 5;
+					// Only count picks that are definitively correct (game finished and won)
+					const correctInWeek = pick.picks.filter(p => p.isCorrect === true).length;
 
-							// Count stats for any week with at least one finished game
-							if (finishedGamesCount > 0) {
-								leagueTotalPoints += pick.weeklyPoints || 0;
-								leagueCorrectPicks += correctInWeek;
-								leagueTotalPicks += finishedGamesCount; // Only count finished games
-								leagueTotalTFSPoints += pick.tfsPoints || 0;
+					// Count stats for any week with at least one finished game
+					if (finishedGamesCount > 0) {
+						leagueTotalPoints += pick.weeklyPoints || 0;
+						leagueCorrectPicks += correctInWeek;
+						leagueTotalPicks += finishedGamesCount;
+						leagueTotalTFSPoints += pick.tfsPoints || 0;
 
-								// Check for perfect week (all 5 picks correct and all 5 games finished)
-								const isPerfectWeek = allGamesFinished && totalPicksInWeek === 5 && correctInWeek === 5;
+						const isPerfectWeek = allGamesFinished && correctInWeek === 5;
 
-								// Only add to allWeeks for streak calculation if all games are finished
-								if (allGamesFinished) {
-									allWeeks.push({
-										week: pick.week,
-										leagueId: league._id,
-										correctPicks: correctInWeek,
-										totalPicks: totalPicksInWeek,
-										weeklyPoints: pick.weeklyPoints || 0,
-										isPerfectWeek,
-										allGamesFinished
-									});
+						// Only fully finished weeks feed streaks
+						if (allGamesFinished) {
+							allWeeks.push({
+								week: pick.week,
+								leagueId: league._id,
+								correctPicks: correctInWeek,
+								totalPicks: totalPicksInWeek,
+								weeklyPoints: pick.weeklyPoints || 0,
+								isPerfectWeek,
+								allGamesFinished
+							});
+							if (isPerfectWeek) perfectWeeksSet.add(`week-${pick.week}`);
+						}
+					}
+				});
 
-									// Track unique perfect weeks (same week across multiple leagues counts as one)
-									if (isPerfectWeek) {
-										perfectWeeksSet.add(`week-${pick.week}`);
-									}
-								}
-							}
-						});
+				const weeksPlayed = picks.filter(p => p.picks.some(isFinished)).length;
+				const leagueWeeksWon = seasonStats?.weeksWon || 0;
 
-						// Count weeks with at least one finished game
-						const weeksPlayed = picks.filter((p: PickData) => p.picks.some(pick => pick.isCorrect !== undefined && pick.isCorrect !== null)).length;
-
-						// Fetch weeks won and recalculated weekly stats from seasonStats API
-						try {
-							const seasonStatsResponse = await fetch(`/api/seasonStats?leagueId=${league._id}`);
-							if (seasonStatsResponse.ok) {
-								const seasonStatsData = await seasonStatsResponse.json();
-								leagueWeeksWon = seasonStatsData.weeksWon || 0;
-
-								// Use recalculated weekly stats for best week (retroactive)
-								if (seasonStatsData.weeklyStats) {
-									Object.entries(seasonStatsData.weeklyStats).forEach(([week, weekData]: [string, any]) => {
-										const weekPoints = weekData.weeklyPoints || 0;
-										if (weekPoints > leagueBestWeekPoints) {
-											leagueBestWeekPoints = weekPoints;
-										}
-										if (weekPoints > allTimeData.bestWeekPoints) {
-											allTimeData.bestWeekPoints = weekPoints;
-											allTimeData.bestWeekNumber = parseInt(week);
-										}
-									});
-								}
-							}
-						} catch (error) {
-							console.error('Error fetching weeks won for league:', league._id, error);
+				// Use recalculated weekly stats for best week (retroactive)
+				if (seasonStats?.weeklyStats) {
+					Object.entries(seasonStats.weeklyStats).forEach(([week, weekData]) => {
+						const weekPoints = weekData.weeklyPoints || 0;
+						if (weekPoints > leagueBestWeekPoints) leagueBestWeekPoints = weekPoints;
+						if (weekPoints > allTimeData.bestWeekPoints) {
+							allTimeData.bestWeekPoints = weekPoints;
+							allTimeData.bestWeekNumber = parseInt(week);
 						}
 
-						leagueStatsData.push({
-							leagueId: league._id,
-							leagueName: league.name,
-							leagueMode: league.mode || 'standard',
-							totalPoints: leagueTotalPoints,
-							correctPicks: leagueCorrectPicks,
-							totalPicks: leagueTotalPicks,
-							totalTFSPoints: leagueTotalTFSPoints,
-							winPercentage: leagueTotalPicks > 0 ? (leagueCorrectPicks / leagueTotalPicks) * 100 : 0,
-							weeksPlayed,
-							bestWeekPoints: leagueBestWeekPoints,
-							currentStreak: 0,
-							bestStreak: 0,
-							weeksWon: leagueWeeksWon
-						});
-
-						allTimeData.totalPoints += leagueTotalPoints;
-						allTimeData.correctPicks += leagueCorrectPicks;
-						allTimeData.totalPicks += leagueTotalPicks;
-						allTimeData.totalTFSPoints += leagueTotalTFSPoints;
-						allTimeData.totalWeeksPlayed += weeksPlayed;
-						allTimeData.totalWins += leagueCorrectPicks;
-						allTimeData.totalLosses += leagueTotalPicks - leagueCorrectPicks;
-					}
-				} catch (error) {
-					console.error('Error fetching stats for league:', league._id, error);
+						const weekNum = parseInt(week);
+						const agg = weekTotalsMap.get(weekNum) ?? { week: weekNum, points: 0, correct: 0, total: 0 };
+						agg.points += weekPoints;
+						agg.correct += weekData.correctPicks || 0;
+						agg.total += weekData.totalPicks || 0;
+						weekTotalsMap.set(weekNum, agg);
+					});
 				}
+
+				leagueStatsData.push({
+					leagueId: league._id,
+					leagueName: league.name,
+					leagueMode: league.mode || 'standard',
+					totalPoints: leagueTotalPoints,
+					correctPicks: leagueCorrectPicks,
+					totalPicks: leagueTotalPicks,
+					totalTFSPoints: leagueTotalTFSPoints,
+					winPercentage: leagueTotalPicks > 0 ? (leagueCorrectPicks / leagueTotalPicks) * 100 : 0,
+					weeksPlayed,
+					bestWeekPoints: leagueBestWeekPoints,
+					currentStreak: 0,
+					bestStreak: 0,
+					weeksWon: leagueWeeksWon
+				});
+
+				allTimeData.totalPoints += leagueTotalPoints;
+				allTimeData.correctPicks += leagueCorrectPicks;
+				allTimeData.totalPicks += leagueTotalPicks;
+				allTimeData.totalTFSPoints += leagueTotalTFSPoints;
+				allTimeData.totalWeeksPlayed += weeksPlayed;
+				allTimeData.totalWins += leagueCorrectPicks;
+				allTimeData.totalLosses += leagueTotalPicks - leagueCorrectPicks;
 			}
 
-			// Calculate perfect weeks (unique weeks only)
 			allTimeData.perfectWeeks = perfectWeeksSet.size;
 
-			// Calculate streaks based on consecutive weeks
-			// Group by week number and sum correct picks across all leagues for that week
+			// Streaks: group by week number across leagues, 60%+ accuracy extends a streak
 			const weekMap = new Map<number, { correct: number; total: number }>();
 			allWeeks.forEach(w => {
 				const existing = weekMap.get(w.week) || { correct: 0, total: 0 };
-				weekMap.set(w.week, {
-					correct: existing.correct + w.correctPicks,
-					total: existing.total + w.totalPicks
-				});
+				weekMap.set(w.week, { correct: existing.correct + w.correctPicks, total: existing.total + w.totalPicks });
 			});
-
-			// Sort weeks and calculate streaks
 			const sortedWeeks = Array.from(weekMap.entries())
 				.sort((a, b) => a[0] - b[0])
 				.map(([week, data]) => ({ week, ...data }));
+			const goodWeek = (w: { correct: number; total: number }) => (w.total > 0 ? w.correct / w.total : 0) >= 0.6;
 
 			let currentStreak = 0;
 			let bestStreak = 0;
 			let tempStreak = 0;
-
-			// Calculate best streak (any consecutive weeks with 60%+ win rate)
-			for (let i = 0; i < sortedWeeks.length; i++) {
-				const winRate = sortedWeeks[i].total > 0 ? sortedWeeks[i].correct / sortedWeeks[i].total : 0;
-				if (winRate >= 0.6) {
+			for (const w of sortedWeeks) {
+				if (goodWeek(w)) {
 					tempStreak++;
 					bestStreak = Math.max(bestStreak, tempStreak);
 				} else {
 					tempStreak = 0;
 				}
 			}
-
-			// Calculate current streak (from most recent week backwards)
 			for (let i = sortedWeeks.length - 1; i >= 0; i--) {
-				const winRate = sortedWeeks[i].total > 0 ? sortedWeeks[i].correct / sortedWeeks[i].total : 0;
-				if (winRate >= 0.6) {
-					currentStreak++;
-				} else {
-					break;
-				}
+				if (goodWeek(sortedWeeks[i])) currentStreak++;
+				else break;
 			}
 
-			// If no complete weeks but user has picks with good win rate, count current streak as 1
-			if (currentStreak === 0 && allTimeData.totalPicks > 0) {
-				const currentWinRate = allTimeData.correctPicks / allTimeData.totalPicks;
-				if (currentWinRate >= 0.6) {
-					currentStreak = 1;
-					// Also set best streak to 1 if it's 0 and user is doing well
-					if (bestStreak === 0) {
-						bestStreak = 1;
-					}
-				}
+			// No complete weeks yet but a strong win rate: count it as a 1-week streak
+			if (currentStreak === 0 && allTimeData.totalPicks > 0 && allTimeData.correctPicks / allTimeData.totalPicks >= 0.6) {
+				currentStreak = 1;
+				if (bestStreak === 0) bestStreak = 1;
 			}
 
 			allTimeData.currentStreak = currentStreak;
 			allTimeData.bestStreak = bestStreak;
 
 			setLeagueStats(leagueStatsData);
+			setWeekTotals(Array.from(weekTotalsMap.values()).sort((a, b) => a.week - b.week));
 			setAllTimeStats({
 				...allTimeData,
 				winPercentage: allTimeData.totalPicks > 0 ? (allTimeData.correctPicks / allTimeData.totalPicks) * 100 : 0,
@@ -296,479 +314,371 @@ const StatsPage = () => {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
+
+	useEffect(() => {
+		if (status === 'unauthenticated') {
+			router.push('/login');
+			return;
+		}
+
+		if (status === 'authenticated') {
+			fetchStats();
+		}
+	}, [status, router, fetchStats]);
+
+
+	const achievements = useMemo(() => (allTimeStats ? getAchievements(allTimeStats) : []), [allTimeStats]);
+	// Pick one fact per data load (not per render)
+	const featuredFact = useMemo(() => {
+		if (!allTimeStats) return null;
+		const facts = getStatFacts(allTimeStats);
+		return facts[Math.floor(Math.random() * facts.length)];
+	}, [allTimeStats]);
+
+	const header = <PageHeader eyebrow={<><BarChart3 className='h-3.5 w-3.5' /> Season report</>} title='My Stats' description='Your picks, wins and streaks across every league.' />;
 
 	if (status === 'loading' || loading) {
 		return (
-			<div className='min-h-screen p-4 pt-8 flex items-center justify-center'>
-				<Spinner />
-			</div>
+			<PageContainer>
+				{header}
+				<div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
+					{Array.from({ length: 4 }).map((_, i) => (
+						<Skeleton key={i} className='h-32 rounded-2xl' />
+					))}
+				</div>
+				<div className='mt-6 grid gap-6 lg:grid-cols-2'>
+					<Skeleton className='h-64 rounded-2xl' />
+					<Skeleton className='h-64 rounded-2xl' />
+				</div>
+				<Skeleton className='mt-6 h-72 rounded-2xl' />
+			</PageContainer>
 		);
 	}
 
-	// Achievement badges
-	const getAchievements = () => {
-		if (!allTimeStats) return [];
-		const achievements = [];
+	if (!allTimeStats || leagueStats.length === 0) {
+		return (
+			<PageContainer>
+				{header}
+				<EmptyState
+					icon={BarChart3}
+					title='No stats yet'
+					description='Join a league and start making picks — your season numbers will show up here once games are graded.'
+					action={
+						<Button asChild>
+							<Link href='/dashboard'>Go to dashboard</Link>
+						</Button>
+					}
+				/>
+			</PageContainer>
+		);
+	}
 
-		// Perfect Week - Get 5/5 picks correct in a week
-		if (allTimeStats.perfectWeeks > 0) {
-			achievements.push({
-				icon: Crown,
-				label: 'Perfect Week',
-				value: `${allTimeStats.perfectWeeks}x`,
-				color: 'text-yellow-400',
-				description: 'Got all 5 picks correct in a week'
-			});
-		}
-
-		// Century Club - Reach 100 total points
-		if (allTimeStats.totalPoints >= 100) {
-			achievements.push({
-				icon: Trophy,
-				label: 'Century Club',
-				value: '100+ pts',
-				color: 'text-primary',
-				description: 'Earned 100+ total points'
-			});
-		}
-
-		// Points Machine - Reach 200 total points
-		if (allTimeStats.totalPoints >= 200) {
-			achievements.push({
-				icon: Rocket,
-				label: 'Points Machine',
-				value: '200+ pts',
-				color: 'text-pink-400',
-				description: 'Earned 200+ total points'
-			});
-		}
-
-		// Elite Picker - 60%+ win rate
-		if (allTimeStats.winPercentage >= 60) {
-			achievements.push({
-				icon: Star,
-				label: 'Elite Picker',
-				value: `${Math.round(allTimeStats.winPercentage)}%`,
-				color: 'text-accent',
-				description: 'Maintained 60%+ win rate'
-			});
-		}
-
-		// Sharpshooter - 80%+ win rate
-		if (allTimeStats.winPercentage >= 80) {
-			achievements.push({
-				icon: Crosshair,
-				label: 'Sharpshooter',
-				value: `${Math.round(allTimeStats.winPercentage)}%`,
-				color: 'text-red-400',
-				description: 'Achieved 80%+ win rate'
-			});
-		}
-
-		// Hot Streak - 5+ week winning streak
-		if (allTimeStats.bestStreak >= 5) {
-			achievements.push({
-				icon: Flame,
-				label: 'Hot Streak',
-				value: `${allTimeStats.bestStreak}`,
-				color: 'text-orange-400',
-				description: '5+ weeks with 60%+ win rate'
-			});
-		}
-
-		// Unstoppable - 10+ week winning streak
-		if (allTimeStats.bestStreak >= 10) {
-			achievements.push({
-				icon: Sparkles,
-				label: 'Unstoppable',
-				value: `${allTimeStats.bestStreak}`,
-				color: 'text-yellow-300',
-				description: '10+ week winning streak'
-			});
-		}
-
-		// TFS Master - 20+ TFS bonus points
-		if (allTimeStats.totalTFSPoints >= 20) {
-			achievements.push({
-				icon: Zap,
-				label: 'TFS Master',
-				value: `${allTimeStats.totalTFSPoints}`,
-				color: 'text-purple-400',
-				description: 'Earned 20+ TFS bonus points'
-			});
-		}
-
-		// TFS Expert - 50+ TFS bonus points
-		if (allTimeStats.totalTFSPoints >= 50) {
-			achievements.push({
-				icon: Zap,
-				label: 'TFS Expert',
-				value: `${allTimeStats.totalTFSPoints}`,
-				color: 'text-purple-300',
-				description: 'Earned 50+ TFS bonus points'
-			});
-		}
-
-		// League Warrior - Join 3+ leagues
-		if (allTimeStats.totalLeagues >= 3) {
-			achievements.push({
-				icon: Users,
-				label: 'League Warrior',
-				value: `${allTimeStats.totalLeagues}`,
-				color: 'text-blue-400',
-				description: 'Competing in 3+ leagues'
-			});
-		}
-
-		// Consistency King - Play 10+ weeks
-		if (allTimeStats.totalWeeksPlayed >= 10) {
-			achievements.push({
-				icon: Calendar,
-				label: 'Consistency King',
-				value: `${allTimeStats.totalWeeksPlayed} wks`,
-				color: 'text-green-400',
-				description: 'Played in 10+ weeks'
-			});
-		}
-
-		// Marathon Runner - Play 15+ weeks
-		if (allTimeStats.totalWeeksPlayed >= 15) {
-			achievements.push({
-				icon: Medal,
-				label: 'Marathon Runner',
-				value: `${allTimeStats.totalWeeksPlayed} wks`,
-				color: 'text-teal-400',
-				description: 'Played in 15+ weeks'
-			});
-		}
-
-		// Champion - 100+ correct picks
-		if (allTimeStats.correctPicks >= 100) {
-			achievements.push({
-				icon: Shield,
-				label: 'Champion',
-				value: `${allTimeStats.correctPicks}`,
-				color: 'text-amber-400',
-				description: 'Made 100+ correct picks'
-			});
-		}
-
-		// On Fire - Current streak of 3+ weeks
-		if (allTimeStats.currentStreak >= 3) {
-			achievements.push({
-				icon: Flame,
-				label: 'On Fire',
-				value: `${allTimeStats.currentStreak} now`,
-				color: 'text-orange-500',
-				description: 'Currently on a 3+ week streak'
-			});
-		}
-
-		return achievements;
-	};
-
-	const achievements = getAchievements();
-
-	// Generate cool stat facts
-	const getStatFacts = () => {
-		if (!allTimeStats) return [];
-		const facts = [];
-
-		// Calculate interesting stats
-		const pointsPerCorrectPick = allTimeStats.correctPicks > 0 ? (allTimeStats.totalPoints / allTimeStats.correctPicks).toFixed(1) : 0;
-
-		if (allTimeStats.winPercentage > 60) {
-			facts.push(`You're beating the house! ${Math.round(allTimeStats.winPercentage)}% win rate crushes the typical 50% mark`);
-		}
-		if (allTimeStats.bestWeekPoints >= 15) {
-			facts.push(`Your best week earned ${allTimeStats.bestWeekPoints} points - that's ${(allTimeStats.bestWeekPoints / (allTimeStats.avgPointsPerWeek || 1)).toFixed(1)}x your average!`);
-		}
-		if (allTimeStats.perfectWeeks > 0) {
-			facts.push(`Perfect weeks are rare - you've achieved ${allTimeStats.perfectWeeks} of them!`);
-		}
-		if (allTimeStats.currentStreak >= 3) {
-			facts.push(`You're on fire! ${allTimeStats.currentStreak} weeks in a row with 60%+ accuracy`);
-		}
-		if (allTimeStats.totalTFSPoints >= 20) {
-			facts.push(`Your TFS predictions have earned ${allTimeStats.totalTFSPoints} bonus points!`);
-		}
-		if (allTimeStats.totalWeeksPlayed >= 10) {
-			facts.push(`${allTimeStats.totalWeeksPlayed} weeks of dedication - you're in for the long haul!`);
-		}
-		if (pointsPerCorrectPick) {
-			facts.push(`Each correct pick earns you ${pointsPerCorrectPick} points on average`);
-		}
-
-		return facts.length > 0 ? facts : ['Keep making picks to unlock interesting stats!'];
-	};
-
-	const statFacts = getStatFacts();
+	const s = allTimeStats;
+	const incorrect = s.totalPicks - s.correctPicks;
+	const winPct = Math.round(s.winPercentage);
 
 	return (
-		<div className='min-h-screen p-4 pt-8'>
-			<div className='max-w-7xl mx-auto space-y-8'>
-				{/* Header with Animation */}
-				<motion.div
-					className='text-center space-y-4'
-					initial={{ opacity: 0, y: -20 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.5 }}
-				>
-					<h1 className='text-4xl lg:text-5xl font-display font-bold gradient-text'>Your Performance</h1>
-					<p className='text-xl text-muted-foreground max-w-2xl mx-auto'>Tracking your picks, wins, and domination</p>
-					{statFacts.length > 0 && (
-						<motion.div
-							className='inline-block px-6 py-3 rounded-full glass border border-primary/30 bg-gradient-to-r from-primary/10 to-accent/10'
-							initial={{ opacity: 0, scale: 0.9 }}
-							animate={{ opacity: 1, scale: 1 }}
-							transition={{ delay: 0.2, duration: 0.4 }}
-						>
-							<p className='text-sm font-medium text-primary flex items-center gap-2'>
-								<Sparkles className='h-4 w-4' />
-								{statFacts[Math.floor(Math.random() * statFacts.length)]}
-							</p>
-						</motion.div>
-					)}
-				</motion.div>
+		<PageContainer>
+			{header}
 
-				{/* Achievements Banner with Animation */}
-				{achievements.length > 0 && (
-					<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
-						<Card className='glass border-primary/30 bg-gradient-to-r from-primary/5 to-accent/5'>
-							<CardContent className='p-6'>
-								<h3 className='text-lg font-semibold mb-4 flex items-center gap-2'>
-									<Award className='h-5 w-5 text-primary' />
-									<span>Achievements Unlocked</span>
-								</h3>
-								<div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4'>
-									{achievements.map((achievement, i) => (
-										<motion.div
-											key={i}
-											className='text-center p-3 rounded-lg bg-card/50 border border-white/10 hover:border-primary/50 transition-all group cursor-default'
-											initial={{ opacity: 0, scale: 0.8 }}
-											animate={{ opacity: 1, scale: 1 }}
-											transition={{ delay: 0.4 + i * 0.05, duration: 0.3 }}
-											whileHover={{ scale: 1.05 }}
-										>
-											<achievement.icon className={`h-8 w-8 mx-auto mb-2 ${achievement.color}`} />
-											<p className='text-xs font-semibold text-foreground'>{achievement.label}</p>
-											<p className='text-sm font-bold text-primary'>{achievement.value}</p>
-											<p className='text-[10px] text-muted-foreground mt-1 leading-tight'>{achievement.description}</p>
-										</motion.div>
-									))}
-								</div>
-							</CardContent>
-						</Card>
-					</motion.div>
-				)}
-
-				{/* Key Stats Grid with Staggered Animation */}
-				{allTimeStats && (
-					<div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.4 }}>
-							<Card className='glass border-white/10 hover:border-primary/50 transition-all card-hover'>
-								<CardContent className='p-6 text-center space-y-2'>
-									<div className='relative'>
-										<Trophy className='h-10 w-10 text-yellow-400 mx-auto' />
-										<Flame className='h-4 w-4 text-orange-400 absolute top-0 right-1/3 animate-pulse' />
-									</div>
-									<p className='text-4xl font-bold text-foreground'>{allTimeStats.totalPoints}</p>
-									<p className='text-sm text-muted-foreground'>Total Points</p>
-								</CardContent>
-							</Card>
-						</motion.div>
-
-						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }}>
-							<Card className='glass border-white/10 hover:border-green-500/50 transition-all card-hover'>
-								<CardContent className='p-6 text-center space-y-2'>
-									<Target className='h-10 w-10 text-green-400 mx-auto' />
-									<p className='text-4xl font-bold text-green-400'>{Math.round(allTimeStats.winPercentage)}%</p>
-									<p className='text-sm text-muted-foreground'>Win Rate</p>
-									<motion.div className='w-full bg-muted/30 rounded-full h-2 mt-2' initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ delay: 0.8, duration: 0.6 }}>
-										<motion.div className='bg-green-400 h-2 rounded-full' initial={{ width: 0 }} animate={{ width: `${allTimeStats.winPercentage}%` }} transition={{ delay: 1, duration: 1 }} />
-									</motion.div>
-								</CardContent>
-							</Card>
-						</motion.div>
-
-						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.4 }}>
-							<Card className='glass border-white/10 hover:border-accent/50 transition-all card-hover'>
-								<CardContent className='p-6 text-center space-y-2'>
-									<TrendingUp className='h-10 w-10 text-accent mx-auto' />
-									<p className='text-4xl font-bold text-foreground'>{allTimeStats.avgPointsPerWeek.toFixed(1)}</p>
-									<p className='text-sm text-muted-foreground'>Avg/Week</p>
-								</CardContent>
-							</Card>
-						</motion.div>
-
-						<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.4 }}>
-							<Card className='glass border-white/10 hover:border-purple-500/50 transition-all card-hover'>
-								<CardContent className='p-6 text-center space-y-2'>
-									<Zap className='h-10 w-10 text-purple-400 mx-auto' />
-									<p className='text-4xl font-bold text-purple-400'>{allTimeStats.totalTFSPoints}</p>
-									<p className='text-sm text-muted-foreground'>TFS Bonus</p>
-								</CardContent>
-							</Card>
-						</motion.div>
-					</div>
-				)}
-
-				{/* Main Stats Breakdown */}
-				<div className='grid lg:grid-cols-2 gap-6'>
-					{/* Record Card */}
-					<Card className='glass border-white/10'>
-						<CardHeader>
-							<CardTitle className='text-2xl font-display font-bold flex items-center gap-2'>
-								<Trophy className='h-6 w-6 text-primary' />
-								Your Record
-							</CardTitle>
-						</CardHeader>
-						<CardContent className='space-y-4'>
-							{allTimeStats && (
-								<>
-									<div className='flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-green-500/10 to-transparent border-l-4 border-green-500'>
-										<span className='text-muted-foreground'>Correct Picks</span>
-										<span className='text-3xl font-bold text-green-400'>{allTimeStats.correctPicks}</span>
-									</div>
-									<div className='flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-red-500/10 to-transparent border-l-4 border-red-500'>
-										<span className='text-muted-foreground'>Incorrect Picks</span>
-										<span className='text-3xl font-bold text-red-400'>{allTimeStats.totalPicks - allTimeStats.correctPicks}</span>
-									</div>
-									<div className='flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-primary/10 to-transparent border-l-4 border-primary'>
-										<span className='text-muted-foreground'>Total Games Picked</span>
-										<span className='text-3xl font-bold text-primary'>{allTimeStats.totalPicks}</span>
-									</div>
-									<div className='flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-accent/10 to-transparent border-l-4 border-accent'>
-										<span className='text-muted-foreground'>Weeks Played</span>
-										<span className='text-3xl font-bold text-accent'>{allTimeStats.totalWeeksPlayed}</span>
-									</div>
-								</>
-							)}
-						</CardContent>
-					</Card>
-
-					{/* Performance Card */}
-					<Card className='glass border-white/10'>
-						<CardHeader>
-							<CardTitle className='text-2xl font-display font-bold flex items-center gap-2'>
-								<Flame className='h-6 w-6 text-orange-400' />
-								Performance
-							</CardTitle>
-						</CardHeader>
-						<CardContent className='space-y-4'>
-							{allTimeStats && (
-								<>
-									<div className='p-4 rounded-lg bg-card/50 border border-white/10'>
-										<div className='flex justify-between items-center mb-2'>
-											<span className='text-sm text-muted-foreground'>Win Rate</span>
-											<span className='text-2xl font-bold text-green-400'>{Math.round(allTimeStats.winPercentage)}%</span>
-										</div>
-										<div className='w-full bg-muted/30 rounded-full h-3'>
-											<div className='bg-gradient-to-r from-green-400 to-green-600 h-3 rounded-full transition-all' style={{ width: `${allTimeStats.winPercentage}%` }} />
-										</div>
-									</div>
-
-									{allTimeStats.perfectWeeks > 0 && (
-										<div className='p-4 rounded-lg bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/50'>
-											<div className='flex items-center justify-between'>
-												<div className='flex items-center gap-2'>
-													<Crown className='h-5 w-5 text-yellow-400' />
-													<span className='text-foreground font-semibold'>Perfect Weeks</span>
-												</div>
-												<span className='text-2xl font-bold text-yellow-400'>{allTimeStats.perfectWeeks}</span>
-											</div>
-											<p className='text-xs text-muted-foreground mt-1'>All 5 picks correct!</p>
-										</div>
-									)}
-
-									<div className='grid grid-cols-2 gap-4'>
-										<div className='p-4 rounded-lg bg-card/50 border border-white/10 text-center'>
-											<p className='text-xs text-muted-foreground mb-1'>Current Streak</p>
-											<p className='text-3xl font-bold text-primary'>{allTimeStats.currentStreak}</p>
-										</div>
-										<div className='p-4 rounded-lg bg-card/50 border border-white/10 text-center'>
-											<p className='text-xs text-muted-foreground mb-1'>Best Streak</p>
-											<p className='text-3xl font-bold text-accent'>{allTimeStats.bestStreak}</p>
-										</div>
-									</div>
-								</>
-							)}
-						</CardContent>
-					</Card>
+			{featuredFact && (
+				<div className='mb-6 flex animate-fade-in items-start gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-4 py-3'>
+					<Sparkles className='mt-0.5 h-4 w-4 shrink-0 text-primary' />
+					<p className='text-sm text-foreground/90'>{featuredFact}</p>
 				</div>
+			)}
 
-				{/* League Breakdown */}
-				<Card className='glass border-white/10'>
-					<CardHeader>
-						<CardTitle className='text-2xl font-display font-bold'>League Performance</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className='space-y-4'>
-							{leagueStats.length > 0 ? (
-								leagueStats.map((stat, index) => (
-									<div key={stat.leagueId} className='p-6 rounded-lg bg-gradient-to-r from-primary/5 to-transparent border border-primary/20 hover:border-primary/40 transition-all cursor-pointer group' onClick={() => router.push(`/league/${stat.leagueId}`)}>
-										<div className='flex items-start justify-between mb-4'>
-											<div className='flex items-center gap-3'>
-												<div className='w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-lg'>
-													#{index + 1}
-												</div>
-												<div>
-													<h3 className='text-xl font-semibold text-primary group-hover:text-accent transition-colors'>{stat.leagueName}</h3>
-													<p className='text-sm text-muted-foreground'>{stat.weeksPlayed} weeks • {stat.totalPicks} picks</p>
-												</div>
-											</div>
-											<Award className='h-6 w-6 text-primary group-hover:text-accent transition-colors' />
-										</div>
-
-										<div className={`grid grid-cols-2 ${stat.leagueMode === 'steve' ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-4`}>
-											<div className='text-center p-3 rounded-lg bg-card/30'>
-												<p className='text-xs text-muted-foreground mb-1'>Points</p>
-												<p className='text-2xl font-bold text-foreground'>{stat.totalPoints}</p>
-											</div>
-											<div className='text-center p-3 rounded-lg bg-card/30'>
-												<p className='text-xs text-muted-foreground mb-1'>Win %</p>
-												<p className='text-2xl font-bold text-green-400'>{Math.round(stat.winPercentage)}%</p>
-											</div>
-											<div className='text-center p-3 rounded-lg bg-card/30'>
-												<p className='text-xs text-muted-foreground mb-1'>Weeks Won</p>
-												<p className='text-2xl font-bold text-yellow-400'>{stat.weeksWon}</p>
-											</div>
-											<div className='text-center p-3 rounded-lg bg-card/30'>
-												<p className='text-xs text-muted-foreground mb-1'>Correct</p>
-												<p className='text-2xl font-bold text-primary'>{stat.correctPicks}</p>
-											</div>
-											<div className='text-center p-3 rounded-lg bg-card/30'>
-												<p className='text-xs text-muted-foreground mb-1'>Incorrect</p>
-												<p className='text-2xl font-bold text-red-400'>{stat.totalPicks - stat.correctPicks}</p>
-											</div>
-											{stat.leagueMode === 'steve' && (
-												<div className='text-center p-3 rounded-lg bg-card/30'>
-													<p className='text-xs text-muted-foreground mb-1'>TFS</p>
-													<p className='text-2xl font-bold text-accent'>{stat.totalTFSPoints}</p>
-												</div>
-											)}
-										</div>
-
-										{/* Win rate bar */}
-										<div className='mt-4'>
-											<div className='w-full bg-muted/30 rounded-full h-2'>
-												<div className='bg-gradient-to-r from-primary to-accent h-2 rounded-full transition-all' style={{ width: `${stat.winPercentage}%` }} />
-											</div>
-										</div>
-									</div>
-								))
-							) : (
-								<div className='text-center py-12 text-muted-foreground'>
-									<p>No league stats available yet. Start making picks to see your stats!</p>
-								</div>
-							)}
+			{/* Headline numbers */}
+			<div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
+				<StatTile label='Total points' value={s.totalPoints} icon={Trophy} tone='primary' sub={s.bestWeekPoints > 0 ? `Best: ${s.bestWeekPoints} in Wk ${s.bestWeekNumber}` : undefined} className='animate-slide-up' />
+				<StatTile
+					label='Win rate'
+					value={`${winPct}%`}
+					icon={Target}
+					tone='accent'
+					sub={
+						<div className='h-1 overflow-hidden rounded-full bg-accent/15' role='meter' aria-valuemin={0} aria-valuemax={100} aria-valuenow={winPct} aria-label='Win rate'>
+							<div className='h-full rounded-full bg-accent transition-[width] duration-700' style={{ width: `${Math.min(100, s.winPercentage)}%` }} />
 						</div>
-					</CardContent>
+					}
+					className='animate-slide-up [animation-delay:60ms]'
+				/>
+				<StatTile label='Avg / week' value={s.avgPointsPerWeek.toFixed(1)} icon={TrendingUp} tone='primary' sub={`${s.totalWeeksPlayed} weeks played`} className='animate-slide-up [animation-delay:120ms]' />
+				<StatTile label='TFS bonus' value={s.totalTFSPoints} icon={Zap} tone='warning' sub='Tiebreaker points' className='animate-slide-up [animation-delay:180ms]' />
+			</div>
+
+			{/* Record + Performance */}
+			<div className='mt-6 grid gap-6 lg:grid-cols-2'>
+				<Card className='p-5 sm:p-6'>
+					<SectionHeader title='Your Record' icon={Trophy} />
+					<div className='flex items-end justify-between gap-4'>
+						<p className='font-display text-5xl font-extrabold italic leading-none tracking-tight sm:text-6xl'>
+							<span className='text-accent'>{s.correctPicks}</span>
+							<span className='mx-1 text-muted-foreground'>-</span>
+							<span className='text-accent-2'>{incorrect}</span>
+						</p>
+						<p className='pb-1 text-right text-xs text-muted-foreground tabular'>
+							{s.totalPicks} games
+							<br />
+							{s.totalWeeksPlayed} weeks
+						</p>
+					</div>
+
+					{/* Win/loss split — two segments with a 2px surface gap */}
+					<div className='mt-4 flex h-2.5 gap-0.5 overflow-hidden rounded-full' aria-hidden>
+						{s.correctPicks > 0 && <div className='rounded-l-full bg-accent' style={{ flexGrow: s.correctPicks }} />}
+						{incorrect > 0 && <div className='rounded-r-full bg-accent-2' style={{ flexGrow: incorrect }} />}
+						{s.totalPicks === 0 && <div className='flex-1 bg-white/[0.06]' />}
+					</div>
+					<div className='mt-2 flex justify-between text-xs text-muted-foreground'>
+						<span className='flex items-center gap-1.5'>
+							<span className='h-2 w-2 rounded-full bg-accent' /> Correct
+						</span>
+						<span className='flex items-center gap-1.5'>
+							Incorrect <span className='h-2 w-2 rounded-full bg-accent-2' />
+						</span>
+					</div>
+
+					<dl className='mt-5 grid grid-cols-2 gap-3'>
+						<Metric label='Leagues' value={s.totalLeagues} />
+						<Metric label='Weeks played' value={s.totalWeeksPlayed} />
+					</dl>
+				</Card>
+
+				<Card className='p-5 sm:p-6'>
+					<SectionHeader title='Performance' icon={Flame} />
+					<dl className='grid grid-cols-2 gap-3'>
+						<Metric label='Current streak' value={s.currentStreak} sub='wks at 60%+' accent={s.currentStreak >= 3} />
+						<Metric label='Best streak' value={s.bestStreak} sub='wks at 60%+' />
+						<Metric label='Best week' value={s.bestWeekPoints} sub={s.bestWeekNumber ? `Week ${s.bestWeekNumber}` : undefined} />
+						<Metric label='Pts / correct pick' value={s.correctPicks > 0 ? (s.totalPoints / s.correctPicks).toFixed(1) : '—'} />
+					</dl>
+					{s.perfectWeeks > 0 && (
+						<div className='mt-3 flex items-center justify-between gap-3 rounded-xl border border-[#FFD66B]/25 bg-[#FFD66B]/[0.07] px-4 py-3'>
+							<div className='flex items-center gap-2.5'>
+								<Crown className='h-5 w-5 text-[#FFD66B]' />
+								<div>
+									<p className='text-sm font-semibold'>Perfect weeks</p>
+									<p className='text-xs text-muted-foreground'>All 5 picks correct</p>
+								</div>
+							</div>
+							<span className='font-display text-3xl font-extrabold italic tabular text-[#FFD66B]'>{s.perfectWeeks}</span>
+						</div>
+					)}
 				</Card>
 			</div>
-		</div>
+
+			{/* Week by week */}
+			{weekTotals.length > 0 && (
+				<section className='mt-8'>
+					<SectionHeader title='Week by Week' icon={BarChart3} action={<Pill>{leagueStats.length > 1 ? 'All leagues' : leagueStats[0].leagueName}</Pill>} />
+					<Card className='p-4 sm:p-6'>
+						<WeekColumns weeks={weekTotals} />
+					</Card>
+				</section>
+			)}
+
+			{/* League breakdown */}
+			<section className='mt-8'>
+				<SectionHeader title='By League' icon={Users} />
+				<div className='space-y-3'>
+					{leagueStats.map((stat, i) => (
+						<Link
+							key={stat.leagueId}
+							href={`/league/${stat.leagueId}`}
+							className='glass group block animate-slide-up rounded-2xl p-4 transition-colors hover:bg-white/[0.06] sm:p-5'
+							style={{ animationDelay: `${i * 50}ms` }}
+						>
+							<div className='flex items-center gap-3'>
+								<div className='min-w-0 flex-1'>
+									<div className='flex items-center gap-2'>
+										<h3 className='truncate font-display text-xl font-bold uppercase italic tracking-tight'>{stat.leagueName}</h3>
+										{stat.leagueMode === 'steve' && <Pill tone='warning'>TFS</Pill>}
+									</div>
+									<p className='text-xs text-muted-foreground tabular'>
+										{stat.weeksPlayed} weeks · {stat.totalPicks} picks
+									</p>
+								</div>
+								<div className='text-right'>
+									<p className='font-display text-3xl font-extrabold italic leading-none tabular'>{stat.totalPoints}</p>
+									<p className='eyebrow mt-0.5 text-[9px]'>pts</p>
+								</div>
+								<ChevronRight className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary' />
+							</div>
+
+							<dl className={cn('mt-4 grid grid-cols-3 gap-2', stat.leagueMode === 'steve' ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
+								<Metric compact label='Win %' value={`${Math.round(stat.winPercentage)}%`} />
+								<Metric compact label='Weeks won' value={stat.weeksWon} />
+								<Metric compact label='Correct' value={stat.correctPicks} />
+								<Metric compact label='Incorrect' value={stat.totalPicks - stat.correctPicks} />
+								{stat.leagueMode === 'steve' && <Metric compact label='TFS' value={stat.totalTFSPoints} />}
+							</dl>
+
+							<div className='mt-3 h-1 overflow-hidden rounded-full bg-accent/15'>
+								<div className='h-full rounded-full bg-accent' style={{ width: `${Math.min(100, stat.winPercentage)}%` }} />
+							</div>
+						</Link>
+					))}
+				</div>
+			</section>
+
+			{/* Achievements */}
+			{achievements.length > 0 && (
+				<section className='mt-8'>
+					<SectionHeader title='Achievements' icon={Award} action={<Pill tone='primary'>{achievements.length} unlocked</Pill>} />
+					<div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'>
+						{achievements.map((a, i) => (
+							<div key={a.label} className='glass animate-slide-up rounded-2xl p-4' style={{ animationDelay: `${i * 40}ms` }}>
+								<div className='flex items-start justify-between gap-2'>
+									<span className={cn('grid h-9 w-9 place-items-center rounded-xl', ACHIEVEMENT_TONES[a.tone])}>
+										<a.icon className='h-4 w-4' />
+									</span>
+									<span className='font-display text-lg font-extrabold italic tabular'>{a.value}</span>
+								</div>
+								<p className='mt-3 text-sm font-semibold'>{a.label}</p>
+								<p className='mt-0.5 text-xs leading-snug text-muted-foreground'>{a.description}</p>
+							</div>
+						))}
+					</div>
+				</section>
+			)}
+		</PageContainer>
 	);
 };
 
 export default StatsPage;
+
+/* ------------------------------------------------------------------ */
+
+function Metric({ label, value, sub, accent, compact }: { label: string; value: ReactNode; sub?: string; accent?: boolean; compact?: boolean }) {
+	return (
+		<div className={cn('rounded-xl border border-white/[0.07] bg-white/[0.03]', compact ? 'px-3 py-2' : 'p-3.5')}>
+			<dt className='eyebrow text-[10px]'>{label}</dt>
+			<dd className={cn('mt-1 font-display font-extrabold italic leading-none tabular', compact ? 'text-xl' : 'text-3xl', accent && 'text-accent')}>{value}</dd>
+			{sub && <dd className='mt-1 text-[11px] text-muted-foreground'>{sub}</dd>}
+		</div>
+	);
+}
+
+/** Single-series column chart: points per week. Value on the best week's cap; tooltip on hover/focus. */
+function WeekColumns({ weeks }: { weeks: WeekTotal[] }) {
+	const [active, setActive] = useState<number | null>(null);
+	const max = Math.max(...weeks.map(w => w.points), 1);
+	const step = [1, 2, 5, 10, 20, 25, 50, 100].find(s => max / s <= 4) ?? Math.ceil(max / 4);
+	const top = Math.ceil(max / step) * step;
+	const ticks: number[] = [];
+	for (let t = 0; t <= top; t += step) ticks.push(t);
+	const best = weeks.reduce((b, w) => (w.points > b.points ? w : b), weeks[0]);
+	const activeWeek = weeks.find(w => w.week === active) ?? null;
+
+	return (
+		<div>
+			<div className='mb-3 flex h-5 items-center justify-between text-xs text-muted-foreground'>
+				{activeWeek ? (
+					<p>
+						<span className='font-semibold text-foreground'>Week {activeWeek.week}</span> · <span className='font-display text-sm font-bold italic tabular text-foreground'>{activeWeek.points}</span> pts · {activeWeek.correct}/{activeWeek.total} correct
+					</p>
+				) : (
+					<p>Tap or hover a week for details</p>
+				)}
+			</div>
+			<div className='relative flex h-48 gap-2'>
+				{/* Y axis + gridlines share one coordinate system: bottom 1.5rem is the label row */}
+				<div className='relative w-6 shrink-0'>
+					{ticks.map(t => (
+						<span key={t} className='absolute right-0 translate-y-1/2 text-[10px] leading-none text-muted-foreground tabular' style={{ bottom: `calc(${t / top} * (100% - 1.5rem) + 1.5rem)` }}>
+							{t}
+						</span>
+					))}
+				</div>
+				<div className='relative min-w-0 flex-1'>
+					{ticks.map(t => (
+						<div key={t} className='pointer-events-none absolute inset-x-0 h-px bg-white/[0.07]' style={{ bottom: `calc(${t / top} * (100% - 1.5rem) + 1.5rem)` }} />
+					))}
+					<ol className='relative flex h-full items-stretch gap-0.5' onMouseLeave={() => setActive(null)}>
+						{weeks.map(w => {
+							const pct = (w.points / top) * 100;
+							const isActive = active === w.week;
+							return (
+								<li key={w.week} className='flex min-w-0 flex-1 flex-col'>
+									<button
+										type='button'
+										onMouseEnter={() => setActive(w.week)}
+										onFocus={() => setActive(w.week)}
+										onClick={() => setActive(w.week)}
+										aria-label={`Week ${w.week}: ${w.points} points, ${w.correct} of ${w.total} correct`}
+										className={cn('relative flex flex-1 items-end justify-center rounded-t-md transition-colors', isActive && 'bg-white/[0.04]')}
+									>
+										{w.week === best.week && w.points > 0 && (
+											<span className='absolute left-1/2 -translate-x-1/2 text-[10px] font-bold leading-none text-foreground tabular' style={{ bottom: `calc(${pct}% + 4px)` }}>
+												{w.points}
+											</span>
+										)}
+										<span
+											className={cn('block w-full max-w-6 rounded-t bg-primary transition-opacity', active !== null && !isActive && 'opacity-50')}
+											style={{ height: `${Math.max(pct, w.points > 0 ? 2 : 0.5)}%` }}
+										/>
+									</button>
+									<span className={cn('h-6 pt-1.5 text-center text-[10px] font-semibold leading-none tabular', isActive ? 'text-foreground' : 'text-muted-foreground')}>{w.week}</span>
+								</li>
+							);
+						})}
+					</ol>
+				</div>
+			</div>
+			<table className='sr-only'>
+				<caption>Points per week</caption>
+				<thead>
+					<tr>
+						<th scope='col'>Week</th>
+						<th scope='col'>Points</th>
+						<th scope='col'>Correct</th>
+					</tr>
+				</thead>
+				<tbody>
+					{weeks.map(w => (
+						<tr key={w.week}>
+							<td>{w.week}</td>
+							<td>{w.points}</td>
+							<td>
+								{w.correct}/{w.total}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	);
+}
+
+function getAchievements(s: AllTimeStats): Achievement[] {
+	const list: Achievement[] = [];
+	if (s.perfectWeeks > 0) list.push({ icon: Crown, label: 'Perfect Week', value: `${s.perfectWeeks}x`, tone: 'gold', description: 'Got all 5 picks correct in a week' });
+	if (s.totalPoints >= 100) list.push({ icon: Trophy, label: 'Century Club', value: '100+', tone: 'primary', description: 'Earned 100+ total points' });
+	if (s.totalPoints >= 200) list.push({ icon: Rocket, label: 'Points Machine', value: '200+', tone: 'hot', description: 'Earned 200+ total points' });
+	if (s.winPercentage >= 60) list.push({ icon: Star, label: 'Elite Picker', value: `${Math.round(s.winPercentage)}%`, tone: 'accent', description: 'Maintained 60%+ win rate' });
+	if (s.winPercentage >= 80) list.push({ icon: Crosshair, label: 'Sharpshooter', value: `${Math.round(s.winPercentage)}%`, tone: 'hot', description: 'Achieved 80%+ win rate' });
+	if (s.bestStreak >= 5) list.push({ icon: Flame, label: 'Hot Streak', value: `${s.bestStreak}`, tone: 'warning', description: '5+ weeks with 60%+ win rate' });
+	if (s.bestStreak >= 10) list.push({ icon: Sparkles, label: 'Unstoppable', value: `${s.bestStreak}`, tone: 'gold', description: '10+ week winning streak' });
+	if (s.totalTFSPoints >= 20) list.push({ icon: Zap, label: 'TFS Master', value: `${s.totalTFSPoints}`, tone: 'violet', description: 'Earned 20+ TFS bonus points' });
+	if (s.totalTFSPoints >= 50) list.push({ icon: Zap, label: 'TFS Expert', value: `${s.totalTFSPoints}`, tone: 'violet', description: 'Earned 50+ TFS bonus points' });
+	if (s.totalLeagues >= 3) list.push({ icon: Users, label: 'League Warrior', value: `${s.totalLeagues}`, tone: 'primary', description: 'Competing in 3+ leagues' });
+	if (s.totalWeeksPlayed >= 10) list.push({ icon: Calendar, label: 'Consistency King', value: `${s.totalWeeksPlayed}w`, tone: 'accent', description: 'Played in 10+ weeks' });
+	if (s.totalWeeksPlayed >= 15) list.push({ icon: Medal, label: 'Marathon Runner', value: `${s.totalWeeksPlayed}w`, tone: 'primary', description: 'Played in 15+ weeks' });
+	if (s.correctPicks >= 100) list.push({ icon: Shield, label: 'Champion', value: `${s.correctPicks}`, tone: 'gold', description: 'Made 100+ correct picks' });
+	if (s.currentStreak >= 3) list.push({ icon: Flame, label: 'On Fire', value: `${s.currentStreak}`, tone: 'hot', description: 'Currently on a 3+ week streak' });
+	return list;
+}
+
+function getStatFacts(s: AllTimeStats): string[] {
+	const facts: string[] = [];
+	if (s.winPercentage > 60) facts.push(`You're beating the house! ${Math.round(s.winPercentage)}% win rate crushes the typical 50% mark`);
+	if (s.bestWeekPoints >= 15) facts.push(`Your best week earned ${s.bestWeekPoints} points — that's ${(s.bestWeekPoints / (s.avgPointsPerWeek || 1)).toFixed(1)}x your average!`);
+	if (s.perfectWeeks > 0) facts.push(`Perfect weeks are rare — you've achieved ${s.perfectWeeks} of them!`);
+	if (s.currentStreak >= 3) facts.push(`You're on fire! ${s.currentStreak} weeks in a row with 60%+ accuracy`);
+	if (s.totalTFSPoints >= 20) facts.push(`Your TFS predictions have earned ${s.totalTFSPoints} bonus points!`);
+	if (s.totalWeeksPlayed >= 10) facts.push(`${s.totalWeeksPlayed} weeks of dedication — you're in for the long haul!`);
+	if (s.correctPicks > 0) facts.push(`Each correct pick earns you ${(s.totalPoints / s.correctPicks).toFixed(1)} points on average`);
+	return facts.length > 0 ? facts : ['Keep making picks to unlock interesting stats!'];
+}

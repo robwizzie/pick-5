@@ -1,17 +1,38 @@
 'use client';
 
 import { useState } from 'react';
-import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { CheckCircle2, Info, Radio, RefreshCw, XCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Spinner } from '@/components/ui/spinner';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { PageContainer, PageHeader } from '@/components/ui/page';
+
+interface OddsFetchResult {
+	success: boolean;
+	week?: number;
+	season?: number;
+	totalGames?: number;
+	snapshotsCreated?: number;
+	snapshotsUpdated?: number;
+	snapshotsSkipped?: number;
+	timestamp?: string;
+	error?: string;
+}
+
+interface TriggerOddsFetchResponse {
+	success?: boolean;
+	message?: string;
+	result?: OddsFetchResult;
+	error?: string;
+	details?: string;
+}
 
 export default function FetchOddsPage() {
-	const { data: session, status } = useSession();
 	const [loading, setLoading] = useState(false);
-	const [result, setResult] = useState<any>(null);
+	const [result, setResult] = useState<OddsFetchResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [weekInput, setWeekInput] = useState<string>('');
 
@@ -30,131 +51,104 @@ export default function FetchOddsPage() {
 				body: JSON.stringify(body)
 			});
 
-			const data = await response.json();
+			const data: TriggerOddsFetchResponse = await response.json();
 
 			if (!response.ok) {
-				setError(data.error || 'Failed to fetch odds');
+				const message = data.error || 'Failed to fetch odds';
+				setError(message);
+				toast.error(message);
 			} else {
-				setResult(data.result);
+				setResult(data.result ?? null);
+				toast.success('Odds fetched successfully');
 			}
 		} catch (err) {
 			console.error('Error triggering odds fetch:', err);
 			setError('An unexpected error occurred');
+			toast.error('An unexpected error occurred');
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	if (status === 'loading') {
-		return (
-			<div className='container mx-auto p-4'>
-				<Card>
-					<CardContent className='p-6'>
-						<Spinner />
-					</CardContent>
-				</Card>
-			</div>
-		);
-	}
-
-	if (!session) {
-		return (
-			<div className='container mx-auto p-4'>
-				<Card>
-					<CardContent className='p-6'>
-						<Alert>
-							<AlertDescription>Please sign in to access this page</AlertDescription>
-						</Alert>
-					</CardContent>
-				</Card>
-			</div>
-		);
-	}
+	const rows: { label: string; value: React.ReactNode; className?: string }[] = result
+		? [
+				{ label: 'Week', value: result.week },
+				{ label: 'Season', value: result.season },
+				{ label: 'Games found', value: result.totalGames },
+				{ label: 'New snapshots', value: result.snapshotsCreated, className: 'text-accent' },
+				{ label: 'Updated snapshots', value: result.snapshotsUpdated, className: 'text-primary' },
+				{ label: 'Skipped (started)', value: result.snapshotsSkipped, className: 'text-warning' },
+				{ label: 'Timestamp', value: result.timestamp ? new Date(result.timestamp).toLocaleString() : '—', className: 'text-xs' }
+			]
+		: [];
 
 	return (
-		<div className='container mx-auto p-4 max-w-2xl'>
-			<Card>
-				<CardHeader>
-					<CardTitle>Manually Fetch Odds</CardTitle>
-				</CardHeader>
-				<CardContent className='space-y-4'>
-					<Alert>
-						<AlertDescription>
-							This will fetch current odds from The Odds API and store them in the database. Use this to manually update odds before games start or when there are major line movements.
-						</AlertDescription>
-					</Alert>
+		<PageContainer size='narrow'>
+			<PageHeader eyebrow='Admin · Odds' title='Fetch Odds' description='Manually trigger an odds fetch from The Odds API and store it in the database' />
 
-					<div className='space-y-2'>
-						<label htmlFor='week-input' className='text-sm font-medium'>
-							Week (optional)
-						</label>
-						<Input
-							id='week-input'
-							type='number'
-							min='1'
-							max='18'
-							placeholder='Leave empty for current week'
-							value={weekInput}
-							onChange={e => setWeekInput(e.target.value)}
-							disabled={loading}
-						/>
-						<p className='text-xs text-muted-foreground'>Enter a specific week number (1-18) or leave empty to fetch odds for the current week</p>
-					</div>
-
-					<Button onClick={handleFetchOdds} disabled={loading} className='w-full bg-primary text-black hover:bg-primary/90'>
-						{loading ? 'Fetching Odds...' : weekInput ? `Fetch Odds for Week ${weekInput}` : 'Fetch Odds for Current Week'}
-					</Button>
-
-					{error && (
-						<Alert variant='destructive'>
-							<AlertDescription>{error}</AlertDescription>
+			<div className='space-y-6'>
+				<Card>
+					<CardContent className='space-y-5 p-5 sm:p-6'>
+						<Alert variant='info'>
+							<Info />
+							<AlertDescription>
+								This will fetch current odds from The Odds API and store them in the database. Use this to manually update odds before games start or when there are major line movements.
+							</AlertDescription>
 						</Alert>
-					)}
 
-					{result && (
-						<div className='space-y-4'>
-							<Alert>
-								<AlertDescription className='text-green-600 font-medium'>✓ Odds fetched successfully!</AlertDescription>
-							</Alert>
-
-							<Card className='bg-muted/50'>
-								<CardContent className='p-4'>
-									<div className='space-y-2 text-sm'>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>Week:</span>
-											<span className='font-medium'>{result.week}</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>Season:</span>
-											<span className='font-medium'>{result.season}</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>Games Found:</span>
-											<span className='font-medium'>{result.totalGames}</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>New Snapshots:</span>
-											<span className='font-medium text-green-600'>{result.snapshotsCreated}</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>Updated Snapshots:</span>
-											<span className='font-medium text-blue-600'>{result.snapshotsUpdated}</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>Skipped (started):</span>
-											<span className='font-medium text-orange-600'>{result.snapshotsSkipped}</span>
-										</div>
-										<div className='flex justify-between'>
-											<span className='text-muted-foreground'>Timestamp:</span>
-											<span className='font-medium text-xs'>{new Date(result.timestamp).toLocaleString()}</span>
-										</div>
-									</div>
-								</CardContent>
-							</Card>
+						<div className='space-y-2'>
+							<Label htmlFor='week-input'>Week (optional)</Label>
+							<Input
+								id='week-input'
+								type='number'
+								inputMode='numeric'
+								min='1'
+								max='18'
+								placeholder='Leave empty for current week'
+								value={weekInput}
+								onChange={e => setWeekInput(e.target.value)}
+								disabled={loading}
+								className='tabular'
+							/>
+							<p className='text-xs text-muted-foreground'>Enter a specific week number (1-18) or leave empty to fetch odds for the current week</p>
 						</div>
-					)}
-				</CardContent>
-			</Card>
-		</div>
+
+						<Button onClick={handleFetchOdds} disabled={loading} size='lg' className='w-full'>
+							{loading ? <RefreshCw className='animate-spin' /> : <Radio />}
+							{loading ? 'Fetching odds…' : weekInput ? `Fetch Odds for Week ${weekInput}` : 'Fetch Odds for Current Week'}
+						</Button>
+					</CardContent>
+				</Card>
+
+				{error && (
+					<Alert variant='destructive'>
+						<XCircle />
+						<AlertDescription>{error}</AlertDescription>
+					</Alert>
+				)}
+
+				{result && (
+					<div className='space-y-4 animate-fade-in'>
+						<Alert variant='success'>
+							<CheckCircle2 />
+							<AlertTitle>Odds fetched successfully</AlertTitle>
+						</Alert>
+
+						<Card>
+							<CardContent className='p-5 sm:p-6'>
+								<dl className='divide-y divide-white/[0.06]'>
+									{rows.map(row => (
+										<div key={row.label} className='flex items-center justify-between gap-4 py-2.5 text-sm'>
+											<dt className='text-muted-foreground'>{row.label}</dt>
+											<dd className={`tabular font-semibold ${row.className ?? ''}`}>{row.value ?? '—'}</dd>
+										</div>
+									))}
+								</dl>
+							</CardContent>
+						</Card>
+					</div>
+				)}
+			</div>
+		</PageContainer>
 	);
 }
