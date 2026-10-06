@@ -3,15 +3,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useSession } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
+import { FcGoogle } from 'react-icons/fc';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowRight, CheckCircle2, Compass, LayoutDashboard, Ticket, XCircle } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Compass, LayoutDashboard, Ticket, Users, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageContainer, Pill } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
-type JoinStatus = 'loading' | 'success' | 'error' | 'already_member';
+type JoinStatus = 'loading' | 'signin' | 'success' | 'error' | 'already_member';
+
+export interface InvitePreview {
+	name: string;
+	members: number;
+	mode: string;
+}
 
 interface JoinResponse {
 	message?: string;
@@ -19,7 +26,7 @@ interface JoinResponse {
 	league?: { id: string; name: string };
 }
 
-export default function JoinInvitePage() {
+export default function JoinInviteClient({ preview }: { preview: InvitePreview | null }) {
 	const params = useParams();
 	const inviteCode = (params?.inviteCode as string) || '';
 	const router = useRouter();
@@ -65,17 +72,16 @@ export default function JoinInvitePage() {
 
 	useEffect(() => {
 		if (status === 'unauthenticated') {
-			// Store the invite code in sessionStorage so we can join after login
-			try {
-				sessionStorage.setItem('pendingInviteCode', inviteCode);
-			} catch {
-				// Storage can be unavailable (private mode); login still proceeds
+			if (preview) {
+				setJoinStatus('signin');
+			} else {
+				setJoinStatus('error');
+				setErrorMessage('This invite link isn’t valid');
 			}
-			router.push('/login');
 		} else if (status === 'authenticated') {
 			handleJoinLeague();
 		}
-	}, [status, inviteCode, router, handleJoinLeague]);
+	}, [status, preview, handleJoinLeague]);
 
 	const isLoading = status === 'loading' || joinStatus === 'loading';
 	const isError = !isLoading && joinStatus === 'error';
@@ -90,6 +96,35 @@ export default function JoinInvitePage() {
 				/>
 
 				<div className='relative flex flex-col items-center px-6 pb-7 pt-9 text-center sm:px-8'>
+					{joinStatus === 'signin' && preview && (
+						<>
+							<div className='relative mb-6 h-[5.5rem] w-20'>
+								<Image src='/pick-5-logo-sm.webp' alt='Pick 5' fill sizes='80px' className='object-contain' priority />
+							</div>
+							<p className='eyebrow mb-3 flex items-center gap-2'>
+								<Ticket className='h-3.5 w-3.5 text-primary' /> You&apos;re invited to
+							</p>
+							<h1 className='display-heading break-words text-4xl sm:text-5xl'>
+								<span className='gradient-text'>{preview.name}</span>
+							</h1>
+							<div className='mt-4 flex flex-wrap justify-center gap-2'>
+								<Pill tone={preview.mode === 'steve' ? 'accent' : 'primary'}>{preview.mode === 'steve' ? 'Steve mode' : 'Standard'}</Pill>
+								<Pill>
+									<Users className='h-3 w-3' /> {preview.members} {preview.members === 1 ? 'player' : 'players'}
+								</Pill>
+							</div>
+							<p className='mt-4 text-sm text-muted-foreground'>Pick five NFL games a week, back the underdogs for bigger points, and climb the standings. Free to play.</p>
+							<Button
+								size='xl'
+								onClick={() => signIn('google', { callbackUrl: `/league/join/${inviteCode}` })}
+								className='mt-7 w-full bg-white text-[#0b0d12] shadow-[0_12px_40px_-12px_rgba(255,255,255,0.45)] hover:bg-white hover:brightness-100'
+							>
+								<FcGoogle className='!size-5' /> Continue with Google
+							</Button>
+							<p className='mt-3 text-xs text-muted-foreground'>You’ll join the league as soon as you sign in.</p>
+						</>
+					)}
+
 					{isLoading && (
 						<>
 							<div className='relative mb-6 h-[5.5rem] w-20'>

@@ -4,7 +4,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Landing } from '@/components/landing/Landing';
 
-export const metadata: Metadata = { title: 'Sign in' };
+export const metadata: Metadata = {
+	title: 'Sign in',
+	alternates: { canonical: '/' },
+	robots: { index: false, follow: true }
+};
 
 /**
  * Reduce the callback to a same-site path. The auth middleware sends an absolute
