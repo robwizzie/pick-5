@@ -8,37 +8,33 @@ export const dynamic = 'force-dynamic'; // Ensure dynamic behavior
 
 export async function GET(req: Request, context: { params: Promise<{ id: string }> }) {
 	try {
-		// Connect to the database
-		await connectDB();
+		const session = await getServerSession(authOptions);
+		const userId = session?.user?.id;
+		if (!userId) {
+			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		}
 
-		// Ensure params is resolved before use
-		const resolvedParams = await context.params;
-		const { id } = resolvedParams;
-
-		// Log the resolved params for debugging
-		console.log('[API Debug] Resolved Params:', resolvedParams);
-		console.log('[API Debug] Extracted ID:', id);
-
-		// Ensure `id` is available
+		const { id } = await context.params;
 		if (!id) {
 			return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
 		}
 
-		// Find the league by ID
+		await connectDB();
 		const league = await League.findById(id);
-
-		// Log the league data
-		console.log('[API Debug] League Data:', league);
-
-		// Handle the case where the league is not found
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
 
-		// Return the league data
-		return NextResponse.json(league);
+		// Only members may view a league; the invite code is the commissioner's to share
+		if (!league.members.map(String).includes(userId)) {
+			return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
+		}
+		const data = league.toJSON();
+		if (String(league.creatorId) !== userId) delete data.inviteCode;
+
+		return NextResponse.json(data);
 	} catch (error) {
-		console.error('[API Debug] Error fetching league:', error);
+		console.error('Error fetching league:', error);
 		return NextResponse.json({ error: 'Failed to fetch league' }, { status: 500 });
 	}
 }
