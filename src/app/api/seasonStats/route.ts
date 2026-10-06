@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,9 @@ export async function GET(req: Request) {
 
 		const { searchParams } = new URL(req.url);
 		const leagueId = searchParams.get('leagueId');
+		// Optional ?season=YYYY; defaults to the current season
+		const season = parseSeasonParam(searchParams.get('season'));
+		const seasonFilter = seasonPickFilter(season);
 
 		if (!leagueId) {
 			return NextResponse.json({ error: 'League ID is required' }, { status: 400 });
@@ -35,27 +39,30 @@ export async function GET(req: Request) {
 		const leagueMode = (league as any).mode || 'standard';
 
 		// Find picks for the user in the specific league
-		const userPicks = await Pick.find({ userId: session.user.id, leagueId }).lean();
+		const userPicks = await Pick.find({ userId: session.user.id, leagueId, ...seasonFilter }).lean();
 
 		// Get unique weeks from picks
 		const weekSet = new Set<number>();
 		userPicks.forEach(p => weekSet.add(p.week));
 		const uniqueWeeks = Array.from(weekSet);
 
-		// Fetch game results for all weeks
-		const gameResultsByWeek = new Map();
-		for (const weekNum of uniqueWeeks) {
-			const weekGames = await NFLService.getWeeklyGames(weekNum);
-			const results = weekGames.map(game => ({
-				id: game.id,
-				homeScore: game.home.score || 0,
-				awayScore: game.away.score || 0,
-				homeTeam: game.home.team,
-				awayTeam: game.away.team,
-				status: game.status // Include game status for accurate scoring
-			}));
-			gameResultsByWeek.set(weekNum, results);
-		}
+		// Fetch game results for every week, and every member's picks for those weeks, in parallel
+		const [weekResultsList, leaguePicks] = await Promise.all([
+			Promise.all(
+				uniqueWeeks.map(async weekNum =>
+					(await NFLService.getWeeklyGames(weekNum, season)).map(game => ({
+						id: game.id,
+						homeScore: game.home.score || 0,
+						awayScore: game.away.score || 0,
+						homeTeam: game.home.team,
+						awayTeam: game.away.team,
+						status: game.status
+					}))
+				)
+			),
+			Pick.find({ leagueId, week: { $in: uniqueWeeks }, ...seasonFilter }).lean()
+		]);
+		const gameResultsByWeek = new Map(uniqueWeeks.map((weekNum, i) => [weekNum, weekResultsList[i]]));
 
 		// Initialize weekly stats and totals
 		const weeklyStats: Record<string, { weeklyPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number }> = {};
@@ -76,7 +83,8 @@ export async function GET(req: Request) {
 				pick.tfsGame,
 				pick.tfsScore,
 				leagueMode,
-				calculatePointsFromOdds
+				calculatePointsFromOdds,
+			pick.lockGameId
 			);
 
 			// Store weekly stats
@@ -96,8 +104,7 @@ export async function GET(req: Request) {
 
 		// Calculate weeks won (weeks where user got 1st or tied for 1st)
 		for (const week of uniqueWeeks) {
-			// Get all picks for this week in the league
-			const allPicksForWeek = await Pick.find({ week, leagueId }).lean();
+			const allPicksForWeek = leaguePicks.filter(p => p.week === week);
 
 			// Calculate scores for all users in this week
 			const weekResults = gameResultsByWeek.get(week) || [];
@@ -111,7 +118,8 @@ export async function GET(req: Request) {
 					pick.tfsGame,
 					pick.tfsScore,
 					leagueMode,
-					calculatePointsFromOdds
+					calculatePointsFromOdds,
+				pick.lockGameId
 				);
 
 				if (pick.userId.toString() === session.user.id) {

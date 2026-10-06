@@ -1,145 +1,43 @@
-'use client';
+import type { Metadata } from 'next';
+import { cache } from 'react';
+import { connectDB } from '@/lib/db';
+import { League } from '@/models/League';
+import JoinInviteClient, { type InvitePreview } from './JoinInviteClient';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter, useParams } from 'next/navigation';
-import { Spinner } from '@/components/ui/spinner';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { CheckCircle2, XCircle } from 'lucide-react';
+type Params = { params: Promise<{ inviteCode: string }> };
 
-export default function JoinInvitePage() {
-	// Use useParams() hook for client components instead of params prop
-	const params = useParams();
-	const inviteCode = (params?.inviteCode as string) || '';
-	const router = useRouter();
-	const { status } = useSession();
-	const [joinStatus, setJoinStatus] = useState<'loading' | 'success' | 'error' | 'already_member'>('loading');
-	const [leagueName, setLeagueName] = useState('');
-	const [leagueId, setLeagueId] = useState('');
-	const [errorMessage, setErrorMessage] = useState('');
-
-	const handleJoinLeague = useCallback(async () => {
-		if (!inviteCode) {
-			setJoinStatus('error');
-			setErrorMessage('Invalid invite code');
-			return;
-		}
-
-		try {
-			setJoinStatus('loading');
-
-			const response = await fetch('/api/league/join-by-invite', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ inviteCode })
-			});
-
-			const data = await response.json();
-
-			if (!response.ok) {
-				setJoinStatus('error');
-				setErrorMessage(data.error || 'Failed to join league');
-				return;
-			}
-
-			setLeagueName(data.league.name);
-			setLeagueId(data.league.id);
-
-			// Check if user was already a member
-			if (data.message === 'Already a member') {
-				setJoinStatus('already_member');
-			} else {
-				setJoinStatus('success');
-			}
-		} catch (error) {
-			console.error('Error joining league:', error);
-			setJoinStatus('error');
-			setErrorMessage('An unexpected error occurred');
-		}
-	}, [inviteCode]);
-
-	useEffect(() => {
-		if (status === 'unauthenticated') {
-			// Store the invite code in sessionStorage so we can join after login
-			sessionStorage.setItem('pendingInviteCode', inviteCode);
-			router.push('/login');
-		} else if (status === 'authenticated') {
-			handleJoinLeague();
-		}
-	}, [status, inviteCode, router, handleJoinLeague]);
-
-	if (status === 'loading' || joinStatus === 'loading') {
-		return (
-			<div className='min-h-screen flex items-center justify-center'>
-				<div className='text-center space-y-4'>
-					<Spinner />
-					<p className='text-lg text-muted-foreground'>Joining league...</p>
-				</div>
-			</div>
-		);
+// Shared by generateMetadata and the page within one request
+const getInvitePreview = cache(async (inviteCode: string): Promise<InvitePreview | null> => {
+	try {
+		await connectDB();
+		const league = await League.findOne({ inviteCode }, 'name mode members').lean<{ name: string; mode?: string; members?: string[] }>();
+		return league ? { name: league.name, mode: league.mode || 'standard', members: league.members?.length ?? 0 } : null;
+	} catch (error) {
+		console.error('Error loading invite preview:', error);
+		return null;
 	}
+});
 
-	return (
-		<div className='min-h-screen flex items-center justify-center p-4'>
-			<Card className='glass border-white/10 max-w-md w-full'>
-				<CardContent className='p-8'>
-					{joinStatus === 'success' && (
-						<div className='text-center space-y-6'>
-							<div className='flex justify-center'>
-								<CheckCircle2 className='h-16 w-16 text-green-500' />
-							</div>
-							<div className='space-y-2'>
-								<h1 className='text-2xl font-bold text-foreground'>Welcome to the League!</h1>
-								<p className='text-muted-foreground'>
-									You&apos;ve successfully joined <span className='text-primary font-semibold'>{leagueName}</span>
-								</p>
-							</div>
-							<Button onClick={() => router.push(`/league/${leagueId}`)} className='w-full bg-primary hover:bg-primary/90 text-lg py-6'>
-								Go to League
-							</Button>
-						</div>
-					)}
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+	const { inviteCode } = await params;
+	const league = await getInvitePreview(inviteCode);
+	if (!league) return { title: 'League invitation', robots: { index: false, follow: false } };
 
-					{joinStatus === 'already_member' && (
-						<div className='text-center space-y-6'>
-							<div className='flex justify-center'>
-								<CheckCircle2 className='h-16 w-16 text-primary' />
-							</div>
-							<div className='space-y-2'>
-								<h1 className='text-2xl font-bold text-foreground'>You&apos;re Already In!</h1>
-								<p className='text-muted-foreground'>
-									You&apos;re already a member of <span className='text-primary font-semibold'>{leagueName}</span>
-								</p>
-							</div>
-							<Button onClick={() => router.push(`/league/${leagueId}`)} className='w-full bg-primary hover:bg-primary/90 text-lg py-6'>
-								Go to League
-							</Button>
-						</div>
-					)}
+	const title = `You're invited to ${league.name}`;
+	const description = `Join ${league.name} on Pick 5${league.members > 1 ? ` with ${league.members} players` : ''}. Pick five NFL games a week, back the underdogs, and beat your friends. Free to play.`;
+	const image = { url: '/og-image.jpg', width: 1200, height: 630, alt: `Pick 5 — join ${league.name}` };
 
-					{joinStatus === 'error' && (
-						<div className='text-center space-y-6'>
-							<div className='flex justify-center'>
-								<XCircle className='h-16 w-16 text-red-500' />
-							</div>
-							<div className='space-y-2'>
-								<h1 className='text-2xl font-bold text-foreground'>Unable to Join League</h1>
-								<p className='text-red-500'>{errorMessage}</p>
-								<p className='text-sm text-muted-foreground'>The invite link may be invalid or expired.</p>
-							</div>
-							<div className='flex gap-2'>
-								<Button onClick={() => router.push('/dashboard')} variant='outline' className='flex-1'>
-									Go to Dashboard
-								</Button>
-								<Button onClick={() => router.push('/league/browse')} className='flex-1 bg-primary hover:bg-primary/90'>
-									Browse Leagues
-								</Button>
-							</div>
-						</div>
-					)}
-				</CardContent>
-			</Card>
-		</div>
-	);
+	return {
+		title,
+		description,
+		// Invite codes are secrets: never index these pages
+		robots: { index: false, follow: false },
+		openGraph: { type: 'website', siteName: 'Pick 5', title: `${title} 🏈`, description, url: `/league/join/${inviteCode}`, images: [image] },
+		twitter: { card: 'summary_large_image', title: `${title} 🏈`, description, images: [image] }
+	};
+}
+
+export default async function JoinInvitePage({ params }: Params) {
+	const { inviteCode } = await params;
+	return <JoinInviteClient preview={await getInvitePreview(inviteCode)} />;
 }

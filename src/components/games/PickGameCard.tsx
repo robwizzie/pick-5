@@ -1,5 +1,6 @@
-import { GameCard } from './GameCard';
+import { GameCard, LockBadge } from './GameCard';
 import type { Game } from './GameCard';
+import { cn } from '@/lib/utils';
 
 interface UserPick {
 	userId: string;
@@ -30,8 +31,11 @@ interface PickGameCardProps {
 	leaguePicks?: GamePicksData;
 	leagueMode?: string;
 	variant?: 'picks' | 'results'; // 'picks' for WeeklyPicks, 'results' for Results
+	/** This pick is the player's lock of the week (pickPoints should already be doubled). */
+	isLock?: boolean;
 }
 
+/** A game card framed as one of the user's five picks, with its result. */
 export function PickGameCard({
 	game,
 	pick,
@@ -43,17 +47,10 @@ export function PickGameCard({
 	pickPoints = 0,
 	leaguePicks,
 	leagueMode = 'standard',
-	variant = 'results'
+	variant = 'results',
+	isLock = false
 }: PickGameCardProps) {
-	const badgeStyle = 'absolute px-2 py-1 rounded-full text-xs font-medium border';
-
-	const getPointsColor = (points: number) => {
-		if (points > 0) return 'bg-green-500/30 text-white border-green-500/40';
-		if (points < 0) return 'bg-red-500/30 text-white border-red-500/40';
-		return 'bg-muted text-muted-foreground';
-	};
-
-	// Build game data with scores and odds
+	// Show the odds locked in when the pick was made, not today's line
 	const gameCardData: Game = {
 		...game,
 		away: {
@@ -68,52 +65,59 @@ export function PickGameCard({
 		}
 	};
 
+	const graded = gameFinished && typeof isCorrect === 'boolean';
+	const won = graded && isCorrect === true;
+
 	return (
-		<div className={`relative rounded-lg overflow-hidden border-2 bg-card pointer-events-none transition-all duration-300 ${
-			variant === 'picks'
-				? 'border-neon-green/20 shadow-neon-green/20 hover:shadow-neon-green/30'
-				: 'border-primary/20'
-		}`}>
-			{/* Left Badge: Pick Number */}
-			<div className={`${badgeStyle} top-2 left-2 z-10 bg-primary text-black`}>
-				Pick {pickIndex + 1}
-			</div>
-
-			{/* Center Badge: Date */}
-			<div className='absolute top-2 left-1/2 transform -translate-x-1/2 px-2 py-1 rounded-full bg-primary text-black text-xs font-medium shadow-md z-10'>
-				{new Date(game.date).toLocaleDateString()}
-			</div>
-
-			{/* Right Badge: Points/Status (only for Results variant) */}
-			{variant === 'results' && (
-				<>
-					{gameFinished ? (
-						<div className={`${badgeStyle} top-2 right-2 z-10 ${getPointsColor(pickPoints)}`}>
-							{pickPoints > 0 ? `+${pickPoints} pts` : '0 pts'}
-						</div>
-					) : gameInProgress ? (
-						<div className={`${badgeStyle} top-2 right-2 z-10 bg-green-500/20 text-green-400 border-green-500/50`}>
-							Live
-						</div>
-					) : (
-						<div className={`${badgeStyle} top-2 right-2 z-10 bg-muted text-muted-foreground`}>
-							Pending
-						</div>
-					)}
-				</>
+		<div
+			className={cn(
+				'glass relative overflow-hidden rounded-2xl',
+				graded && (won ? 'border-accent/30' : 'border-accent-2/25'),
+				gameInProgress && 'border-live/30',
+				isLock && !graded && !gameInProgress && 'border-warning/30'
 			)}
+		>
+			{/* Result accent bar */}
+			<div className={cn('absolute inset-y-0 left-0 w-1', graded ? (won ? 'bg-accent' : 'bg-accent-2') : gameInProgress ? 'bg-live' : 'bg-primary/60')} />
 
-			{/* Game Card */}
-			<div className='mt-8'>
+			<div className='flex items-center justify-between gap-2 border-b border-white/[0.06] py-2.5 pl-5 pr-4'>
+				<span className='flex items-center gap-2'>
+					<span className='font-display text-sm font-bold uppercase italic tracking-wide text-muted-foreground'>
+						Pick <span className='text-foreground tabular'>{pickIndex + 1}</span>
+					</span>
+					{isLock && <LockBadge />}
+				</span>
+
+				{variant === 'results' &&
+					(gameFinished ? (
+						<span
+							className={cn(
+								'rounded-full px-2.5 py-0.5 font-display text-sm font-bold italic tabular',
+								pickPoints > 0 ? 'bg-accent/15 text-accent' : 'bg-white/[0.06] text-muted-foreground'
+							)}
+						>
+							{pickPoints > 0 ? `+${pickPoints}` : '0'} pts
+						</span>
+					) : gameInProgress ? (
+						<span className='inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-live'>
+							<span className='live-dot' /> In play
+						</span>
+					) : (
+						<span className='text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'>Pending</span>
+					))}
+			</div>
+
+			<div className='pointer-events-none pl-1'>
 				<GameCard
 					game={gameCardData}
 					selected={pick.team}
 					showScores={showScores}
-					disabled={true}
+					disabled
 					isCorrect={gameFinished ? isCorrect : null}
-					noHover={true}
-					leaguePicks={(gameFinished || gameInProgress) ? leaguePicks : undefined}
+					noHover
+					leaguePicks={gameFinished || gameInProgress ? leaguePicks : undefined}
 					leagueMode={leagueMode}
+					lockedTeam={isLock ? pick.team : undefined}
 				/>
 			</div>
 		</div>

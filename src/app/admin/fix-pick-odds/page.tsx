@@ -1,14 +1,25 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { toast } from 'sonner';
+import { CheckCircle2, Info, RefreshCw, Wrench, XCircle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { PageContainer, PageHeader, StatTile } from '@/components/ui/page';
+
+interface FixPickOddsResult {
+	success: boolean;
+	totalPicksProcessed: number;
+	picksUpdated: number;
+	picksSkipped: number;
+	usersUpdated: number;
+	details?: string[];
+}
 
 export default function FixPickOddsPage() {
 	const [loading, setLoading] = useState(false);
-	const [result, setResult] = useState<any>(null);
+	const [result, setResult] = useState<FixPickOddsResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	const fixPickOdds = async () => {
@@ -21,105 +32,96 @@ export default function FixPickOddsPage() {
 				method: 'POST'
 			});
 
-			const data = await response.json();
+			const data: FixPickOddsResult & { error?: string } = await response.json();
 
 			if (!response.ok) {
 				throw new Error(data.error || 'Failed to fix pick odds');
 			}
 
 			setResult(data);
-		} catch (err: any) {
+			toast.success(`Fixed ${data.picksUpdated} picks`);
+		} catch (err) {
 			console.error('Error fixing pick odds:', err);
-			setError(err.message || 'An error occurred');
+			const message = err instanceof Error ? err.message : 'An error occurred';
+			setError(message);
+			toast.error(message);
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	return (
-		<div className='space-y-6'>
-			<div className='flex items-center gap-4'>
-				<Link href='/admin'>
-					<Button variant='ghost' size='sm'>
-						← Back to Admin
-					</Button>
-				</Link>
-			</div>
+		<PageContainer size='narrow'>
+			<PageHeader eyebrow='Admin · Odds' title='Fix Pick Odds' description='Retroactively add odds to existing picks and recalculate points' />
 
-			<Card className='glass border-white/10'>
-				<CardHeader>
-					<CardTitle className='flex items-center gap-2'>
-						<span>🔧</span>
-						Retroactively Fix Pick Odds
-					</CardTitle>
-				</CardHeader>
-				<CardContent className='space-y-6'>
-					<div className='space-y-4'>
-						<Alert>
+			<div className='space-y-6'>
+				<Card>
+					<CardHeader>
+						<CardTitle className='text-xl'>What this does</CardTitle>
+					</CardHeader>
+					<CardContent className='space-y-5'>
+						<ul className='list-inside list-disc space-y-1.5 text-sm text-muted-foreground'>
+							<li>Finds all picks in standard mode leagues that don&apos;t have odds</li>
+							<li>Looks up the historical odds from the odds snapshot for that week</li>
+							<li>Updates each pick with the correct odds based on which team was selected</li>
+							<li>Recalculates points for finished games using the same calculatePointsFromOdds function</li>
+							<li>Updates total points for each user</li>
+						</ul>
+
+						<Alert variant='warning'>
+							<Info />
 							<AlertDescription>
-								<strong>What this does:</strong>
-								<ul className='list-disc list-inside mt-2 space-y-1'>
-									<li>Finds all picks in standard mode leagues that don&apos;t have odds</li>
-									<li>Looks up the historical odds from the odds snapshot for that week</li>
-									<li>Updates each pick with the correct odds based on which team was selected</li>
-									<li>Recalculates points for finished games using the same calculatePointsFromOdds function</li>
-									<li>Updates total points for each user</li>
-								</ul>
-								<p className='mt-3 text-yellow-600'>
-									<strong>Note:</strong> This uses the odds from the snapshot. If no snapshot exists for a week, those picks will be skipped.
-								</p>
+								<strong>Note:</strong> This uses the odds from the snapshot. If no snapshot exists for a week, those picks will be skipped.
 							</AlertDescription>
 						</Alert>
 
-						<Button
-							onClick={fixPickOdds}
-							disabled={loading}
-							className='w-full bg-primary text-black hover:bg-primary/90'
-						>
-							{loading ? 'Processing...' : 'Fix Pick Odds'}
+						<Button onClick={fixPickOdds} disabled={loading} size='lg' className='w-full'>
+							{loading ? <RefreshCw className='animate-spin' /> : <Wrench />}
+							{loading ? 'Processing…' : 'Fix Pick Odds'}
 						</Button>
-					</div>
+					</CardContent>
+				</Card>
 
-					{error && (
-						<Alert variant='destructive'>
-							<AlertDescription>{error}</AlertDescription>
+				{error && (
+					<Alert variant='destructive'>
+						<XCircle />
+						<AlertDescription>{error}</AlertDescription>
+					</Alert>
+				)}
+
+				{result && (
+					<div className='space-y-4 animate-fade-in'>
+						<Alert variant='success'>
+							<CheckCircle2 />
+							<AlertTitle>Success</AlertTitle>
+							<AlertDescription>Pick odds have been updated and points recalculated.</AlertDescription>
 						</Alert>
-					)}
 
-					{result && (
-						<div className='space-y-4'>
-							<Alert className='bg-green-500/10 border-green-500/20'>
-								<AlertDescription>
-									<strong className='text-green-600'>Success!</strong>
-									<div className='mt-2 space-y-1'>
-										<p>✓ Processed {result.totalPicksProcessed} total picks</p>
-										<p>✓ Fixed {result.picksUpdated} picks with missing odds</p>
-										<p>✓ Skipped {result.picksSkipped} picks (already had odds or no snapshot available)</p>
-										<p>✓ Updated {result.usersUpdated} user totals</p>
-									</div>
-								</AlertDescription>
-							</Alert>
-
-							{result.details && result.details.length > 0 && (
-								<Card className='glass border-white/10'>
-									<CardHeader>
-										<CardTitle className='text-lg'>Details</CardTitle>
-									</CardHeader>
-									<CardContent>
-										<div className='space-y-2 text-sm font-mono'>
-											{result.details.map((detail: string, i: number) => (
-												<div key={i} className='text-muted-foreground'>
-													{detail}
-												</div>
-											))}
-										</div>
-									</CardContent>
-								</Card>
-							)}
+						<div className='grid grid-cols-2 gap-3'>
+							<StatTile label='Processed' value={result.totalPicksProcessed} tone='primary' sub='Total picks' />
+							<StatTile label='Fixed' value={result.picksUpdated} tone='accent' sub='Picks with missing odds' />
+							<StatTile label='Skipped' value={result.picksSkipped} tone='muted' sub='Had odds or no snapshot' />
+							<StatTile label='Users' value={result.usersUpdated} tone='primary' sub='Totals updated' />
 						</div>
-					)}
-				</CardContent>
-			</Card>
-		</div>
+
+						{result.details && result.details.length > 0 && (
+							<Card>
+								<CardHeader>
+									<CardTitle className='text-xl'>Details</CardTitle>
+									<CardDescription>First {result.details.length} entries</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<div className='max-h-96 space-y-1 overflow-y-auto rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 font-mono text-xs text-muted-foreground'>
+										{result.details.map((detail, i) => (
+											<div key={i}>{detail}</div>
+										))}
+									</div>
+								</CardContent>
+							</Card>
+						)}
+					</div>
+				)}
+			</div>
+		</PageContainer>
 	);
 }

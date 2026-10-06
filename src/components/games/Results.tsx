@@ -1,38 +1,50 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
-import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle2, ClipboardX, LayoutGrid, LogIn, Target, Trophy, Tv } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Spinner } from '@/components/ui/spinner';
+import { EmptyState, StatTile } from '@/components/ui/page';
+import { GameCardSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { TeamLogo } from '@/components/ui/team-logo';
 import { PickGameCard } from './PickGameCard';
 import { GameCard } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
+import { ScoringService } from '@/services/scoringService';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { hasGameFinished, hasGameStarted } from '@/services/gameUtils';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
+
+interface Pick {
+	gameId: string;
+	team: string;
+	opponent: string;
+	isHome: boolean;
+	odds?: number;
+}
 
 interface WeeklyPicks {
-	picks: Array<{
-		gameId: string;
-		team: string;
-		opponent: string;
-		isHome: boolean;
-		odds?: number;
-	}>;
+	picks: Pick[];
 	tfsGame: string;
 	tfsScore: string;
 	submitted: boolean;
+	/** Lock of the week; for another player it's only revealed once that game kicks off. */
+	lockGameId?: string | null;
 }
 
-interface UserPick {
+interface LeagueMember {
 	_id: string;
+	name: string;
+	image: string | null;
+}
+
+interface Picker {
 	userId: string;
 	name: string;
 	image: string | null;
@@ -40,8 +52,8 @@ interface UserPick {
 
 interface LeaguePicksData {
 	[gameId: string]: {
-		away: UserPick[];
-		home: UserPick[];
+		away: Picker[];
+		home: Picker[];
 	};
 }
 
@@ -49,6 +61,115 @@ interface SnapshotOdds {
 	id: string;
 	home?: { odds?: number };
 	away?: { odds?: number };
+}
+
+interface ResultRow {
+	pick: Pick;
+	index: number;
+	game: Game;
+	isCorrect: boolean | null;
+	points: number;
+	isLock: boolean;
+	finished: boolean;
+	inProgress: boolean;
+}
+
+const ALL_GAMES = 'all-games';
+
+const isLiveStatus = (status?: string) => {
+	const s = status?.toLowerCase();
+	return s === 'in' || s === 'in_progress';
+};
+const isFinalStatus = (status?: string) => {
+	const s = status?.toLowerCase();
+	return s === 'post' || s === 'final';
+};
+const isUpcomingStatus = (status?: string) => {
+	const s = status?.toLowerCase();
+	return s === 'pre' || s === 'scheduled' || !s;
+};
+
+/** Attach odds from the centralized snapshot (standard mode). */
+async function withSnapshotOdds(games: Game[], week: number): Promise<Game[]> {
+	try {
+		const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}`);
+		let snapshotOdds: SnapshotOdds[] = [];
+		if (oddsResponse.ok) {
+			const data = await oddsResponse.json();
+			snapshotOdds = data.odds || [];
+		}
+
+		return games.map(game => {
+			const snapshotGameOdds = snapshotOdds.find(o => o.id === game.id);
+			const homeOdds = snapshotGameOdds?.home?.odds;
+			const awayOdds = snapshotGameOdds?.away?.odds;
+			if (homeOdds || awayOdds) {
+				return { ...game, home: { ...game.home, odds: homeOdds }, away: { ...game.away, odds: awayOdds } };
+			}
+			return game;
+		});
+	} catch (error) {
+		console.error('[Results] Error fetching odds:', error);
+		return games;
+	}
+}
+
+/** A pick is only graded once the game is final. Ties are losses for both sides (mirrors server scoring). */
+function checkPickCorrect(pick: Pick, game: Game): boolean | null {
+	if (!hasGameFinished(game)) return null;
+	const homeScore = game.home.score;
+	const awayScore = game.away.score;
+	if (typeof homeScore !== 'number' || typeof awayScore !== 'number') return null;
+	return ScoringService.calculatePickResult(pick, {
+		id: game.id,
+		homeScore,
+		awayScore,
+		homeTeam: game.home.team,
+		awayTeam: game.away.team,
+		status: game.status
+	});
+}
+
+const getGameTotal = (game: Game) => (typeof game.home.score === 'number' && typeof game.away.score === 'number' ? game.home.score + game.away.score : undefined);
+
+const getTimeAgo = (date: Date | null) => {
+	if (!date) return '';
+	const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+	if (seconds < 60) return 'just now';
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m ago`;
+	return `${Math.floor(minutes / 60)}h ago`;
+};
+
+function GroupLabel({ title, count, live }: { title: string; count: number; live?: boolean }) {
+	return (
+		<div className='mb-3 flex items-center gap-2.5 px-1'>
+			{live && <span className='live-dot' />}
+			<h3 className={cn('font-display text-lg font-bold uppercase italic tracking-tight', live ? 'text-live' : 'text-foreground')}>{title}</h3>
+			<span className='text-xs font-semibold text-muted-foreground tabular'>{count}</span>
+			<span className='h-px flex-1 bg-white/[0.06]' />
+		</div>
+	);
+}
+
+function ResultsSkeleton() {
+	return (
+		<div className='space-y-5'>
+			<div className='glass space-y-4 rounded-2xl p-4 sm:p-5'>
+				<div className='space-y-2'>
+					<Skeleton className='h-3 w-20' />
+					<Skeleton className='h-10 w-44' />
+				</div>
+				<Skeleton className='h-11 w-full' />
+			</div>
+			<div className='grid grid-cols-2 gap-3'>
+				<Skeleton className='h-28 rounded-2xl' />
+				<Skeleton className='h-28 rounded-2xl' />
+			</div>
+			<GameCardSkeleton />
+			<GameCardSkeleton />
+		</div>
+	);
 }
 
 export function Results() {
@@ -63,14 +184,14 @@ export function Results() {
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leaguePicks, setLeaguePicks] = useState<LeaguePicksData>({});
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
-	const [leagueMembers, setLeagueMembers] = useState<UserPick[]>([]);
+	const [leagueMembers, setLeagueMembers] = useState<LeagueMember[]>([]);
 	const [selectedUserId, setSelectedUserId] = useState<string>('');
+	const currentUserId = session?.user?.id;
 
 	// Fetch league mode
 	useEffect(() => {
 		const fetchLeagueMode = async () => {
 			if (!leagueId) return;
-
 			try {
 				const response = await fetch(`/api/league/${leagueId}`);
 				if (response.ok) {
@@ -78,37 +199,30 @@ export function Results() {
 					setLeagueMode(leagueData.mode || 'standard');
 				}
 			} catch (error) {
-				console.error('Error fetching league mode:', error);
+				console.error('[Results] Error fetching league mode:', error);
 			}
 		};
-
 		fetchLeagueMode();
 	}, [leagueId]);
 
-	// Fetch league members
+	// Fetch league members (once per league / user — not on every selection change)
 	useEffect(() => {
 		const fetchLeagueMembers = async () => {
 			if (!leagueId) return;
-
 			try {
 				const response = await fetch(`/api/league/${leagueId}/members`);
 				if (response.ok) {
-					const members = await response.json();
+					const members: LeagueMember[] = await response.json();
 					setLeagueMembers(members);
 					// Default to current user's results
-					if (session?.user?.id && !selectedUserId) {
-						setSelectedUserId(session.user.id);
-					}
+					if (currentUserId) setSelectedUserId(prev => prev || currentUserId);
 				}
 			} catch (error) {
-				console.error('Error fetching league members:', error);
+				console.error('[Results] Error fetching league members:', error);
 			}
 		};
-
-		if (session?.user) {
-			fetchLeagueMembers();
-		}
-	}, [leagueId, session?.user, selectedUserId]);
+		if (currentUserId) fetchLeagueMembers();
+	}, [leagueId, currentUserId]);
 
 	useEffect(() => {
 		const loadData = async (isPolling = false) => {
@@ -117,127 +231,40 @@ export function Results() {
 
 			try {
 				if (!leagueId) {
-					console.error('[Results] Missing leagueId');
 					setError('League ID is missing.');
 					return;
 				}
 
-				// Show updating indicator for polling updates (not initial load)
-				if (isPolling) {
-					setIsUpdating(true);
-				} else {
-					setLoading(true);
-				}
+				// Polls update silently with a small indicator; only the initial load shows skeletons
+				if (isPolling) setIsUpdating(true);
+				else setLoading(true);
 
-				// Handle "All Games" view differently
-				if (selectedUserId === 'all-games') {
-					let [weeklyGames, leaguePicksResponse] = await Promise.all([
-						NFLService.getWeeklyGames(currentWeek),
-						fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
-					]);
-
-					// Enrich live games with clock and period data
-					weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
-
-					const leaguePicksData = await leaguePicksResponse.json();
-
-					// Fetch odds for Standard mode leagues
-					let gamesWithOdds = weeklyGames;
-					if (leagueMode === 'standard') {
-						try {
-							const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
-							let snapshotOdds: SnapshotOdds[] = [];
-							if (oddsResponse.ok) {
-								const data = await oddsResponse.json();
-								snapshotOdds = data.odds || [];
-							}
-
-							gamesWithOdds = weeklyGames.map(game => {
-								const snapshotGameOdds = snapshotOdds.find((o: SnapshotOdds) => o.id === game.id);
-								const homeOdds = snapshotGameOdds?.home?.odds;
-								const awayOdds = snapshotGameOdds?.away?.odds;
-
-								if (homeOdds || awayOdds) {
-									return {
-										...game,
-										home: { ...game.home, odds: homeOdds },
-										away: { ...game.away, odds: awayOdds }
-									};
-								}
-								return game;
-							});
-						} catch (error) {
-							console.error('[Results] Error fetching odds:', error);
-						}
-					}
-
-					setGames(gamesWithOdds);
-					setPicks(null); // No specific user picks
-					setLeaguePicks(leaguePicksData);
-					setLastUpdated(new Date());
-					setLoading(false);
-					setIsUpdating(false);
-					return;
-				}
-
-				// Pass leagueId and userId to the backend
-				let [weeklyGames, picksResponse, leaguePicksResponse] = await Promise.all([
+				const allGamesView = selectedUserId === ALL_GAMES;
+				const [weeklyGames, leaguePicksResponse, picksResponse] = await Promise.all([
 					NFLService.getWeeklyGames(currentWeek),
-					fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`, { cache: 'no-store' }),
-					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
+					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
+					allGamesView ? Promise.resolve(null) : fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`, { cache: 'no-store' })
 				]);
 
 				// Enrich live games with clock and period data
-				weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
-
-				const picksData = await picksResponse.json();
-				const leaguePicksData = await leaguePicksResponse.json();
+				const enrichedGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
+				const leaguePicksData: LeaguePicksData = await leaguePicksResponse.json();
+				const picksData: WeeklyPicks | null = picksResponse ? await picksResponse.json() : null;
 
 				// Fetch odds for Standard mode leagues (same logic as WeeklyPicks)
-				let gamesWithOdds = weeklyGames;
-				if (leagueMode === 'standard') {
-					try {
-						// Fetch odds from centralized snapshot
-						const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
-						let snapshotOdds: SnapshotOdds[] = [];
-						if (oddsResponse.ok) {
-							const data = await oddsResponse.json();
-							snapshotOdds = data.odds || [];
-						}
-
-						// Match odds to games
-						gamesWithOdds = weeklyGames.map(game => {
-							const snapshotGameOdds = snapshotOdds.find((o: SnapshotOdds) => o.id === game.id);
-
-							const homeOdds = snapshotGameOdds?.home?.odds;
-							const awayOdds = snapshotGameOdds?.away?.odds;
-
-							if (homeOdds || awayOdds) {
-								return {
-									...game,
-									home: { ...game.home, odds: homeOdds },
-									away: { ...game.away, odds: awayOdds }
-								};
-							}
-							return game;
-						});
-					} catch (error) {
-						console.error('[Results] Error fetching odds:', error);
-					}
-				}
+				const gamesWithOdds = leagueMode === 'standard' ? await withSnapshotOdds(enrichedGames, currentWeek) : enrichedGames;
 
 				setGames(gamesWithOdds);
-				setPicks(picksData);
+				setPicks(picksData); // null in the "All Games" view
 				setLeaguePicks(leaguePicksData);
 				setLastUpdated(new Date());
+				setError(null);
 
-				// Trigger refresh events for leaderboard and season stats
-				// The /api/picks endpoint recalculates scores, so we need to notify other components
-				if (isPolling) {
-					console.log('[Results] Auto-refresh: Triggering leaderboard and stats updates');
+				if (!allGamesView) {
+					// The /api/picks endpoint recalculates scores, so notify other components
+					window.dispatchEvent(new Event('refreshLeaderboard'));
+					window.dispatchEvent(new Event('refreshSeasonStats'));
 				}
-				window.dispatchEvent(new Event('refreshLeaderboard'));
-				window.dispatchEvent(new Event('refreshSeasonStats'));
 			} catch (err) {
 				console.error('[Results] Error loading results:', err);
 				setError('Error loading results');
@@ -249,540 +276,292 @@ export function Results() {
 
 		loadData(false); // Initial load
 
-		// Use smart polling interval based on game schedule
-		// 2 minutes during games, 5 minutes outside game windows
-		const pollingInterval = NFLService.getPollingInterval();
-		console.log(`[Results] Using ${pollingInterval / 1000 / 60} minute polling interval`);
-
-		const pollInterval = setInterval(() => {
-			console.log('[Results] 🔄 Auto-refreshing scores...');
-			loadData(true); // Polling update
-		}, pollingInterval);
-
+		// Smart polling interval: 2 minutes during games, 5 minutes outside game windows
+		const pollInterval = setInterval(() => loadData(true), NFLService.getPollingInterval());
 		return () => clearInterval(pollInterval);
 	}, [currentWeek, sessionStatus, leagueId, selectedUserId, leagueMode]);
 
-	// Game score calculation utility
-	const getGameScore = (game: Game) => ({
-		home: typeof game.home.score === 'number' ? game.home.score : undefined,
-		away: typeof game.away.score === 'number' ? game.away.score : undefined,
-		total: typeof game.home.score === 'number' && typeof game.away.score === 'number' && game.home.score !== undefined && game.away.score !== undefined ? game.home.score + game.away.score : undefined
-	});
+	const viewingSelf = selectedUserId === currentUserId;
 
-	// Determine game status - check for in_progress, completed, or pending
-	const checkGameStatus = (game: Game): 'completed' | 'in_progress' | 'pending' => {
-		if (hasGameFinished(game)) return 'completed';
-		const status = game.status?.toLowerCase();
-		if (status === 'in' || status === 'in_progress') return 'in_progress';
-		return 'pending';
-	};
-
-	// Check if a pick is correct - only returns true/false if game is finished
-	const checkPickCorrect = (pick: WeeklyPicks['picks'][0], game: Game): boolean | null => {
-		if (!hasGameFinished(game)) {
-			return null;
-		}
-
-		const homeScore = game.home.score;
-		const awayScore = game.away.score;
-
-		if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || homeScore === undefined || awayScore === undefined) {
-			return null;
-		}
-
-		const homeWon = homeScore > awayScore;
-		const pickedHome = pick.team === game.home.team;
-		return (pickedHome && homeWon) || (!pickedHome && !homeWon);
-	};
-
-	// Calculate TFS (Total Final Score) points
-	const getTFSPoints = (predictedScore: number, actualScore: number) => {
-		const difference = Math.abs(predictedScore - actualScore);
-		if (difference === 0) return 5;
-		if (difference <= 3) return 4;
-		if (difference <= 5) return 3;
-		if (difference <= 7) return 2;
-		if (difference <= 10) return 1;
-		return 0;
-	};
-
-	const getTextColor = (points: number) => {
-		if (points > 0) return 'text-green-500';
-		if (points < 0) return 'text-red-500';
-		return 'text-muted-foreground';
-	};
-
-	// Memoized results calculation
 	const results = useMemo(() => {
-		if (!picks || !games.length)
-			return {
-				liveGames: [],
-				upcomingGames: [],
-				pastGames: [],
-				totalPoints: 0,
-				correctPicks: 0,
-				tfsPoints: 0
-			};
+		const empty = { live: [] as ResultRow[], upcoming: [] as ResultRow[], final: [] as ResultRow[], totalPoints: 0, correctPicks: 0, tfsPoints: 0 };
+		if (!picks || !games.length) return empty;
 
 		let totalPoints = 0;
 		let correctPicks = 0;
 		let tfsPoints = 0;
 
-		// Process game picks and organize by status
-		const allGameElements = picks.picks.map((pick, index) => {
+		const rows: ResultRow[] = [];
+		picks.picks.forEach((pick, index) => {
 			const game = games.find(g => g.id === pick.gameId);
-			if (!game) return null;
+			if (!game) return;
 
 			// If viewing another user's picks, hide games that haven't started (to prevent pick stealing)
-			const isViewingOtherUser = selectedUserId !== session?.user?.id;
-			if (isViewingOtherUser && !hasGameStarted(game)) {
-				return null;
-			}
+			if (!viewingSelf && !hasGameStarted(game)) return;
 
-			const gameStatus = checkGameStatus(game);
 			const isCorrect = checkPickCorrect(pick, game);
-			const gameFinished = hasGameFinished(game);
-			const gameInProgress = gameStatus === 'in_progress';
+			const finished = hasGameFinished(game);
+			const isLock = !!picks.lockGameId && picks.lockGameId === pick.gameId;
 
-			//  Calculate points based on league mode
-			let pickPoints = 0;
-			if (gameFinished && isCorrect === true) {
-				if (leagueMode === 'standard' && pick.odds !== undefined) {
-					pickPoints = calculatePointsFromOdds(pick.odds);
-				} else {
-					pickPoints = 2; // Steve mode default
-				}
-				totalPoints += pickPoints;
+			// Points depend on league mode; the lock scores double
+			let points = 0;
+			if (finished && isCorrect === true) {
+				points = ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock);
+				totalPoints += points;
 				correctPicks += 1;
 			}
 
-			// Show scores for both finished games AND in-progress games
-			const shouldShowScores = gameFinished || gameInProgress;
-
-			return (
-				<PickGameCard
-					key={pick.gameId}
-					game={game}
-					pick={pick}
-					pickIndex={index}
-					gameFinished={gameFinished}
-					gameInProgress={gameInProgress}
-					showScores={shouldShowScores}
-					isCorrect={isCorrect}
-					pickPoints={pickPoints}
-					leaguePicks={leaguePicks[pick.gameId]}
-					leagueMode={leagueMode}
-					variant="results"
-				/>
-			);
-		}).filter((element): element is React.ReactElement => element !== null);
-
-		// Organize games by status
-		const liveGames = allGameElements.filter((element: React.ReactElement) => {
-			const game = games.find(g => g.id === element.key);
-			if (!game) return false;
-			const status = game.status?.toLowerCase();
-			return status === 'in' || status === 'in_progress';
-		});
-
-		const upcomingGames = allGameElements.filter((element: React.ReactElement) => {
-			const game = games.find(g => g.id === element.key);
-			if (!game) return false;
-			const status = game.status?.toLowerCase();
-			return status === 'pre' || status === 'scheduled' || !status;
-		});
-
-		const pastGames = allGameElements.filter((element: React.ReactElement) => {
-			const game = games.find(g => g.id === element.key);
-			if (!game) return false;
-			const status = game.status?.toLowerCase();
-			return status === 'post' || status === 'final';
+			rows.push({ pick, index, game, isCorrect, points, isLock, finished, inProgress: !finished && isLiveStatus(game.status) });
 		});
 
 		// Calculate TFS points (only if game is finished)
 		if (picks.tfsGame) {
 			const tfsGame = games.find(g => g.id === picks.tfsGame);
-			if (tfsGame && hasGameFinished(tfsGame)) {
-				const scores = getGameScore(tfsGame);
-				if (scores.total !== undefined) {
-					const predictedScore = parseInt(picks.tfsScore);
-					tfsPoints = getTFSPoints(predictedScore, scores.total);
-					totalPoints += tfsPoints;
-				}
+			const total = tfsGame ? getGameTotal(tfsGame) : undefined;
+			if (tfsGame && hasGameFinished(tfsGame) && total !== undefined) {
+				tfsPoints = ScoringService.calculateTFSPoints(parseInt(picks.tfsScore), total);
+				totalPoints += tfsPoints;
 			}
 		}
 
 		return {
-			liveGames,
-			upcomingGames,
-			pastGames,
+			live: rows.filter(r => isLiveStatus(r.game.status)),
+			upcoming: rows.filter(r => isUpcomingStatus(r.game.status)),
+			final: rows.filter(r => isFinalStatus(r.game.status)),
 			totalPoints,
 			correctPicks,
 			tfsPoints
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [picks, games, selectedUserId, session?.user?.id]);
+	}, [picks, games, viewingSelf, leagueMode]);
 
 	if (sessionStatus === 'loading' || loading) {
-		return (
-			<Card>
-				<CardContent className='p-6'>
-					<div className='flex items-center justify-center'>
-						<Spinner />
-					</div>
-				</CardContent>
-			</Card>
-		);
+		return <ResultsSkeleton />;
 	}
 
 	if (!session) {
-		return (
-			<Card>
-				<CardContent className='p-6'>
-					<Alert>
-						<AlertDescription>Please sign in to view results</AlertDescription>
-					</Alert>
-				</CardContent>
-			</Card>
-		);
+		return <EmptyState icon={LogIn} title='Sign in' description='Please sign in to view results.' />;
 	}
 
-	// Helper function to format time ago
-	const getTimeAgo = (date: Date | null) => {
-		if (!date) return '';
-		const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-		if (seconds < 60) return 'just now';
-		const minutes = Math.floor(seconds / 60);
-		if (minutes < 60) return `${minutes}m ago`;
-		const hours = Math.floor(minutes / 60);
-		return `${hours}h ago`;
+	const selectedName = leagueMembers.find(m => m._id === selectedUserId)?.name;
+	const allGamesView = selectedUserId === ALL_GAMES;
+
+	const header = (
+		<div className='glass relative overflow-hidden rounded-2xl p-4 sm:p-5'>
+			<div className='pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-accent/15 blur-3xl' />
+			<div className='relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between'>
+				<div className='min-w-0'>
+					<div className='mb-1.5 flex items-center gap-3'>
+						<p className='eyebrow'>Results</p>
+						{isUpdating ? (
+							<span className='flex items-center gap-1.5 text-[11px] font-medium text-primary'>
+								<span className='h-1.5 w-1.5 animate-pulse rounded-full bg-primary' />
+								Updating…
+							</span>
+						) : (
+							lastUpdated && (
+								<span className='flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground'>
+									<span className='h-1.5 w-1.5 rounded-full bg-accent' />
+									Updated {getTimeAgo(lastUpdated)}
+								</span>
+							)
+						)}
+					</div>
+					<h2 className='display-heading text-[2.5rem] sm:text-5xl'>
+						Week <span className='text-primary tabular'>{currentWeek}</span>
+					</h2>
+				</div>
+				<Select value={selectedUserId} onValueChange={setSelectedUserId}>
+					<SelectTrigger className='w-full sm:w-[220px]' aria-label='View results for'>
+						<SelectValue placeholder='Select player' />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value={ALL_GAMES}>
+							<span className='flex items-center gap-2'>
+								<span className='grid h-5 w-5 place-items-center rounded-full bg-primary/15 text-primary'>
+									<LayoutGrid className='h-3 w-3' />
+								</span>
+								<span className='font-semibold'>All games</span>
+							</span>
+						</SelectItem>
+						{leagueMembers.map(member => (
+							<SelectItem key={member._id} value={member._id}>
+								<span className='flex items-center gap-2'>
+									<Avatar className='h-5 w-5 ring-1 ring-white/10'>
+										<AvatarImage src={member.image || undefined} alt={member.name} />
+										<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
+									</Avatar>
+									<span>{member._id === currentUserId ? `${member.name} (you)` : member.name}</span>
+								</span>
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
+			</div>
+		</div>
+	);
+
+	const renderBody = () => {
+		// "All Games" view: final and in-progress games only (no upcoming games)
+		if (allGamesView) {
+			const groups = [
+				{ key: 'live', title: 'Live', live: true, games: games.filter(g => isLiveStatus(g.status)) },
+				{ key: 'final', title: 'Final', live: false, games: games.filter(g => isFinalStatus(g.status)) }
+			].filter(g => g.games.length > 0);
+
+			if (!groups.length) {
+				return <EmptyState icon={Tv} title='Nothing final yet' description='No completed or live games yet this week.' />;
+			}
+
+			return groups.map(group => (
+				<div key={group.key}>
+					<GroupLabel title={group.title} count={group.games.length} live={group.live} />
+					<div className='space-y-3'>
+						{group.games.map((game, index) => (
+							<div key={game.id} className='glass animate-slide-up rounded-2xl' style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
+								<GameCard game={game} showScores disabled noHover leaguePicks={leaguePicks[game.id]} leagueMode={leagueMode} />
+							</div>
+						))}
+					</div>
+				</div>
+			));
+		}
+
+		if (!picks || !picks.picks.length) {
+			return (
+				<EmptyState
+					icon={ClipboardX}
+					title='No picks'
+					description={viewingSelf ? 'No picks were made for this week.' : `${selectedName || 'This user'} has not made picks for this week.`}
+				/>
+			);
+		}
+
+		const isSteve = leagueMode === 'steve';
+		const groups = [
+			{ key: 'live', title: 'Live', live: true, rows: results.live },
+			{ key: 'final', title: 'Final', live: false, rows: results.final },
+			{ key: 'upcoming', title: 'Upcoming', live: false, rows: results.upcoming }
+		].filter(g => g.rows.length > 0);
+
+		// TFS card (Steve mode) — hidden for other users until their TFS game kicks off
+		const tfsGame = picks.tfsGame ? games.find(g => g.id === picks.tfsGame) : undefined;
+		const showTfs = isSteve && !!tfsGame && (viewingSelf || hasGameStarted(tfsGame));
+		const tfsFinished = !!tfsGame && hasGameFinished(tfsGame);
+		const tfsTotal = tfsGame ? getGameTotal(tfsGame) : undefined;
+
+		return (
+			<>
+				{/* Week summary */}
+				<div className={cn('grid gap-2 sm:gap-3', isSteve ? 'grid-cols-3' : 'grid-cols-2')}>
+					<StatTile
+						label='Points'
+						icon={Trophy}
+						tone='accent'
+						className='p-3 sm:p-5'
+						value={
+							<span className={results.totalPoints > 0 ? 'text-accent' : 'text-muted-foreground'}>
+								<CountUp end={results.totalPoints} duration={1} preserveValue />
+							</span>
+						}
+					/>
+					<StatTile
+						label='Correct'
+						icon={CheckCircle2}
+						tone='primary'
+						className='p-3 sm:p-5'
+						value={
+							<span>
+								<CountUp end={results.correctPicks} duration={1} preserveValue />
+								<span className='text-muted-foreground'>/5</span>
+							</span>
+						}
+					/>
+					{isSteve && (
+						<StatTile
+							label='TFS'
+							icon={Target}
+							tone='warning'
+							className='p-3 sm:p-5'
+							value={
+								<span className={results.tfsPoints > 0 ? 'text-accent' : 'text-muted-foreground'}>
+									<CountUp end={results.tfsPoints} duration={1} preserveValue />
+								</span>
+							}
+						/>
+					)}
+				</div>
+
+				<p className='eyebrow px-1'>{viewingSelf ? 'Your picks' : `${selectedName ?? 'Player'}'s picks`}</p>
+
+				{groups.map(group => (
+					<div key={group.key}>
+						<GroupLabel title={group.title} count={group.rows.length} live={group.live} />
+						<div className='space-y-3'>
+							{group.rows.map((row, i) => (
+								<div key={row.pick.gameId} className='animate-slide-up' style={{ animationDelay: `${i * 50}ms` }}>
+									<PickGameCard
+										game={row.game}
+										pick={row.pick}
+										pickIndex={row.index}
+										gameFinished={row.finished}
+										gameInProgress={row.inProgress}
+										showScores={row.finished || row.inProgress}
+										isCorrect={row.isCorrect}
+										pickPoints={row.points}
+										isLock={row.isLock}
+										leaguePicks={leaguePicks[row.pick.gameId]}
+										leagueMode={leagueMode}
+										variant='results'
+									/>
+								</div>
+							))}
+						</div>
+					</div>
+				))}
+
+				{showTfs && tfsGame && (
+					<div className='glass rounded-2xl p-4 sm:p-5'>
+						<div className='mb-4 flex items-center justify-between gap-3'>
+							<p className='eyebrow'>Total final score</p>
+							<div className='flex items-center gap-2'>
+								<TeamLogo src={tfsGame.away.logo} alt={tfsGame.away.team} size={24} />
+								<span className='font-display text-sm font-bold uppercase italic tracking-tight'>
+									{tfsGame.away.abbreviation} <span className='text-muted-foreground'>@</span> {tfsGame.home.abbreviation}
+								</span>
+								<TeamLogo src={tfsGame.home.logo} alt={tfsGame.home.team} size={24} />
+							</div>
+						</div>
+						<div className='grid grid-cols-3 gap-2'>
+							{[
+								{ label: 'Guess', value: picks.tfsScore || '—', tone: 'text-foreground' },
+								{ label: 'Actual', value: tfsFinished && tfsTotal !== undefined ? tfsTotal : 'TBD', tone: 'text-foreground' },
+								{
+									label: 'Bonus',
+									value: tfsFinished ? `+${results.tfsPoints}` : 'TBD',
+									tone: tfsFinished && results.tfsPoints > 0 ? 'text-accent' : 'text-muted-foreground'
+								}
+							].map(stat => (
+								<div key={stat.label} className='rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 text-center'>
+									<p className='eyebrow'>{stat.label}</p>
+									<p className={cn('mt-1 font-display text-2xl font-extrabold italic tabular', stat.tone)}>{stat.value}</p>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
+			</>
+		);
 	};
 
-	// Handle "All Games" view
-	if (selectedUserId === 'all-games') {
-		// Show final and in-progress games only (no upcoming games)
-		const finishedOrLiveGames = games.filter(g => {
-			const status = g.status?.toLowerCase();
-			return status === 'post' || status === 'final' || status === 'in' || status === 'in_progress';
-		});
-
-		return (
-			<Card className='bg-card border-primary/20'>
-				<CardHeader>
-					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
-						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
-						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
-							<SelectTrigger className='w-full sm:w-[200px]'>
-								<SelectValue placeholder='Select user' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='all-games' className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
-									<div className='flex items-center gap-2'>
-										<span className='font-semibold text-primary'>All Games</span>
-									</div>
-								</SelectItem>
-								{leagueMembers.map(member => (
-									<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
-										<div className='flex items-center gap-2'>
-											<Avatar className='w-5 h-5'>
-												<AvatarImage src={member.image || undefined} alt={member.name} />
-												<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
-											</Avatar>
-											<span>{member.name}</span>
-										</div>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-					<div className='flex items-center justify-between'>
-						<div></div>
-						<div className='flex items-center gap-2'>
-							{isUpdating && (
-								<div className='flex items-center gap-1 text-xs text-primary/80'>
-									<div className='h-2 w-2 rounded-full bg-primary animate-pulse' />
-									<span>Updating...</span>
-								</div>
-							)}
-							{!isUpdating && lastUpdated && (
-								<div className='flex items-center gap-1 text-xs text-muted-foreground'>
-									<div className='h-2 w-2 rounded-full bg-green-500' />
-									<span>Live • {getTimeAgo(lastUpdated)}</span>
-								</div>
-							)}
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent>
-					{finishedOrLiveGames.length > 0 ? (
-						<div className='space-y-3'>
-							{finishedOrLiveGames.map((game, index) => (
-								<motion.div
-									key={game.id}
-									initial={{ opacity: 0, y: 10 }}
-									whileInView={{ opacity: 1, y: 0 }}
-									viewport={{ once: true, margin: "-50px" }}
-									transition={{ duration: 0.3, delay: index * 0.05 }}
-								>
-									<GameCard
-										game={game}
-										showScores={true}
-										disabled={true}
-										noHover={true}
-										leaguePicks={leaguePicks[game.id]}
-										leagueMode={leagueMode}
-									/>
-								</motion.div>
-							))}
-						</div>
-					) : (
-						<div className='text-center py-12 text-muted-foreground'>
-							No completed or live games yet this week.
-						</div>
-					)}
-				</CardContent>
-			</Card>
-		);
-	}
-
-	if (!picks || !picks.picks.length) {
-		return (
-			<Card className='bg-card border-primary/20'>
-				<CardHeader>
-					<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
-						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
-						<Select value={selectedUserId} onValueChange={setSelectedUserId}>
-							<SelectTrigger className='w-full sm:w-[200px]'>
-								<SelectValue placeholder='Select user' />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value='all-games' className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
-									<div className='flex items-center gap-2'>
-										<span className='font-semibold text-primary'>All Games</span>
-									</div>
-								</SelectItem>
-								{leagueMembers.map(member => (
-									<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
-										<div className='flex items-center gap-2'>
-											<Avatar className='w-5 h-5'>
-												<AvatarImage src={member.image || undefined} alt={member.name} />
-												<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
-											</Avatar>
-											<span>{member.name}</span>
-										</div>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
-				</CardHeader>
-				<CardContent>
-					<Alert variant='destructive' className='mb-4'>
-						<AlertDescription>
-							{selectedUserId === session?.user?.id
-								? 'No picks were made for this week.'
-								: `${leagueMembers.find(m => m._id === selectedUserId)?.name || 'This user'} has not made picks for this week.`}
-						</AlertDescription>
-					</Alert>
-				</CardContent>
-			</Card>
-		);
-	}
-
 	return (
-		<Card className='bg-card border-primary/20'>
-			<CardHeader>
-				<div className='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4'>
-					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {currentWeek} Results</CardTitle>
-					<Select value={selectedUserId} onValueChange={setSelectedUserId}>
-						<SelectTrigger className='w-full sm:w-[200px]'>
-							<SelectValue placeholder='Select user' />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value='all-games' className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
-								<div className='flex items-center gap-2'>
-									<span className='font-semibold text-primary'>All Games</span>
-								</div>
-							</SelectItem>
-							{leagueMembers.map(member => (
-								<SelectItem key={member._id} value={member._id} className='focus:bg-primary/20 focus:text-primary data-[state=checked]:bg-primary/20 my-1'>
-									<div className='flex items-center gap-2'>
-										<Avatar className='w-5 h-5'>
-											<AvatarImage src={member.image || undefined} alt={member.name} />
-											<AvatarFallback className='text-[10px]'>{member.name.charAt(0)}</AvatarFallback>
-										</Avatar>
-										<span>{member.name}</span>
-									</div>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
-				<div className='flex items-center justify-between'>
-					<div></div>
-					<div className='flex items-center gap-2'>
-						{isUpdating && (
-							<div className='flex items-center gap-1 text-xs text-primary/80'>
-								<div className='h-2 w-2 rounded-full bg-primary animate-pulse' />
-								<span>Updating...</span>
-							</div>
-						)}
-						{!isUpdating && lastUpdated && (
-							<div className='flex items-center gap-1 text-xs text-muted-foreground'>
-								<div className='h-2 w-2 rounded-full bg-green-500' />
-								<span>Live • {getTimeAgo(lastUpdated)}</span>
-							</div>
-						)}
-					</div>
-				</div>
-			</CardHeader>
-			<CardContent>
-				{error && (
-					<Alert variant='destructive' className='mb-4 border-destructive/50 bg-destructive/10'>
-						<AlertDescription>{error}</AlertDescription>
-					</Alert>
-				)}
-
-				<div className='space-y-6'>
-					{/* Game Picks organized by status */}
-					<div>
-						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>
-							{selectedUserId === session?.user?.id ? 'Your Picks' : `${leagueMembers.find(m => m._id === selectedUserId)?.name}'s Picks`}
-						</h3>
-
-						{/* Live Games */}
-						{results.liveGames.length > 0 && (
-							<div className='mb-6'>
-								<div className='flex items-center gap-2 mb-3'>
-									<div className='h-2 w-2 rounded-full bg-green-500 animate-pulse' />
-									<h4 className='text-md font-semibold text-green-400 uppercase tracking-wide'>Live Games</h4>
-								</div>
-								<div className='space-y-3'>
-									{results.liveGames.map((game: React.ReactElement, index: number) => (
-										<motion.div
-											key={game.key || index}
-											initial={{ opacity: 0, y: 10 }}
-											whileInView={{ opacity: 1, y: 0 }}
-											viewport={{ once: true, margin: "-50px" }}
-											transition={{ duration: 0.3, delay: index * 0.05 }}
-										>
-											{game}
-										</motion.div>
-									))}
-								</div>
-							</div>
-						)}
-
-						{/* Past Games */}
-						{results.pastGames.length > 0 && (
-							<div className='mb-6'>
-								<h4 className='text-md font-semibold text-muted-foreground uppercase tracking-wide mb-3'>Final</h4>
-								<div className='space-y-3'>
-									{results.pastGames.map((game: React.ReactElement, index: number) => (
-										<motion.div
-											key={game.key || index}
-											initial={{ opacity: 0, y: 10 }}
-											whileInView={{ opacity: 1, y: 0 }}
-											viewport={{ once: true, margin: "-50px" }}
-											transition={{ duration: 0.3, delay: index * 0.05 }}
-										>
-											{game}
-										</motion.div>
-									))}
-								</div>
-							</div>
-						)}
-					</div>
-
-					{/* TFS Prediction - Only for Steve mode */}
-					{leagueMode === 'steve' && (
-					<div>
-						<h3 className='text-lg font-oswald uppercase tracking-wide text-primary mb-4'>Total Final Score</h3>
-						<div className='p-4 rounded-lg bg-card border-2 border-primary/20'>
-							<div className='space-y-2 text-foreground'>
-								{picks?.tfsGame &&
-									(() => {
-										const tfsGame = games.find(g => g.id === picks.tfsGame);
-										if (!tfsGame) return null;
-
-										// If viewing another user's picks and game hasn't started, don't show TFS
-										const isViewingOtherUser = selectedUserId !== session?.user?.id;
-										if (isViewingOtherUser && !hasGameStarted(tfsGame)) {
-											return null;
-										}
-
-										const tfsGameFinished = hasGameFinished(tfsGame);
-										const scores = getGameScore(tfsGame);
-
-										return (
-											<>
-												<div className='font-oswald uppercase text-lg text-primary mb-2'>
-													{tfsGame.away.team} vs {tfsGame.home.team}
-												</div>
-												<div className='flex justify-between items-center bg-primary/10 p-3 rounded-lg'>
-													<div>
-														<span className='text-primary font-medium'>Your Guess: </span>
-														<span className='text-lg font-bold'>{picks.tfsScore}</span>
-													</div>
-													<div>
-														<span className='text-primary font-medium'>Actual: </span>
-														<span className='text-lg font-bold'>{tfsGameFinished && scores.total !== undefined ? scores.total : 'TBD'}</span>
-													</div>
-													<div>
-														<span className='text-primary font-medium'>Bonus: </span>
-														<span className={`text-lg font-bold ${getTextColor(results.tfsPoints)}`}>{tfsGameFinished ? `+${results.tfsPoints}` : 'TBD'}</span>
-													</div>
-												</div>
-											</>
-										);
-									})()}
-							</div>
-						</div>
-					</div>
-					)}
-
-					{/* Weekly Summary */}
-					<motion.div
-						className='border-t border-primary/20 pt-6 mt-8'
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true, margin: "-50px" }}
-						transition={{ duration: 0.4 }}
-					>
-						<div className={`grid gap-4 ${leagueMode === 'steve' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-							<motion.div
-								className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
-								whileHover={{ scale: 1.02 }}
-							>
-								<p className='text-primary/80 text-sm font-medium'>Total Points</p>
-								<p className={`text-2xl font-bold font-mono ${getTextColor(results.totalPoints)}`}>
-									<CountUp end={results.totalPoints} duration={1} preserveValue />
-								</p>
-							</motion.div>
-							<motion.div
-								className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
-								whileHover={{ scale: 1.02 }}
-							>
-								<p className='text-primary/80 text-sm font-medium'>Correct Picks</p>
-								<p className={`text-2xl font-bold font-mono text-primary`}>
-									<CountUp end={results.correctPicks} duration={1} preserveValue />/5
-								</p>
-							</motion.div>
-							{leagueMode === 'steve' && (
-								<motion.div
-									className='bg-card/80 backdrop-blur-sm rounded-lg p-4 text-center border-2 border-primary/20 hover:border-primary/30 transition-all'
-									whileHover={{ scale: 1.02 }}
-								>
-									<p className='text-primary/80 text-sm font-medium'>TFS Points</p>
-									<p className={`text-2xl font-bold font-mono ${getTextColor(results.tfsPoints)}`}>
-										<CountUp end={results.tfsPoints} duration={1} preserveValue />
-									</p>
-								</motion.div>
-							)}
-						</div>
-					</motion.div>
-				</div>
-			</CardContent>
-		</Card>
+		<section className='space-y-5'>
+			{header}
+			{error && (
+				<Alert variant='destructive'>
+					<AlertDescription>{error}</AlertDescription>
+				</Alert>
+			)}
+			{renderBody()}
+		</section>
 	);
 }

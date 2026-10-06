@@ -1,55 +1,43 @@
-'use client';
-
 /**
- * AnimatedBackground - Subtle gradient mesh that animates slowly
- * Creates depth and visual interest without being distracting
- * Very low opacity (5-10%) to maintain dark aesthetic
+ * Ambient "night game" backdrop: stadium-light glows in the logo's colors,
+ * a faint yard-line grid, and a vignette. Static gradients only, so it costs
+ * nothing per frame.
  */
 export function AnimatedBackground() {
 	return (
-		<div className='fixed inset-0 -z-10 overflow-hidden pointer-events-none'>
-			{/* Primary gradient orb - blue to purple */}
+		<div aria-hidden className='pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-background'>
+			{/* Stadium lights */}
 			<div
-				className='absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] opacity-[0.08]'
+				className='absolute -top-[30vh] left-1/2 h-[80vh] w-[140vw] -translate-x-1/2 opacity-70'
 				style={{
-					background: 'radial-gradient(circle, rgba(0, 102, 255, 0.4) 0%, rgba(157, 78, 221, 0.2) 50%, transparent 70%)',
-					animation: 'float-slow 30s ease-in-out infinite'
+					background:
+						'radial-gradient(ellipse 40% 50% at 20% 40%, rgba(56,214,255,0.18), transparent 70%), radial-gradient(ellipse 35% 45% at 80% 35%, rgba(255,61,90,0.14), transparent 70%), radial-gradient(ellipse 30% 40% at 50% 10%, rgba(124,255,79,0.08), transparent 70%)'
 				}}
 			/>
-
-			{/* Secondary gradient orb - pink to orange */}
+			{/* Yard-line grid, fading out toward the bottom */}
 			<div
-				className='absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full blur-[100px] opacity-[0.06]'
+				className='absolute inset-0 opacity-[0.35]'
 				style={{
-					background: 'radial-gradient(circle, rgba(255, 0, 110, 0.3) 0%, rgba(255, 107, 53, 0.2) 50%, transparent 70%)',
-					animation: 'float-slow 25s ease-in-out infinite reverse'
+					backgroundImage:
+						'linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px)',
+					backgroundSize: '72px 72px',
+					maskImage: 'radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%)',
+					WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 75%)'
 				}}
 			/>
-
-			{/* Tertiary gradient orb - electric blue */}
+			{/* Turf glow at the bottom */}
 			<div
-				className='absolute top-1/2 right-1/3 w-[400px] h-[400px] rounded-full blur-[90px] opacity-[0.05]'
+				className='absolute -bottom-[40vh] left-1/2 h-[60vh] w-[120vw] -translate-x-1/2'
+				style={{ background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(47,107,255,0.10), transparent 70%)' }}
+			/>
+			{/* Film grain for depth */}
+			<div
+				className='absolute inset-0 opacity-[0.035] mix-blend-overlay'
 				style={{
-					background: 'radial-gradient(circle, rgba(0, 217, 255, 0.3) 0%, rgba(157, 78, 221, 0.2) 50%, transparent 70%)',
-					animation: 'float-slow 35s ease-in-out infinite'
+					backgroundImage:
+						"url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>\")"
 				}}
 			/>
-
-			{/* CSS animations */}
-			<style jsx>{`
-				@keyframes float-slow {
-					0%,
-					100% {
-						transform: translate(0, 0) scale(1);
-					}
-					33% {
-						transform: translate(30px, -30px) scale(1.05);
-					}
-					66% {
-						transform: translate(-20px, 20px) scale(0.95);
-					}
-				}
-			`}</style>
 		</div>
 	);
 }

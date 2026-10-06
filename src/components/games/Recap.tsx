@@ -1,17 +1,59 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Spinner } from '@/components/ui/spinner';
+import { useSession } from 'next-auth/react';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, Award, BarChart3, Crown, Flame, Minus, Rocket, Moon, Sparkles, Target, ThumbsDown, ThumbsUp, TrendingDown, TrendingUp, Trophy, Users, Zap, CalendarX } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { EmptyState, Pill, SectionHeader, StatTile } from '@/components/ui/page';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
-import { Crown, Trophy, TrendingUp, Target, Zap, Users, BarChart3, Flame, Award, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+import { cn } from '@/lib/utils';
 import { GameCard } from './GameCard';
 import type { Game } from './GameCard';
+
+interface LeagueUser {
+	userId: string;
+	name: string;
+	image: string | null;
+}
+
+interface LeaguePicks {
+	away: LeagueUser[];
+	home: LeagueUser[];
+}
+
+interface WeeklyResult {
+	userId: string;
+	player: string;
+	image: string | null;
+	points: number;
+	correct: number;
+	tfsPoints: number;
+	hasPicks: boolean;
+}
+
+type HighlightTone = 'primary' | 'accent' | 'hot' | 'warning';
+
+interface Highlight {
+	icon: LucideIcon;
+	tone: HighlightTone;
+	text: string;
+}
+
+interface StandingRow {
+	userId: string;
+	player: string;
+	image: string | null;
+	points: number;
+	correct: number;
+	rank: number;
+	/** Places gained (+) or lost (-) vs the previous week's ranking; null when unknown. */
+	change: number | null;
+}
 
 interface RecapData {
 	// User's performance
@@ -39,11 +81,8 @@ interface RecapData {
 		odds: number;
 		points: number;
 		pickCount: number;
-		correctPickers: Array<{ userId: string; name: string; image: string | null }>;
-		leaguePicks: {
-			away: Array<{ userId: string; name: string; image: string | null }>;
-			home: Array<{ userId: string; name: string; image: string | null }>;
-		};
+		correctPickers: LeagueUser[];
+		leaguePicks: LeaguePicks;
 	}>;
 	// Most picked correct games
 	mostPickedCorrect: Array<{
@@ -53,11 +92,8 @@ interface RecapData {
 		losingTeam: string;
 		pickCount: number;
 		totalPicks: number;
-		pickers: Array<{ userId: string; name: string; image: string | null }>;
-		leaguePicks: {
-			away: Array<{ userId: string; name: string; image: string | null }>;
-			home: Array<{ userId: string; name: string; image: string | null }>;
-		};
+		pickers: LeagueUser[];
+		leaguePicks: LeaguePicks;
 	}>;
 	// Most picked incorrect games
 	mostPickedIncorrect: Array<{
@@ -67,11 +103,8 @@ interface RecapData {
 		winningTeam: string;
 		pickCount: number;
 		totalPicks: number;
-		pickers: Array<{ userId: string; name: string; image: string | null }>;
-		leaguePicks: {
-			away: Array<{ userId: string; name: string; image: string | null }>;
-			home: Array<{ userId: string; name: string; image: string | null }>;
-		};
+		pickers: LeagueUser[];
+		leaguePicks: LeaguePicks;
 	}>;
 	// Perfect week users
 	perfectWeek: Array<{
@@ -94,7 +127,39 @@ interface RecapData {
 		highScore: number;
 	};
 	// Week highlights
-	highlights: string[];
+	highlights: Highlight[];
+	// Full week standings with movement
+	standings: StandingRow[];
+}
+
+interface RecapAnalytics {
+	hasPicks?: boolean;
+	weekCompleted?: boolean;
+	upsets: RecapData['upsets'];
+	mostPickedCorrect: RecapData['mostPickedCorrect'];
+	mostPickedIncorrect: RecapData['mostPickedIncorrect'];
+}
+
+const MEDAL_TEXT = ['text-[#FFD66B]', 'text-[#D5DCE6]', 'text-[#E7A16B]'];
+const MEDAL_RING = ['ring-[#FFD66B]', 'ring-[#D5DCE6]', 'ring-[#E7A16B]'];
+
+const initials = (name: string) =>
+	name
+		.split(' ')
+		.map(n => n[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2);
+
+/** Competition ranks ("1, 1, 3") keyed by userId. */
+function rankMap(results: Array<{ userId: string; points: number }>) {
+	const sorted = [...results].sort((a, b) => b.points - a.points);
+	const ranks = new Map<string, number>();
+	sorted.forEach((r, i) => {
+		const prev = sorted[i - 1];
+		ranks.set(r.userId, i > 0 && prev.points === r.points ? (ranks.get(prev.userId) ?? i + 1) : i + 1);
+	});
+	return ranks;
 }
 
 // Helper function to check if recap is available for a week
@@ -109,6 +174,206 @@ export async function isRecapAvailable(week: number, leagueId: string): Promise<
 	}
 }
 
+function calculateRecapData(weeklyResults: WeeklyResult[], previousWeekResults: Array<{ userId: string; points: number }>, recapAnalytics: RecapAnalytics, currentUserId: string, mode: string): RecapData {
+	// Sort by points
+	const sorted = [...weeklyResults].sort((a, b) => b.points - a.points);
+	const ranks = rankMap(weeklyResults);
+	const prevRanks = previousWeekResults.length > 0 ? rankMap(previousWeekResults) : null;
+
+	// User's stats
+	const userResult = weeklyResults.find(r => r.userId === currentUserId);
+	const userRank = ranks.get(currentUserId) ?? 0;
+	let rankChange = 0;
+	const prevUserRank = prevRanks?.get(currentUserId);
+	if (prevUserRank && userRank) {
+		rankChange = prevUserRank - userRank; // Positive = improved
+	}
+
+	const userStats = {
+		rank: userRank,
+		points: userResult?.points || 0,
+		correct: userResult?.correct || 0,
+		total: 5, // Always 5 picks
+		tfsPoints: userResult?.tfsPoints || 0,
+		rankChange
+	};
+
+	// Top 3 performers
+	const topPerformers = sorted.slice(0, 3).map(r => ({ player: r.player, image: r.image, points: r.points, correct: r.correct }));
+
+	// Perfect week (5/5 correct picks)
+	const perfectWeek = sorted
+		.filter(r => r.correct === 5)
+		.slice(0, 5)
+		.map(r => ({ player: r.player, image: r.image, points: r.points }));
+
+	// Best TFS performers (Steve mode only) - sort by TFS points
+	const tfsSorted = [...weeklyResults].sort((a, b) => (b.tfsPoints || 0) - (a.tfsPoints || 0));
+	const bestTFSScore = tfsSorted[0]?.tfsPoints || 0;
+	const bestTFS = tfsSorted
+		.filter(r => r.tfsPoints === bestTFSScore && bestTFSScore > 0)
+		.slice(0, 5)
+		.map(r => ({ player: r.player, image: r.image, tfsPoints: r.tfsPoints || 0 }));
+
+	// League stats
+	const totalPlayers = weeklyResults.length;
+	const totalPoints = weeklyResults.reduce((sum, r) => sum + r.points, 0);
+	const totalCorrect = weeklyResults.reduce((sum, r) => sum + r.correct, 0);
+	const totalPicks = totalPlayers * 5;
+
+	const leagueStats = {
+		totalPlayers,
+		avgPoints: totalPlayers > 0 ? Math.round((totalPoints / totalPlayers) * 10) / 10 : 0,
+		avgCorrect: totalPlayers > 0 ? Math.round((totalCorrect / totalPlayers) * 10) / 10 : 0,
+		accuracy: totalPicks > 0 ? Math.round((totalCorrect / totalPicks) * 100) : 0,
+		highScore: sorted[0]?.points || 0
+	};
+
+	// Generate highlights
+	const highlights: Highlight[] = [];
+
+	if (perfectWeek.length === 1) {
+		highlights.push({ icon: Target, tone: 'accent', text: `${perfectWeek[0].player} went perfect with 5/5 correct picks!` });
+	} else if (perfectWeek.length > 1) {
+		highlights.push({ icon: Target, tone: 'accent', text: `${perfectWeek.length} players achieved a perfect week!` });
+	}
+
+	if (leagueStats.accuracy < 50) {
+		highlights.push({ icon: Flame, tone: 'hot', text: `Upset city! League accuracy was only ${leagueStats.accuracy}% this week.` });
+	} else if (leagueStats.accuracy > 70) {
+		highlights.push({ icon: Sparkles, tone: 'primary', text: `The favorites dominated — league accuracy hit ${leagueStats.accuracy}%!` });
+	}
+
+	if (sorted[0] && sorted.length > 1) {
+		const gap = sorted[0].points - (sorted[1]?.points || 0);
+		if (gap >= 10) {
+			highlights.push({ icon: Crown, tone: 'warning', text: `${sorted[0].player} dominated with a ${gap}-point lead!` });
+		}
+	}
+
+	if (userStats.rankChange > 3) {
+		highlights.push({ icon: TrendingUp, tone: 'accent', text: `You climbed ${userStats.rankChange} spots in the standings!` });
+	} else if (userStats.rankChange < -3) {
+		highlights.push({ icon: TrendingDown, tone: 'hot', text: `Tough week — you dropped ${Math.abs(userStats.rankChange)} spots.` });
+	}
+
+	const avgPointsRounded = Math.round(leagueStats.avgPoints);
+	if (mode === 'standard') {
+		if (avgPointsRounded < 8) {
+			highlights.push({ icon: Moon, tone: 'primary', text: `Conservative week — average score was only ${avgPointsRounded} points.` });
+		} else if (avgPointsRounded > 15) {
+			highlights.push({ icon: Rocket, tone: 'hot', text: `Big upset week! Average score soared to ${avgPointsRounded} points.` });
+		}
+	}
+
+	const standings: StandingRow[] = sorted.map(r => {
+		const rank = ranks.get(r.userId) ?? 0;
+		const prev = prevRanks?.get(r.userId);
+		return { userId: r.userId, player: r.player, image: r.image, points: r.points, correct: r.correct, rank, change: prev ? prev - rank : null };
+	});
+
+	return {
+		userStats,
+		topPerformers,
+		upsets: recapAnalytics.upsets || [],
+		mostPickedCorrect: recapAnalytics.mostPickedCorrect || [],
+		mostPickedIncorrect: recapAnalytics.mostPickedIncorrect || [],
+		perfectWeek,
+		bestTFS,
+		leagueStats,
+		highlights,
+		standings
+	};
+}
+
+/* ---------- Presentational pieces ---------- */
+
+function PlayerAvatar({ name, image, className }: { name: string; image: string | null; className?: string }) {
+	return (
+		<Avatar className={cn('h-10 w-10 ring-1 ring-white/10', className)}>
+			<AvatarImage src={image || undefined} alt={name} />
+			<AvatarFallback className='bg-primary/15 text-xs font-bold text-primary'>{initials(name)}</AvatarFallback>
+		</Avatar>
+	);
+}
+
+function AvatarStack({ users, max = 4 }: { users: LeagueUser[]; max?: number }) {
+	if (users.length === 0) return null;
+	return (
+		<div className='flex items-center gap-1.5' title={users.map(u => u.name).join(', ')}>
+			<div className='flex -space-x-1.5'>
+				{users.slice(0, max).map((u, i) => (
+					<Avatar key={u.userId} className='h-6 w-6 ring-2 ring-[hsl(var(--surface))]' style={{ zIndex: max - i }}>
+						<AvatarImage src={u.image || undefined} alt={u.name} />
+						<AvatarFallback className='bg-primary/20 text-[9px] font-bold text-primary'>{initials(u.name)}</AvatarFallback>
+					</Avatar>
+				))}
+			</div>
+			{users.length > max && <span className='text-[11px] font-semibold text-muted-foreground tabular'>+{users.length - max}</span>}
+		</div>
+	);
+}
+
+const TONE_CHIP: Record<HighlightTone, string> = {
+	primary: 'bg-primary/10 text-primary',
+	accent: 'bg-accent/10 text-accent',
+	hot: 'bg-accent-2/10 text-accent-2',
+	warning: 'bg-warning/10 text-warning'
+};
+
+function Movement({ change }: { change: number | null | undefined }) {
+	if (change === null || change === undefined) return <span className='w-8 text-center text-[10px] font-semibold uppercase text-muted-foreground/60'>New</span>;
+	if (change === 0)
+		return (
+			<span className='flex w-8 items-center justify-center text-muted-foreground/60'>
+				<Minus className='h-3 w-3' />
+			</span>
+		);
+	const up = change > 0;
+	return (
+		<span className={cn('flex w-8 items-center justify-center gap-0.5 text-[11px] font-bold tabular', up ? 'text-accent' : 'text-accent-2')}>
+			{up ? <ArrowUp className='h-3 w-3' strokeWidth={3} /> : <ArrowDown className='h-3 w-3' strokeWidth={3} />}
+			{Math.abs(change)}
+		</span>
+	);
+}
+
+/** A featured game with a one-line story caption above it. */
+function GameStory({ title, caption, aside, game, leaguePicks, leagueMode, tone, delay }: { title: React.ReactNode; caption: React.ReactNode; aside?: React.ReactNode; game: Game; leaguePicks: LeaguePicks; leagueMode: string; tone: 'hot' | 'accent' | 'loss'; delay: number }) {
+	const bar = tone === 'hot' ? 'bg-brand-hot' : tone === 'accent' ? 'bg-accent' : 'bg-accent-2';
+	return (
+		<div className='glass relative overflow-hidden rounded-2xl animate-slide-up' style={{ animationDelay: `${delay}ms` }}>
+			<div className={cn('absolute inset-y-0 left-0 w-1', bar)} />
+			<div className='flex items-start justify-between gap-3 border-b border-white/[0.06] py-3 pl-5 pr-4'>
+				<div className='min-w-0'>
+					<p className='font-display text-lg font-bold uppercase italic leading-tight tracking-tight'>{title}</p>
+					<p className='mt-0.5 text-xs text-muted-foreground tabular'>{caption}</p>
+				</div>
+				{aside && <div className='shrink-0'>{aside}</div>}
+			</div>
+			<div className='pointer-events-none pl-1'>
+				<GameCard game={game} showScores disabled noHover leagueMode={leagueMode} leaguePicks={leaguePicks} forceShowOdds />
+			</div>
+		</div>
+	);
+}
+
+function RecapSkeleton() {
+	return (
+		<div className='space-y-6'>
+			<Skeleton className='h-56 rounded-3xl' />
+			<div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
+				{Array.from({ length: 4 }).map((_, i) => (
+					<Skeleton key={i} className='h-28 rounded-2xl' />
+				))}
+			</div>
+			<Skeleton className='h-64 rounded-2xl' />
+		</div>
+	);
+}
+
+/* ---------- Main component ---------- */
+
 export function Recap({ weekOverride }: { weekOverride?: number }) {
 	const { currentWeek } = useWeek();
 	const { leagueId } = useLeague();
@@ -116,11 +381,13 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 	// Use weekOverride if provided, otherwise use currentWeek from context
 	const weekToDisplay = weekOverride || currentWeek;
 	const [selectedWeek, setSelectedWeek] = useState<number>(0); // Will be set to most recent available week
+	const [weeksResolved, setWeeksResolved] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [recapData, setRecapData] = useState<RecapData | null>(null);
 	const [availableWeeks, setAvailableWeeks] = useState<number[]>([]);
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [leagueModeLoaded, setLeagueModeLoaded] = useState(false);
 
 	// Fetch league mode
 	useEffect(() => {
@@ -134,6 +401,8 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 				}
 			} catch (error) {
 				console.error('[Recap] Error fetching league details:', error);
+			} finally {
+				setLeagueModeLoaded(true);
 			}
 		};
 		fetchLeagueDetails();
@@ -143,18 +412,12 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 	useEffect(() => {
 		const determineAvailableWeeks = async () => {
 			if (!leagueId) return;
-			const weeks: number[] = [];
-			// Check weeks up to and including weekToDisplay (since that week might be completed)
-			for (let w = 1; w <= weekToDisplay; w++) {
-				// Check if recap is available (has picks and is completed)
-				const available = await isRecapAvailable(w, leagueId);
-				if (available) {
-					weeks.push(w);
-				}
-			}
+			// Check weeks up to and including weekToDisplay (since that week might be completed), in parallel
+			const candidates = Array.from({ length: Math.max(0, weekToDisplay) }, (_, i) => i + 1);
+			const availability = await Promise.all(candidates.map(w => isRecapAvailable(w, leagueId)));
+			const weeks = candidates.filter((_, i) => availability[i]);
+
 			setAvailableWeeks(weeks);
-			// If weekOverride is provided, default to that week
-			// Otherwise, default to weekToDisplay from context
 			if (weekOverride && weeks.includes(weekOverride)) {
 				setSelectedWeek(weekOverride);
 			} else if (weeks.includes(weekToDisplay)) {
@@ -164,6 +427,7 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 			} else {
 				setSelectedWeek(0); // No weeks available
 			}
+			setWeeksResolved(true);
 		};
 		determineAvailableWeeks();
 	}, [weekToDisplay, leagueId, weekOverride]);
@@ -171,60 +435,53 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 	// Fetch and calculate recap data
 	useEffect(() => {
 		const fetchRecap = async () => {
-			if (!leagueId || selectedWeek < 1 || !session?.user?.id) {
+			if (!leagueId || !session?.user?.id || !leagueModeLoaded) return;
+			if (selectedWeek < 1) {
+				// Nothing to show once we know there are no recap weeks
+				if (weeksResolved) setLoading(false);
 				return;
 			}
+			const userId = session.user.id;
 
 			try {
 				setLoading(true);
 				setError(null);
 
-				// Fetch both leaderboard data and recap analytics in parallel
-				const [leaderboardResponse, recapResponse] = await Promise.all([
+				// Leaderboard, recap analytics and the previous week's standings are independent
+				const [leaderboardResponse, recapResponse, prevResponse] = await Promise.all([
 					fetch(`/api/leaderboard?week=${selectedWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
-					fetch(`/api/recap?week=${selectedWeek}&leagueId=${leagueId}`, { cache: 'no-store' })
+					fetch(`/api/recap?week=${selectedWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
+					selectedWeek > 1 ? fetch(`/api/leaderboard?week=${selectedWeek - 1}&leagueId=${leagueId}`, { cache: 'no-store' }).catch(() => null) : Promise.resolve(null)
 				]);
 
 				if (!leaderboardResponse.ok || !recapResponse.ok) {
 					throw new Error('Failed to fetch recap data');
 				}
 
-				const leaderboardData = await leaderboardResponse.json();
-				const recapAnalytics = await recapResponse.json();
+				const leaderboardData: { weeklyResults: WeeklyResult[] } = await leaderboardResponse.json();
+				const recapAnalytics: RecapAnalytics = await recapResponse.json();
 
 				// Check if recap is available
 				if (!recapAnalytics.hasPicks || !recapAnalytics.weekCompleted) {
+					setRecapData(null);
 					setError('Recap not available for this week yet.');
 					return;
 				}
 
-				const { weeklyResults } = leaderboardData;
-
-				// Also fetch previous week's standings for rank change calculation
 				let previousWeekResults: Array<{ userId: string; points: number }> = [];
-				if (selectedWeek > 1) {
+				if (prevResponse?.ok) {
 					try {
-						const prevResponse = await fetch(`/api/leaderboard?week=${selectedWeek - 1}&leagueId=${leagueId}`, { cache: 'no-store' });
-						if (prevResponse.ok) {
-							const prevData = await prevResponse.json();
-							previousWeekResults = prevData.weeklyResults;
-						}
+						const prevData = await prevResponse.json();
+						previousWeekResults = prevData.weeklyResults || [];
 					} catch {
 						// Previous week data not available
 					}
 				}
 
-				// Calculate all recap statistics
-				const recap = calculateRecapData(
-					weeklyResults,
-					previousWeekResults,
-					recapAnalytics,
-					session.user.id,
-					leagueMode
-				);
-				setRecapData(recap);
+				setRecapData(calculateRecapData(leaderboardData.weeklyResults || [], previousWeekResults, recapAnalytics, userId, leagueMode));
 			} catch (err) {
 				console.error('[Recap] Failed to load recap:', err);
+				setRecapData(null);
 				setError('Failed to load weekly recap.');
 			} finally {
 				setLoading(false);
@@ -232,705 +489,360 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 		};
 
 		fetchRecap();
-	}, [selectedWeek, leagueId, session?.user?.id, leagueMode]);
+	}, [selectedWeek, leagueId, session?.user?.id, leagueMode, leagueModeLoaded, weeksResolved]);
 
-	const calculateRecapData = (
-		weeklyResults: Array<{ userId: string; player: string; image: string | null; points: number; correct: number; tfsPoints: number; hasPicks: boolean }>,
-		previousWeekResults: Array<{ userId: string; points: number }>,
-		recapAnalytics: {
-			upsets: RecapData['upsets'];
-			mostPickedCorrect: RecapData['mostPickedCorrect'];
-			mostPickedIncorrect: RecapData['mostPickedIncorrect'];
-		},
-		currentUserId: string,
-		mode: string
-	): RecapData => {
-		// Sort by points
-		const sorted = [...weeklyResults].sort((a, b) => b.points - a.points);
+	const currentUserId = session?.user?.id;
 
-		// User's stats
-		const userResult = weeklyResults.find(r => r.userId === currentUserId);
-		const userRank = sorted.findIndex(r => r.userId === currentUserId) + 1;
-		let rankChange = 0;
-
-		if (previousWeekResults.length > 0) {
-			const prevSorted = [...previousWeekResults].sort((a, b) => b.points - a.points);
-			const prevRank = prevSorted.findIndex(r => r.userId === currentUserId) + 1;
-			if (prevRank > 0) {
-				rankChange = prevRank - userRank; // Positive = improved
-			}
-		}
-
-		const userStats = {
-			rank: userRank,
-			points: userResult?.points || 0,
-			correct: userResult?.correct || 0,
-			total: 5, // Always 5 picks
-			tfsPoints: userResult?.tfsPoints || 0,
-			rankChange
-		};
-
-		// Top 3 performers
-		const topPerformers = sorted.slice(0, 3).map(r => ({
-			player: r.player,
-			image: r.image,
-			points: r.points,
-			correct: r.correct
-		}));
-
-		// Perfect week (5/5 correct picks)
-		const perfectWeek = sorted
-			.filter(r => r.correct === 5)
-			.slice(0, 5)
-			.map(r => ({
-				player: r.player,
-				image: r.image,
-				points: r.points
-			}));
-
-		// Best TFS performers (Steve mode only) - sort by TFS points
-		const tfsSorted = [...weeklyResults].sort((a, b) => (b.tfsPoints || 0) - (a.tfsPoints || 0));
-		const bestTFSScore = tfsSorted[0]?.tfsPoints || 0;
-		const bestTFS = tfsSorted
-			.filter(r => r.tfsPoints === bestTFSScore && bestTFSScore > 0)
-			.slice(0, 5)
-			.map(r => ({
-				player: r.player,
-				image: r.image,
-				tfsPoints: r.tfsPoints || 0
-			}));
-
-		// League stats
-		const totalPlayers = weeklyResults.length;
-		const totalPoints = weeklyResults.reduce((sum, r) => sum + r.points, 0);
-		const totalCorrect = weeklyResults.reduce((sum, r) => sum + r.correct, 0);
-		const totalPicks = totalPlayers * 5;
-
-		const leagueStats = {
-			totalPlayers,
-			avgPoints: totalPlayers > 0 ? Math.round((totalPoints / totalPlayers) * 10) / 10 : 0,
-			avgCorrect: totalPlayers > 0 ? Math.round((totalCorrect / totalPlayers) * 10) / 10 : 0,
-			accuracy: totalPicks > 0 ? Math.round((totalCorrect / totalPicks) * 100) : 0,
-			highScore: sorted[0]?.points || 0
-		};
-
-		// Generate highlights
-		const highlights: string[] = [];
-
-		if (perfectWeek.length > 0) {
-			if (perfectWeek.length === 1) {
-				highlights.push(`🎯 ${perfectWeek[0].player} went perfect with 5/5 correct picks!`);
-			} else {
-				highlights.push(`🎯 ${perfectWeek.length} players achieved a perfect week!`);
-			}
-		}
-
-		if (leagueStats.accuracy < 50) {
-			highlights.push(`😱 Upset city! League accuracy was only ${leagueStats.accuracy}% this week.`);
-		} else if (leagueStats.accuracy > 70) {
-			highlights.push(`🔮 The favorites dominated - league accuracy hit ${leagueStats.accuracy}%!`);
-		}
-
-		if (sorted[0] && sorted.length > 1) {
-			const gap = sorted[0].points - (sorted[1]?.points || 0);
-			if (gap >= 10) {
-				highlights.push(`👑 ${sorted[0].player} dominated with a ${gap}-point lead!`);
-			}
-		}
-
-		if (userStats.rankChange > 3) {
-			highlights.push(`📈 You climbed ${userStats.rankChange} spots in the standings!`);
-		} else if (userStats.rankChange < -3) {
-			highlights.push(`📉 Tough week - you dropped ${Math.abs(userStats.rankChange)} spots.`);
-		}
-
-		const avgPointsRounded = Math.round(leagueStats.avgPoints);
-		if (mode === 'standard') {
-			if (avgPointsRounded < 8) {
-				highlights.push(`💤 Conservative week - average score was only ${avgPointsRounded} points.`);
-			} else if (avgPointsRounded > 15) {
-				highlights.push(`🚀 Big upset week! Average score soared to ${avgPointsRounded} points.`);
-			}
-		}
-
-		return {
-			userStats,
-			topPerformers,
-			upsets: recapAnalytics.upsets,
-			mostPickedCorrect: recapAnalytics.mostPickedCorrect,
-			mostPickedIncorrect: recapAnalytics.mostPickedIncorrect,
-			perfectWeek,
-			bestTFS,
-			leagueStats,
-			highlights
-		};
-	};
+	const weekSelector = availableWeeks.length > 1 && (
+		<div className='-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide sm:mx-0 sm:flex-wrap sm:px-0'>
+			{availableWeeks.map(week => {
+				const label = week === currentWeek ? 'This week' : week === currentWeek - 1 ? 'Last week' : null;
+				const active = selectedWeek === week;
+				return (
+					<button
+						key={week}
+						type='button'
+						onClick={() => setSelectedWeek(week)}
+						aria-pressed={active}
+						className={cn(
+							'flex shrink-0 flex-col items-start rounded-xl border px-3.5 py-2 text-left transition-all duration-200',
+							active ? 'border-primary/60 bg-primary/[0.12] shadow-[0_8px_24px_-12px_hsl(var(--primary)/0.7)]' : 'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06]'
+						)}
+					>
+						<span className={cn('font-display text-base font-bold uppercase italic leading-none tracking-tight', active ? 'text-primary' : 'text-foreground')}>Week {week}</span>
+						{label && <span className='mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground'>{label}</span>}
+					</button>
+				);
+			})}
+		</div>
+	);
 
 	if (loading) {
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {selectedWeek} Recap</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className='flex items-center justify-center py-12'>
-						<Spinner />
-					</div>
-				</CardContent>
-			</Card>
+			<div className='space-y-5'>
+				{weekSelector}
+				<RecapSkeleton />
+			</div>
 		);
 	}
 
 	if (error || !recapData) {
 		return (
-			<Card>
-				<CardHeader>
-					<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary'>Week {selectedWeek} Recap</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className='text-center py-12'>
-						<p className='text-muted-foreground'>{error || 'No recap data available for this week.'}</p>
-					</div>
-				</CardContent>
-			</Card>
+			<div className='space-y-5'>
+				{weekSelector}
+				<EmptyState icon={CalendarX} title={selectedWeek > 0 ? `Week ${selectedWeek} Recap` : 'No recap yet'} description={error || 'No recap data available for this week.'} />
+			</div>
 		);
 	}
 
-	return (
-		<div className='space-y-6'>
-			{/* Week Selector */}
-			{availableWeeks.length > 1 && (
-				<Card>
-					<CardContent className='pt-6'>
-						<div className='flex flex-col sm:flex-row sm:items-center gap-3'>
-							<span className='text-sm text-muted-foreground font-medium'>View Week:</span>
-							<div className='flex items-center gap-2 flex-wrap'>
-								{availableWeeks.map(week => {
-									const getWeekLabel = () => {
-										if (week === currentWeek) return 'Current Week';
-										if (week === currentWeek - 1) return 'Last Week';
-										if (week === currentWeek + 1) return 'Next Week';
-										return null;
-									};
-									const weekLabel = getWeekLabel();
+	const { userStats, topPerformers, leagueStats } = recapData;
+	const winner = topPerformers[0];
+	const coWinners = topPerformers.filter(p => winner && p.points === winner.points).length;
+	const runnersUp = topPerformers.slice(1);
 
-									return (
-										<button
-											key={week}
-											onClick={() => setSelectedWeek(week)}
-											className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-												selectedWeek === week
-													? 'bg-primary text-black'
-													: 'bg-card border-2 border-primary/20 text-primary hover:border-primary/40'
-											}`}
-										>
-											<div className='flex flex-col items-center gap-0.5'>
-												<span>Week {week}</span>
-												{weekLabel && (
-													<span className={`text-[11px] font-normal ${selectedWeek === week ? 'text-black/60' : 'text-muted-foreground'}`}>
-														{weekLabel}
-													</span>
-												)}
-											</div>
-										</button>
-									);
-								})}
-							</div>
+	return (
+		<div className='space-y-8'>
+			{weekSelector}
+
+			{/* Hero: week winner */}
+			{winner && (
+				<section className='gradient-border glass relative overflow-hidden rounded-3xl p-5 animate-slide-up sm:p-7'>
+					<div aria-hidden className='pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-[#FFD66B]/10 blur-3xl' />
+					<div aria-hidden className='pointer-events-none absolute -bottom-24 -left-10 h-56 w-56 rounded-full bg-primary/10 blur-3xl' />
+
+					<div className='relative flex items-center justify-between gap-3'>
+						<p className='eyebrow flex items-center gap-2'>
+							<Trophy className='h-3.5 w-3.5 text-[#FFD66B]' />
+							Week {selectedWeek} recap
+						</p>
+						{coWinners > 1 && <Pill tone='warning'>{coWinners}-way tie</Pill>}
+					</div>
+
+					<div className='relative mt-5 flex flex-wrap items-center gap-x-4 gap-y-4 sm:flex-nowrap sm:gap-6'>
+						<div className='relative shrink-0'>
+							<Crown className='absolute -top-6 left-1/2 h-6 w-6 -translate-x-1/2 text-[#FFD66B] drop-shadow-[0_0_10px_rgba(255,214,107,0.8)]' fill='currentColor' />
+							<PlayerAvatar name={winner.player} image={winner.image} className='h-20 w-20 ring-2 ring-[#FFD66B] ring-offset-4 ring-offset-[hsl(var(--surface))] shadow-[0_0_40px_-6px_rgba(255,214,107,0.6)] sm:h-24 sm:w-24' />
 						</div>
-					</CardContent>
-				</Card>
+						<div className='min-w-0 flex-1 basis-0'>
+							<p className='text-[11px] font-bold uppercase tracking-[0.2em] text-[#FFD66B]'>Week winner</p>
+							<h2 className='display-heading mt-1 truncate text-3xl sm:text-5xl'>{winner.player}</h2>
+							<p className='mt-1.5 text-sm text-muted-foreground tabular'>{winner.correct}/5 correct</p>
+						</div>
+						{/* Wraps under the name on phones, sits to the right on larger screens */}
+						<div className='flex w-full items-baseline gap-2 sm:block sm:w-auto sm:shrink-0 sm:text-right'>
+							<p className='display-heading text-5xl text-[#FFD66B] tabular sm:text-7xl'>
+								<CountUp end={winner.points} duration={1} />
+							</p>
+							<p className='eyebrow sm:mt-1'>Points</p>
+						</div>
+					</div>
+
+					{runnersUp.length > 0 && (
+						<div className='relative mt-5 grid gap-2 sm:grid-cols-2'>
+							{runnersUp.map((p, i) => (
+								<div key={`${p.player}-${i}`} className='flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5'>
+									<span className={cn('w-5 text-center font-display text-lg font-extrabold italic tabular', MEDAL_TEXT[i + 1])}>{i + 2}</span>
+									<PlayerAvatar name={p.player} image={p.image} className={cn('h-9 w-9 ring-2', MEDAL_RING[i + 1])} />
+									<div className='min-w-0 flex-1'>
+										<p className='truncate text-sm font-semibold'>{p.player}</p>
+										<p className='text-[11px] text-muted-foreground tabular'>{p.correct}/5 correct</p>
+									</div>
+									<span className={cn('font-display text-2xl font-extrabold italic tabular', MEDAL_TEXT[i + 1])}>{p.points}</span>
+								</div>
+							))}
+						</div>
+					)}
+				</section>
 			)}
 
-			{/* Week Highlights */}
+			{/* Storylines */}
 			{recapData.highlights.length > 0 && (
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3 }}
-				>
-					<Card className='border-2 border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5'>
-						<CardHeader>
-							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary flex items-center gap-2'>
-								<Flame className='h-5 w-5' />
-								Week {selectedWeek} Highlights
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='space-y-2'>
-								{recapData.highlights.map((highlight, idx) => (
-									<motion.p
-										key={idx}
-										className='text-foreground text-sm md:text-base'
-										initial={{ opacity: 0, x: -10 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{ duration: 0.3, delay: idx * 0.1 }}
-									>
-										{highlight}
-									</motion.p>
+				<section>
+					<SectionHeader title='Storylines' icon={Flame} />
+					<div className='grid gap-2 sm:grid-cols-2'>
+						{recapData.highlights.map((h, idx) => (
+							<div key={idx} className='flex items-start gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3.5 animate-slide-up' style={{ animationDelay: `${idx * 70}ms` }}>
+								<span className={cn('grid h-8 w-8 shrink-0 place-items-center rounded-lg', TONE_CHIP[h.tone])}>
+									<h.icon className='h-4 w-4' />
+								</span>
+								<p className='pt-1 text-sm leading-snug text-foreground'>{h.text}</p>
+							</div>
+						))}
+					</div>
+				</section>
+			)}
+
+			{/* Your week */}
+			<section>
+				<SectionHeader title='Your Week' icon={Target} />
+				<div className={cn('grid grid-cols-2 gap-3', leagueMode === 'steve' ? 'md:grid-cols-4' : 'md:grid-cols-3')}>
+					<StatTile
+						label='Rank'
+						icon={Trophy}
+						tone='primary'
+						value={
+							<span className={cn(userStats.rank >= 1 && userStats.rank <= 3 && MEDAL_TEXT[userStats.rank - 1])}>
+								{userStats.rank > 0 ? (
+									<>
+										<span className='text-2xl text-muted-foreground sm:text-3xl'>#</span>
+										<CountUp end={userStats.rank} duration={0.8} />
+									</>
+								) : (
+									'–'
+								)}
+							</span>
+						}
+						sub={
+							userStats.rankChange ? (
+								<span className={cn('inline-flex items-center gap-1 font-semibold', userStats.rankChange > 0 ? 'text-accent' : 'text-accent-2')}>
+									{userStats.rankChange > 0 ? <ArrowUp className='h-3 w-3' /> : <ArrowDown className='h-3 w-3' />}
+									{Math.abs(userStats.rankChange)} vs last week
+								</span>
+							) : (
+								'Same as last week'
+							)
+						}
+					/>
+					<StatTile label='Points' icon={Zap} tone='accent' value={<CountUp end={userStats.points} duration={0.8} />} sub={leagueStats.avgPoints ? `League avg ${leagueStats.avgPoints}` : undefined} />
+					<StatTile
+						label='Correct'
+						icon={Target}
+						tone='muted'
+						value={
+							<>
+								<CountUp end={userStats.correct} duration={0.8} />
+								<span className='text-2xl text-muted-foreground sm:text-3xl'>/{userStats.total}</span>
+							</>
+						}
+						className={cn(leagueMode !== 'steve' && 'col-span-2 md:col-span-1')}
+					/>
+					{leagueMode === 'steve' && <StatTile label='TFS' icon={Award} tone='warning' value={<CountUp end={userStats.tfsPoints || 0} duration={0.8} />} />}
+				</div>
+			</section>
+
+			{/* Awards: perfect week + best TFS */}
+			{(recapData.perfectWeek.length > 0 || (leagueMode === 'steve' && recapData.bestTFS.length > 0)) && (
+				<section className='grid gap-3 md:grid-cols-2'>
+					{recapData.perfectWeek.length > 0 && (
+						<Card className='border-accent/25 p-4 sm:p-5'>
+							<div className='mb-3 flex items-center justify-between gap-2'>
+								<p className='eyebrow flex items-center gap-2 text-accent'>
+									<Target className='h-3.5 w-3.5' /> Perfect week club
+								</p>
+								<Pill tone='accent'>5/5</Pill>
+							</div>
+							<div className='flex flex-wrap gap-2'>
+								{recapData.perfectWeek.map((p, idx) => (
+									<div key={idx} className='flex items-center gap-2 rounded-full border border-accent/25 bg-accent/[0.06] py-1 pl-1 pr-3'>
+										<PlayerAvatar name={p.player} image={p.image} className='h-7 w-7' />
+										<span className='text-sm font-semibold'>{p.player}</span>
+										<span className='font-display text-sm font-bold italic text-accent tabular'>{p.points}</span>
+									</div>
 								))}
 							</div>
-						</CardContent>
-					</Card>
-				</motion.div>
+						</Card>
+					)}
+					{leagueMode === 'steve' && recapData.bestTFS.length > 0 && (
+						<Card className='border-warning/25 p-4 sm:p-5'>
+							<div className='mb-3 flex items-center justify-between gap-2'>
+								<p className='eyebrow flex items-center gap-2 text-warning'>
+									<Award className='h-3.5 w-3.5' /> Best TFS
+								</p>
+								<Pill tone='warning'>{recapData.bestTFS[0].tfsPoints === 5 ? 'Perfect' : `${recapData.bestTFS[0].tfsPoints} pts · ${5 - recapData.bestTFS[0].tfsPoints} off perfect`}</Pill>
+							</div>
+							<div className='flex flex-wrap gap-2'>
+								{recapData.bestTFS.map((p, idx) => (
+									<div key={idx} className='flex items-center gap-2 rounded-full border border-warning/25 bg-warning/[0.06] py-1 pl-1 pr-3'>
+										<PlayerAvatar name={p.player} image={p.image} className='h-7 w-7' />
+										<span className='text-sm font-semibold'>{p.player}</span>
+										<span className='font-display text-sm font-bold italic text-warning tabular'>{p.tfsPoints}</span>
+									</div>
+								))}
+							</div>
+						</Card>
+					)}
+				</section>
 			)}
 
-			{/* Your Performance */}
-			<motion.div
-				initial={{ opacity: 0, y: 10 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.1 }}
-			>
-				<Card className='border-2 border-primary/20'>
-					<CardHeader>
-						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary flex items-center gap-2'>
-							<Target className='h-5 w-5' />
-							Your Performance
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<Trophy className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>Rank</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.userStats.rank} duration={0.8} />
-								</p>
-								{recapData.userStats.rankChange !== undefined && recapData.userStats.rankChange !== 0 && (
-									<p className={`text-xs mt-1 font-semibold ${recapData.userStats.rankChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
-										{recapData.userStats.rankChange > 0 ? '↑' : '↓'} {Math.abs(recapData.userStats.rankChange)}
-									</p>
-								)}
-							</div>
+			{/* Craziest upsets */}
+			{recapData.upsets.length > 0 && (
+				<section>
+					<SectionHeader title='Craziest Upsets' icon={Flame} />
+					<div className='space-y-3'>
+						{recapData.upsets.slice(0, 3).map((upset, idx) => (
+							<GameStory
+								key={upset.gameId}
+								tone='hot'
+								delay={idx * 80}
+								game={upset.game}
+								leaguePicks={upset.leaguePicks}
+								leagueMode={leagueMode}
+								title={
+									<>
+										<span className='text-accent-2'>{upset.team}</span> stun {upset.opponent}
+									</>
+								}
+								caption={`+${upset.odds} · worth ${upset.points} pts`}
+								aside={
+									upset.correctPickers.length > 0 ? (
+										<div className='flex flex-col items-end gap-1'>
+											<span className='text-[10px] font-semibold uppercase tracking-wider text-muted-foreground'>Called it</span>
+											<AvatarStack users={upset.correctPickers} max={3} />
+										</div>
+									) : (
+										<Pill tone='hot'>Nobody</Pill>
+									)
+								}
+							/>
+						))}
+					</div>
+				</section>
+			)}
 
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<Zap className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>Points</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.userStats.points} duration={0.8} />
-								</p>
+			{/* Crowd favorites (standard mode only) */}
+			{leagueMode === 'standard' && (recapData.mostPickedCorrect.length > 0 || recapData.mostPickedIncorrect.length > 0) && (
+				<section className='grid gap-8 xl:grid-cols-2 xl:gap-4'>
+					{recapData.mostPickedCorrect.length > 0 && (
+						<div>
+							<SectionHeader title='Crowd Got It Right' icon={ThumbsUp} />
+							<div className='space-y-3'>
+								{recapData.mostPickedCorrect.slice(0, 2).map((pick, idx) => (
+									<GameStory
+										key={pick.gameId}
+										tone='accent'
+										delay={idx * 80}
+										game={pick.game}
+										leaguePicks={pick.leaguePicks}
+										leagueMode={leagueMode}
+										title={
+											<>
+												<span className='text-accent'>{pick.winningTeam}</span> beat {pick.losingTeam}
+											</>
+										}
+										caption={`${pick.pickCount} of ${pick.totalPicks} players picked correctly`}
+									/>
+								))}
 							</div>
-
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<Target className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>Correct</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.userStats.correct} duration={0.8} />/{recapData.userStats.total}
-								</p>
-							</div>
-
-							{leagueMode === 'steve' && (
-								<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-									<div className='flex items-center justify-center gap-2 mb-2'>
-										<Award className='h-4 w-4 text-primary' />
-										<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>TFS</p>
-									</div>
-									<p className='text-3xl font-bold font-mono text-primary'>
-										<CountUp end={recapData.userStats.tfsPoints || 0} duration={0.8} />
-									</p>
-								</div>
-							)}
 						</div>
-					</CardContent>
-				</Card>
-			</motion.div>
+					)}
+					{recapData.mostPickedIncorrect.length > 0 && (
+						<div>
+							<SectionHeader title='Crowd Got Burned' icon={ThumbsDown} />
+							<div className='space-y-3'>
+								{recapData.mostPickedIncorrect.slice(0, 2).map((pick, idx) => (
+									<GameStory
+										key={pick.gameId}
+										tone='loss'
+										delay={idx * 80}
+										game={pick.game}
+										leaguePicks={pick.leaguePicks}
+										leagueMode={leagueMode}
+										title={
+											<>
+												{pick.pickCount} took <span className='text-accent-2'>{pick.losingTeam}</span>
+											</>
+										}
+										caption={`But ${pick.winningTeam} won`}
+									/>
+								))}
+							</div>
+						</div>
+					)}
+				</section>
+			)}
 
-			{/* Top Performers */}
-			<motion.div
-				initial={{ opacity: 0, y: 10 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.2 }}
-			>
-				<Card className='border-2 border-primary/20'>
-					<CardHeader>
-						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary flex items-center gap-2'>
-							<Crown className='h-5 w-5 text-yellow-400' fill='currentColor' />
-							Top Performers
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className='space-y-3'>
-							{recapData.topPerformers.map((performer, idx) => {
-								const getRankStyle = () => {
-									if (idx === 0) return 'border-yellow-500/30 bg-yellow-500/5 shadow-[0_0_15px_rgba(234,179,8,0.15)]';
-									if (idx === 1) return 'border-gray-400/30 bg-gray-400/5 shadow-[0_0_10px_rgba(156,163,175,0.15)]';
-									if (idx === 2) return 'border-orange-500/30 bg-orange-400/5 shadow-[0_0_10px_rgba(249,115,22,0.15)]';
-									return 'border-primary/20';
-								};
-
-								const getMedalColor = () => {
-									if (idx === 0) return 'text-yellow-400';
-									if (idx === 1) return 'text-gray-300';
-									if (idx === 2) return 'text-orange-400';
-									return 'text-primary';
-								};
-
+			{/* Standings movement */}
+			{recapData.standings.length > 0 && (
+				<section>
+					<SectionHeader title={`Week ${selectedWeek} Standings`} icon={TrendingUp} action={selectedWeek > 1 ? <span className='text-[11px] text-muted-foreground'>vs Week {selectedWeek - 1}</span> : undefined} />
+					<Card className='p-2 sm:p-3'>
+						<div className='space-y-1'>
+							{recapData.standings.map((s, idx) => {
+								const isMe = s.userId === currentUserId;
 								return (
-									<motion.div
-										key={idx}
-										className={`flex items-center justify-between p-4 rounded-lg border-2 ${getRankStyle()}`}
-										initial={{ opacity: 0, x: -10 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{ duration: 0.3, delay: 0.3 + idx * 0.1 }}
+									<div
+										key={s.userId}
+										className={cn('flex items-center gap-3 rounded-xl px-3 py-2.5 animate-slide-up', isMe ? 'bg-primary/[0.08] ring-1 ring-primary/30' : 'hover:bg-white/[0.04]')}
+										style={{ animationDelay: `${Math.min(idx, 12) * 35}ms` }}
 									>
-										<div className='flex items-center gap-3'>
-											<div className={`text-2xl font-bold ${getMedalColor()}`}>
-												{idx === 0 && '🥇'}
-												{idx === 1 && '🥈'}
-												{idx === 2 && '🥉'}
-											</div>
-											<Avatar className='w-10 h-10'>
-												<AvatarImage src={performer.image || undefined} alt={performer.player} />
-												<AvatarFallback className='bg-primary/20 text-primary font-semibold'>
-													{performer.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-												</AvatarFallback>
-											</Avatar>
-											<div>
-												<p className='font-semibold text-foreground'>{performer.player}</p>
-												<p className='text-xs text-muted-foreground'>{performer.correct}/5 correct</p>
-											</div>
+										<span className={cn('w-6 text-center font-display text-lg font-extrabold italic tabular', s.rank <= 3 ? MEDAL_TEXT[s.rank - 1] : 'text-muted-foreground')}>{s.rank}</span>
+										<Movement change={selectedWeek > 1 ? s.change : 0} />
+										<PlayerAvatar name={s.player} image={s.image} className='h-8 w-8' />
+										<div className='min-w-0 flex-1'>
+											<p className='flex items-center gap-1.5 text-sm font-semibold'>
+												<span className='truncate'>{s.player}</span>
+												{isMe && <span className='shrink-0 text-[10px] font-bold uppercase tracking-wider text-primary'>You</span>}
+											</p>
+											<p className='text-[11px] text-muted-foreground tabular'>{s.correct}/5 correct</p>
 										</div>
-										<div className='text-right'>
-											<p className='text-2xl font-bold font-mono text-primary'>{performer.points}</p>
-											<p className='text-xs text-muted-foreground'>points</p>
-										</div>
-									</motion.div>
+										<span className='font-display text-2xl font-extrabold italic tabular'>{s.points}</span>
+									</div>
 								);
 							})}
 						</div>
-					</CardContent>
-				</Card>
-			</motion.div>
-
-			{/* Perfect Week Club */}
-			{recapData.perfectWeek.length > 0 && (
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.3 }}
-				>
-					<Card className='border-2 border-green-500/30 bg-green-500/5'>
-						<CardHeader>
-							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-green-400 flex items-center gap-2'>
-								<Target className='h-5 w-5' />
-								Perfect Week Club (5/5)
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='flex flex-wrap gap-3'>
-								{recapData.perfectWeek.map((player, idx) => (
-									<motion.div
-										key={idx}
-										className='flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-sm rounded-full border-2 border-green-500/30'
-										initial={{ opacity: 0, scale: 0.9 }}
-										animate={{ opacity: 1, scale: 1 }}
-										transition={{ duration: 0.3, delay: 0.4 + idx * 0.05 }}
-									>
-										<Avatar className='w-8 h-8'>
-											<AvatarImage src={player.image || undefined} alt={player.player} />
-											<AvatarFallback className='bg-green-500/20 text-green-400 font-semibold text-xs'>
-												{player.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-											</AvatarFallback>
-										</Avatar>
-										<span className='font-semibold text-foreground text-sm'>{player.player}</span>
-										<span className='text-xs text-green-400 font-bold'>({player.points} pts)</span>
-									</motion.div>
-								))}
-							</div>
-						</CardContent>
 					</Card>
-				</motion.div>
+				</section>
 			)}
 
-			{/* Best TFS Score (Steve Mode Only) */}
-			{leagueMode === 'steve' && recapData.bestTFS.length > 0 && (
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.35 }}
-				>
-					<Card className='border-2 border-purple-500/30 bg-purple-500/5'>
-						<CardHeader>
-							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-purple-400 flex items-center gap-2'>
-								<Award className='h-5 w-5' />
-								Best TFS Performance
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='space-y-3'>
-								{/* Show TFS details */}
-								<div className='text-sm text-muted-foreground mb-3'>
-									{recapData.bestTFS[0].tfsPoints === 5 ? (
-										<span className='text-purple-400 font-semibold'>🎯 Perfect TFS score!</span>
-									) : (
-										<span>
-											Best TFS: <span className='text-purple-400 font-bold'>{recapData.bestTFS[0].tfsPoints}</span> points
-											<span className='text-muted-foreground'> ({5 - recapData.bestTFS[0].tfsPoints} off from perfect)</span>
-										</span>
-									)}
-								</div>
-
-								{/* Show players with best TFS */}
-								<div className='flex flex-wrap gap-3'>
-									{recapData.bestTFS.map((player, idx) => (
-										<motion.div
-											key={idx}
-											className='flex items-center gap-2 px-4 py-2 bg-card/80 backdrop-blur-sm rounded-full border-2 border-purple-500/30'
-											initial={{ opacity: 0, scale: 0.9 }}
-											animate={{ opacity: 1, scale: 1 }}
-											transition={{ duration: 0.3, delay: 0.4 + idx * 0.05 }}
-										>
-											<Avatar className='w-8 h-8'>
-												<AvatarImage src={player.image || undefined} alt={player.player} />
-												<AvatarFallback className='bg-purple-500/20 text-purple-400 font-semibold text-xs'>
-													{player.player.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-												</AvatarFallback>
-											</Avatar>
-											<span className='font-semibold text-foreground text-sm'>{player.player}</span>
-											<span className='text-xs text-purple-400 font-bold'>({player.tfsPoints} TFS)</span>
-										</motion.div>
-									))}
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-				</motion.div>
-			)}
-
-			{/* Craziest Upsets */}
-			{recapData.upsets && recapData.upsets.length > 0 && (
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.4 }}
-				>
-					<Card className='border-2 border-orange-500/30 bg-orange-500/5'>
-						<CardHeader>
-							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-orange-400 flex items-center gap-2'>
-								<Flame className='h-5 w-5' />
-								Craziest Upsets
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='space-y-6'>
-								{recapData.upsets.slice(0, 3).map((upset, idx) => (
-									<motion.div
-										key={upset.gameId}
-										initial={{ opacity: 0, x: -10 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{ duration: 0.3, delay: 0.5 + idx * 0.1 }}
-										className='space-y-4'
-									>
-										<div className='flex items-center justify-between mb-4'>
-											<div>
-												<p className='text-sm font-semibold text-foreground'>
-													<span className='text-orange-400'>{upset.team}</span> beat {upset.opponent}
-												</p>
-												<p className='text-xs text-muted-foreground'>
-													+{upset.odds} odds • Worth {upset.points} pts
-												</p>
-											</div>
-											{upset.correctPickers.length > 0 && (
-												<div className='text-right'>
-													<p className='text-xs text-muted-foreground'>Called by:</p>
-													<div className='flex items-center gap-1 justify-end mt-1'>
-														{upset.correctPickers.slice(0, 3).map((picker, i) => (
-															<Avatar key={picker.userId} className='w-6 h-6 border-2 border-card' style={{ zIndex: 3 - i }}>
-																<AvatarImage src={picker.image || undefined} alt={picker.name} />
-																<AvatarFallback className='bg-orange-500/20 text-orange-400 text-[10px] font-semibold'>
-																	{picker.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-																</AvatarFallback>
-															</Avatar>
-														))}
-														{upset.correctPickers.length > 3 && (
-															<span className='text-xs text-orange-400 ml-1'>+{upset.correctPickers.length - 3}</span>
-														)}
-													</div>
-												</div>
-											)}
-										</div>
-										<GameCard
-											game={upset.game}
-											showScores={true}
-											disabled={true}
-											noHover={true}
-											leagueMode={leagueMode}
-											leaguePicks={upset.leaguePicks}
-											forceShowOdds={true}
-										/>
-									</motion.div>
-								))}
-							</div>
-						</CardContent>
-					</Card>
-				</motion.div>
-			)}
-
-			{/* Most Picked Correct (Standard Mode Only) */}
-			{leagueMode === 'standard' && recapData.mostPickedCorrect && recapData.mostPickedCorrect.length > 0 && (
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.5 }}
-				>
-					<Card className='border-2 border-green-500/30 bg-green-500/5'>
-						<CardHeader>
-							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-green-400 flex items-center gap-2'>
-								<ThumbsUp className='h-5 w-5' />
-								Most Picked Correctly
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='space-y-6'>
-								{recapData.mostPickedCorrect.slice(0, 2).map((pick, idx) => (
-									<motion.div
-										key={pick.gameId}
-										initial={{ opacity: 0, x: -10 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{ duration: 0.3, delay: 0.6 + idx * 0.1 }}
-										className='space-y-4'
-									>
-										<div className='flex items-center justify-between mb-4'>
-											<div>
-												<p className='text-sm font-semibold text-foreground'>
-													<span className='text-green-400'>{pick.winningTeam}</span> beat {pick.losingTeam}
-												</p>
-												<p className='text-xs text-muted-foreground'>
-													{pick.pickCount} of {pick.totalPicks} players picked correctly
-												</p>
-											</div>
-										</div>
-										<GameCard
-											game={pick.game}
-											showScores={true}
-											disabled={true}
-											noHover={true}
-											leagueMode={leagueMode}
-											leaguePicks={pick.leaguePicks}
-											forceShowOdds={true}
-										/>
-									</motion.div>
-								))}
-							</div>
-						</CardContent>
-					</Card>
-				</motion.div>
-			)}
-
-			{/* Most Picked Incorrectly (Standard Mode Only) */}
-			{leagueMode === 'standard' && recapData.mostPickedIncorrect && recapData.mostPickedIncorrect.length > 0 && (
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.3, delay: 0.6 }}
-				>
-					<Card className='border-2 border-red-500/30 bg-red-500/5'>
-						<CardHeader>
-							<CardTitle className='font-oswald text-xl uppercase tracking-wide text-red-400 flex items-center gap-2'>
-								<ThumbsDown className='h-5 w-5' />
-								Most Picked Incorrectly
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className='space-y-6'>
-								{recapData.mostPickedIncorrect.slice(0, 2).map((pick, idx) => (
-									<motion.div
-										key={pick.gameId}
-										initial={{ opacity: 0, x: -10 }}
-										animate={{ opacity: 1, x: 0 }}
-										transition={{ duration: 0.3, delay: 0.7 + idx * 0.1 }}
-										className='space-y-4'
-									>
-										<div className='flex items-center justify-between mb-4'>
-											<div>
-												<p className='text-sm font-semibold text-foreground'>
-													{pick.pickCount} players picked <span className='text-red-400'>{pick.losingTeam}</span>
-												</p>
-												<p className='text-xs text-muted-foreground'>
-													But {pick.winningTeam} won
-												</p>
-											</div>
-										</div>
-										<GameCard
-											game={pick.game}
-											showScores={true}
-											disabled={true}
-											noHover={true}
-											leagueMode={leagueMode}
-											leaguePicks={pick.leaguePicks}
-											forceShowOdds={true}
-										/>
-									</motion.div>
-								))}
-							</div>
-						</CardContent>
-					</Card>
-				</motion.div>
-			)}
-
-			{/* League Statistics */}
-			<motion.div
-				initial={{ opacity: 0, y: 10 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: 0.3, delay: 0.4 }}
-			>
-				<Card className='border-2 border-primary/20'>
-					<CardHeader>
-						<CardTitle className='font-oswald text-xl uppercase tracking-wide text-primary flex items-center gap-2'>
-							<BarChart3 className='h-5 w-5' />
-							League Statistics
-						</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<Users className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>Players</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.leagueStats.totalPlayers} duration={0.8} />
-								</p>
-							</div>
-
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<TrendingUp className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>Avg Points</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.leagueStats.avgPoints} duration={0.8} decimals={1} />
-								</p>
-							</div>
-
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<Target className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>Accuracy</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.leagueStats.accuracy} duration={0.8} />%
-								</p>
-							</div>
-
-							<div className='text-center p-4 bg-card/80 backdrop-blur-sm rounded-lg border-2 border-primary/20'>
-								<div className='flex items-center justify-center gap-2 mb-2'>
-									<Zap className='h-4 w-4 text-primary' />
-									<p className='text-xs text-primary/80 uppercase tracking-wide font-medium'>High Score</p>
-								</div>
-								<p className='text-3xl font-bold font-mono text-primary'>
-									<CountUp end={recapData.leagueStats.highScore} duration={0.8} />
-								</p>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-			</motion.div>
+			{/* League numbers */}
+			<section>
+				<SectionHeader title='League Numbers' icon={BarChart3} />
+				<div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
+					<StatTile label='Players' icon={Users} tone='muted' value={<CountUp end={leagueStats.totalPlayers} duration={0.8} />} />
+					<StatTile label='Avg points' icon={TrendingUp} tone='primary' value={<CountUp end={leagueStats.avgPoints} duration={0.8} decimals={1} />} />
+					<StatTile
+						label='Accuracy'
+						icon={Target}
+						tone={leagueStats.accuracy >= 50 ? 'accent' : 'hot'}
+						value={
+							<>
+								<CountUp end={leagueStats.accuracy} duration={0.8} />%
+							</>
+						}
+					/>
+					<StatTile label='High score' icon={Zap} tone='warning' value={<CountUp end={leagueStats.highScore} duration={0.8} />} />
+				</div>
+			</section>
 		</div>
 	);
 }

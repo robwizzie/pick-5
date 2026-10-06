@@ -1,15 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { Bell, BellOff, Info, Loader2, Mail, Save, Settings as SettingsIcon, Smartphone, User, type LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Save, User, Image as ImageIcon, Loader2, Bell, BellOff, Mail, Smartphone } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { PageContainer, PageHeader, Pill } from '@/components/ui/page';
+import { cn } from '@/lib/utils';
 
 interface EmailPreferences {
 	pickReminders: boolean;
@@ -23,32 +27,40 @@ interface PushNotificationPreferences {
 	weeklyRecap: boolean;
 }
 
+interface UserSettingsResponse {
+	emailPreferences: EmailPreferences;
+	pushNotificationsEnabled: boolean;
+	pushNotificationPreferences?: PushNotificationPreferences;
+}
+
+const DEFAULT_EMAIL_PREFERENCES: EmailPreferences = {
+	pickReminders: true,
+	thursdayReminder: true,
+	saturdayReminder: true,
+	weeklyScoreEmail: true
+};
+
+const DEFAULT_PUSH_PREFERENCES: PushNotificationPreferences = {
+	gameResults: true,
+	weeklyRecap: true
+};
+
 export default function SettingsPage() {
 	const { data: session, status, update } = useSession();
 	const router = useRouter();
-	const [activeTab, setActiveTab] = useState<'profile' | 'notifications'>('profile');
 
 	// Profile state
 	const [name, setName] = useState('');
 	const [image, setImage] = useState('');
 	const [loading, setLoading] = useState(false);
-	const [message, setMessage] = useState('');
-	const [error, setError] = useState('');
 
 	// Notification state
-	const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>({
-		pickReminders: true,
-		thursdayReminder: true,
-		saturdayReminder: true,
-		weeklyScoreEmail: true
-	});
+	const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>(DEFAULT_EMAIL_PREFERENCES);
 	const [pushEnabled, setPushEnabled] = useState(false);
-	const [pushNotificationPreferences, setPushNotificationPreferences] = useState<PushNotificationPreferences>({
-		gameResults: true,
-		weeklyRecap: true
-	});
+	const [pushNotificationPreferences, setPushNotificationPreferences] = useState<PushNotificationPreferences>(DEFAULT_PUSH_PREFERENCES);
 	const [pushSupported, setPushSupported] = useState(false);
 	const [notifLoading, setNotifLoading] = useState(false);
+	const [pushLoading, setPushLoading] = useState(false);
 
 	useEffect(() => {
 		if (status === 'unauthenticated') {
@@ -63,63 +75,27 @@ export default function SettingsPage() {
 		}
 	}, [session]);
 
-	useEffect(() => {
-		if (status === 'authenticated') {
-			checkPushSupport();
-			loadNotificationSettings();
-		}
-	}, [status]);
-
-	const checkPushSupport = () => {
-		if ('serviceWorker' in navigator && 'PushManager' in window) {
-			setPushSupported(true);
-		}
-	};
-
-	const loadNotificationSettings = async () => {
+	const checkActualPushState = useCallback(async (settings: UserSettingsResponse) => {
+		const dbPushEnabled = settings.pushNotificationsEnabled;
 		try {
-			const response = await fetch('/api/user/settings');
-			if (response.ok) {
-				const data = await response.json();
-				setEmailPreferences(data.emailPreferences);
-				if (data.pushNotificationPreferences) {
-					setPushNotificationPreferences(data.pushNotificationPreferences);
-				}
-
-				// Check actual browser permission and subscription state
-				await checkActualPushState(data.pushNotificationsEnabled);
-			}
-		} catch (error) {
-			console.error('Error loading notification settings:', error);
-		}
-	};
-
-	const checkActualPushState = async (dbPushEnabled: boolean) => {
-		try {
-			// Check if browser permission is granted
-			const permission = await Notification.permission;
-
-			// Check if there's an active subscription
+			const permission = Notification.permission;
 			const registration = await navigator.serviceWorker.getRegistration('/sw.js');
 			const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
-			// The actual state is enabled only if:
-			// 1. Permission is granted AND
-			// 2. There's an active subscription
+			// Enabled only if permission is granted AND there's an active subscription
 			const actuallyEnabled = permission === 'granted' && subscription !== null;
 
-			// If database says enabled but browser says otherwise, fix the state
+			// If the database says enabled but the browser says otherwise, sync the DB to reality.
+			// Use the freshly loaded preferences so we never overwrite them with defaults.
 			if (dbPushEnabled && !actuallyEnabled) {
-				console.log('Push notifications are enabled in DB but not in browser. Syncing state...');
 				setPushEnabled(false);
-				// Update the database to reflect reality
 				await fetch('/api/user/settings', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						emailPreferences,
+						emailPreferences: settings.emailPreferences,
 						pushNotificationsEnabled: false,
-						pushNotificationPreferences
+						pushNotificationPreferences: settings.pushNotificationPreferences ?? DEFAULT_PUSH_PREFERENCES
 					})
 				});
 			} else {
@@ -130,27 +106,51 @@ export default function SettingsPage() {
 			// Fallback to database state
 			setPushEnabled(dbPushEnabled);
 		}
-	};
+	}, []);
+
+	useEffect(() => {
+		if (status !== 'authenticated') return;
+
+		const supported = 'serviceWorker' in navigator && 'PushManager' in window;
+		setPushSupported(supported);
+
+		const loadNotificationSettings = async () => {
+			try {
+				const response = await fetch('/api/user/settings');
+				if (!response.ok) return;
+				const data: UserSettingsResponse = await response.json();
+				setEmailPreferences(data.emailPreferences);
+				if (data.pushNotificationPreferences) {
+					setPushNotificationPreferences(data.pushNotificationPreferences);
+				}
+				if (supported) {
+					await checkActualPushState(data);
+				} else {
+					setPushEnabled(data.pushNotificationsEnabled);
+				}
+			} catch (error) {
+				console.error('Error loading notification settings:', error);
+			}
+		};
+
+		loadNotificationSettings();
+	}, [status, checkActualPushState]);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setLoading(true);
-		setMessage('');
-		setError('');
 
 		try {
 			const response = await fetch('/api/user/profile', {
 				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json'
-				},
+				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					name: name.trim(),
 					image: image.trim()
 				})
 			});
 
-			const data = await response.json();
+			const data: { name?: string; image?: string; error?: string } = await response.json();
 
 			if (!response.ok) {
 				throw new Error(data.error || 'Failed to update profile');
@@ -166,11 +166,9 @@ export default function SettingsPage() {
 				}
 			});
 
-			setMessage('Profile updated successfully!');
-			setTimeout(() => setMessage(''), 3000);
+			toast.success('Profile updated');
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to update profile');
-			setTimeout(() => setError(''), 5000);
+			toast.error(err instanceof Error ? err.message : 'Failed to update profile');
 		} finally {
 			setLoading(false);
 		}
@@ -179,8 +177,6 @@ export default function SettingsPage() {
 	const handleSaveNotifications = async () => {
 		try {
 			setNotifLoading(true);
-			setMessage('');
-			setError('');
 
 			const response = await fetch('/api/user/settings', {
 				method: 'POST',
@@ -196,11 +192,9 @@ export default function SettingsPage() {
 				throw new Error('Failed to save notification settings');
 			}
 
-			setMessage('Notification settings saved successfully!');
-			setTimeout(() => setMessage(''), 3000);
+			toast.success('Notification settings saved');
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to save notification settings');
-			setTimeout(() => setError(''), 5000);
+			toast.error(err instanceof Error ? err.message : 'Failed to save notification settings');
 		} finally {
 			setNotifLoading(false);
 		}
@@ -208,14 +202,12 @@ export default function SettingsPage() {
 
 	const handleEnablePush = async () => {
 		if (!pushSupported) {
-			setError('Push notifications are not supported in this browser');
+			toast.error('Push notifications are not supported in this browser');
 			return;
 		}
 
 		try {
-			setNotifLoading(true);
-			setError('');
-			setMessage('');
+			setPushLoading(true);
 
 			const registration = await navigator.serviceWorker.register('/sw.js');
 			await navigator.serviceWorker.ready;
@@ -223,13 +215,12 @@ export default function SettingsPage() {
 			const permission = await Notification.requestPermission();
 
 			if (permission !== 'granted') {
-				setError('Please allow notifications to enable push reminders');
-				setNotifLoading(false);
+				toast.error('Please allow notifications to enable push reminders');
 				return;
 			}
 
 			const vapidResponse = await fetch('/api/push/vapid-public-key');
-			const { publicKey } = await vapidResponse.json();
+			const { publicKey }: { publicKey: string } = await vapidResponse.json();
 
 			const subscription = await registration.pushManager.subscribe({
 				userVisibleOnly: true,
@@ -244,23 +235,22 @@ export default function SettingsPage() {
 
 			if (response.ok) {
 				setPushEnabled(true);
-				setMessage('Push notifications enabled!');
-				setTimeout(() => setMessage(''), 3000);
+				toast.success('Push notifications enabled');
+			} else {
+				toast.error('Failed to enable push notifications');
 			}
 		} catch (err) {
 			console.error('Error enabling push notifications:', err);
-			setError('Failed to enable push notifications');
-			setTimeout(() => setError(''), 5000);
+			toast.error('Failed to enable push notifications');
 		} finally {
-			setNotifLoading(false);
+			setPushLoading(false);
 		}
 	};
 
 	const handleDisablePush = async () => {
 		try {
-			setNotifLoading(true);
+			setPushLoading(true);
 
-			// Try to get the service worker and subscription
 			const registration = await navigator.serviceWorker.getRegistration('/sw.js');
 			const subscription = registration ? await registration.pushManager.getSubscription() : null;
 
@@ -286,329 +276,238 @@ export default function SettingsPage() {
 				})
 			});
 
-			// Update local state
 			setPushEnabled(false);
-			setMessage('Push notifications disabled');
-			setTimeout(() => setMessage(''), 3000);
+			toast.success('Push notifications disabled');
 		} catch (err) {
 			console.error('Error disabling push notifications:', err);
-			setError('Failed to disable push notifications');
-			setTimeout(() => setError(''), 5000);
+			toast.error('Failed to disable push notifications');
 		} finally {
-			setNotifLoading(false);
+			setPushLoading(false);
 		}
 	};
 
-	if (status === 'loading') {
+	if (status === 'loading' || !session) {
+		if (status !== 'loading') return null;
 		return (
-			<div className='min-h-screen flex items-center justify-center'>
-				<Loader2 className='h-8 w-8 animate-spin text-primary' />
-			</div>
+			<PageContainer size='narrow'>
+				<Skeleton className='mb-3 h-4 w-24' />
+				<Skeleton className='mb-10 h-14 w-56' />
+				<div className='space-y-6'>
+					<Skeleton className='h-72 rounded-2xl' />
+					<Skeleton className='h-80 rounded-2xl' />
+				</div>
+			</PageContainer>
 		);
 	}
 
-	if (!session) {
-		return null;
-	}
+	const displayName = name || session.user?.name || '';
 
 	return (
-		<div className='container mx-auto px-4 py-8 max-w-2xl'>
-			<Card className='glass border-white/10 p-6 sm:p-8'>
-				<div className='mb-6'>
-					<h1 className='text-3xl font-bold text-foreground mb-2'>Settings</h1>
-					<p className='text-muted-foreground'>Manage your profile and notification preferences</p>
-				</div>
+		<PageContainer size='narrow'>
+			<PageHeader
+				eyebrow={
+					<>
+						<SettingsIcon className='h-3.5 w-3.5 text-primary' /> Account
+					</>
+				}
+				title='Settings'
+				description='Manage your profile and how Pick 5 keeps you in the loop.'
+			/>
 
-				{/* Tabs */}
-				<div className='flex gap-2 mb-6 border-b border-white/10'>
-					<button
-						onClick={() => setActiveTab('profile')}
-						className={`px-4 py-2 font-medium transition-colors border-b-2 ${
-							activeTab === 'profile' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-						}`}>
-						<div className='flex items-center gap-2'>
-							<User className='h-4 w-4' />
-							Profile
-						</div>
-					</button>
-					<button
-						onClick={() => setActiveTab('notifications')}
-						className={`px-4 py-2 font-medium transition-colors border-b-2 ${
-							activeTab === 'notifications' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
-						}`}>
-						<div className='flex items-center gap-2'>
-							<Bell className='h-4 w-4' />
-							Notifications
-						</div>
-					</button>
-				</div>
-
-				{/* Profile Tab */}
-				{activeTab === 'profile' && (<div>
-
-				<form onSubmit={handleSubmit} className='space-y-6'>
-					{/* Profile Picture Preview */}
-					<div className='flex justify-center'>
-						<div className='relative'>
-							<Avatar className='h-24 w-24 ring-2 ring-primary/50'>
-								<AvatarImage src={image || session.user?.image || ''} alt={name || session.user?.name || ''} />
-								<AvatarFallback className='bg-primary/20 text-primary text-2xl font-semibold'>{(name || session.user?.name || 'U').charAt(0).toUpperCase()}</AvatarFallback>
+			<div className='space-y-8'>
+				{/* Profile */}
+				<SettingsSection title='Profile' description='How you appear on leaderboards and in your leagues.' icon={User}>
+					<form onSubmit={handleSubmit}>
+						<div className='flex items-center gap-4 border-b border-white/[0.07] p-5 sm:p-6'>
+							<Avatar className='h-16 w-16 ring-1 ring-white/10 sm:h-20 sm:w-20'>
+								<AvatarImage src={image || session.user?.image || ''} alt={displayName} />
+								<AvatarFallback className='bg-primary/15 font-display text-2xl font-bold italic text-primary'>{(displayName || 'U').charAt(0).toUpperCase()}</AvatarFallback>
 							</Avatar>
+							<div className='min-w-0'>
+								<p className='truncate font-display text-2xl font-bold uppercase italic leading-tight tracking-tight'>{displayName || 'Your name'}</p>
+								<p className='truncate text-sm text-muted-foreground'>{session.user?.email}</p>
+							</div>
 						</div>
-					</div>
 
-					{/* Name Field */}
-					<div className='space-y-2'>
-						<label htmlFor='name' className='flex items-center gap-2 text-sm font-medium text-foreground'>
-							<User className='h-4 w-4 text-primary' />
-							Display Name
-						</label>
-						<Input id='name' type='text' value={name} onChange={e => setName(e.target.value)} placeholder='Enter your name' required className='glass border-white/10 bg-background/50 focus:border-primary/50' />
-					</div>
+						<div className='space-y-5 p-5 sm:p-6'>
+							<Field id='name' label='Display name' help='Shown to everyone in your leagues.'>
+								<Input id='name' type='text' value={name} onChange={e => setName(e.target.value)} placeholder='Enter your name' required autoComplete='name' />
+							</Field>
 
-					{/* Profile Picture URL Field */}
-					<div className='space-y-2'>
-						<label htmlFor='image' className='flex items-center gap-2 text-sm font-medium text-foreground'>
-							<ImageIcon className='h-4 w-4 text-primary' />
-							Profile Picture URL
-						</label>
-						<Input id='image' type='url' value={image} onChange={e => setImage(e.target.value)} placeholder='https://example.com/your-image.jpg' className='glass border-white/10 bg-background/50 focus:border-primary/50' />
-						<p className='text-xs text-muted-foreground'>Enter a direct URL to an image. Leave blank to keep current picture.</p>
-					</div>
+							<Field id='image' label='Profile picture URL' help='A direct link to an image. Leave blank to keep your current picture.'>
+								<Input id='image' type='url' value={image} onChange={e => setImage(e.target.value)} placeholder='https://example.com/your-image.jpg' />
+							</Field>
 
-					{/* Email (Read-only) */}
-					<div className='space-y-2'>
-						<label className='text-sm font-medium text-foreground'>Email Address</label>
-						<Input type='email' value={session.user?.email || ''} disabled className='glass border-white/10 bg-background/30 text-muted-foreground cursor-not-allowed' />
-						<p className='text-xs text-muted-foreground'>Email cannot be changed</p>
-					</div>
-
-					{/* Success/Error Messages */}
-					{message && (
-						<div className='p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 text-sm flex items-center gap-2'>
-							<div className='h-2 w-2 rounded-full bg-green-500' />
-							{message}
+							<Field id='email' label='Email address' help='Your sign-in email can’t be changed.'>
+								<Input id='email' type='email' value={session.user?.email || ''} disabled />
+							</Field>
 						</div>
-					)}
 
-					{error && (
-						<div className='p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-center gap-2'>
-							<div className='h-2 w-2 rounded-full bg-red-500' />
-							{error}
+						<div className='flex justify-end border-t border-white/[0.07] p-4 sm:px-6'>
+							<Button type='submit' disabled={loading} className='w-full sm:w-auto'>
+								{loading ? <Loader2 className='animate-spin' /> : <Save />}
+								{loading ? 'Saving…' : 'Save profile'}
+							</Button>
 						</div>
-					)}
+					</form>
+				</SettingsSection>
 
-					{/* Submit Button */}
-					<Button type='submit' disabled={loading} className='w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6'>
-						{loading ? (
+				{/* Email notifications */}
+				<SettingsSection title='Email' description='Reminders and recaps sent to your inbox.' icon={Mail}>
+					<div className='divide-y divide-white/[0.07]'>
+						<SettingRow
+							id='pick-reminders'
+							label='Pick reminders'
+							description='Email me when I haven’t made my picks yet.'
+							checked={emailPreferences.pickReminders}
+							onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, pickReminders: checked }))}
+						/>
+						{emailPreferences.pickReminders && (
 							<>
-								<Loader2 className='h-4 w-4 mr-2 animate-spin' />
-								Saving Changes...
-							</>
-						) : (
-							<>
-								<Save className='h-4 w-4 mr-2' />
-								Save Changes
+								<SettingRow
+									id='thursday-reminder'
+									label='Thursday reminder'
+									description='Heads-up before Thursday Night Football.'
+									nested
+									checked={emailPreferences.thursdayReminder}
+									onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, thursdayReminder: checked }))}
+								/>
+								<SettingRow
+									id='saturday-reminder'
+									label='Saturday reminder'
+									description='Last call before Sunday’s games.'
+									nested
+									checked={emailPreferences.saturdayReminder}
+									onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, saturdayReminder: checked }))}
+								/>
 							</>
 						)}
+						<SettingRow
+							id='weekly-score-email'
+							label='Weekly score email'
+							description='A Tuesday summary of your weekly results.'
+							checked={emailPreferences.weeklyScoreEmail}
+							onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, weeklyScoreEmail: checked }))}
+						/>
+					</div>
+				</SettingsSection>
+
+				{/* Push notifications */}
+				{pushSupported && (
+					<SettingsSection title='Push' description='Real-time alerts on this device.' icon={Smartphone}>
+						<div className='divide-y divide-white/[0.07]'>
+							<div className='flex items-center justify-between gap-4 p-4 sm:px-6'>
+								<div className='min-w-0'>
+									<p className='flex items-center gap-2 text-sm font-semibold'>
+										{pushEnabled ? <Bell className='h-4 w-4 text-accent' /> : <BellOff className='h-4 w-4 text-muted-foreground' />}
+										Push notifications
+										<Pill tone={pushEnabled ? 'accent' : 'muted'}>{pushEnabled ? 'On' : 'Off'}</Pill>
+									</p>
+									<p className='mt-1 text-sm text-muted-foreground'>Enable alerts for this browser or installed app.</p>
+								</div>
+								{pushEnabled ? (
+									<Button variant='outline' size='sm' onClick={handleDisablePush} disabled={pushLoading} className='shrink-0'>
+										{pushLoading && <Loader2 className='animate-spin' />}
+										Disable
+									</Button>
+								) : (
+									<Button size='sm' onClick={handleEnablePush} disabled={pushLoading} className='shrink-0'>
+										{pushLoading && <Loader2 className='animate-spin' />}
+										Enable
+									</Button>
+								)}
+							</div>
+							{pushEnabled && (
+								<>
+									<SettingRow
+										id='game-results'
+										label='Game results'
+										description='Get notified when your picks win or lose.'
+										checked={pushNotificationPreferences.gameResults}
+										onCheckedChange={checked => setPushNotificationPreferences(prev => ({ ...prev, gameResults: checked }))}
+									/>
+									<SettingRow
+										id='weekly-recap'
+										label='Weekly recap'
+										description='A Tuesday summary with your results and standings.'
+										checked={pushNotificationPreferences.weeklyRecap}
+										onCheckedChange={checked => setPushNotificationPreferences(prev => ({ ...prev, weeklyRecap: checked }))}
+									/>
+								</>
+							)}
+						</div>
+					</SettingsSection>
+				)}
+
+				<div className='space-y-4'>
+					<div className='flex gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-4 text-sm text-muted-foreground'>
+						<Info className='mt-0.5 h-4 w-4 shrink-0 text-primary' />
+						<p>
+							Reminders are only sent for leagues where you haven&apos;t submitted picks yet. If you&apos;ve made picks for all your leagues, you won&apos;t receive any reminders. Emails are
+							sent once per day on Thursdays and Saturdays.
+						</p>
+					</div>
+					<Button onClick={handleSaveNotifications} disabled={notifLoading} size='lg' className='w-full'>
+						{notifLoading ? <Loader2 className='animate-spin' /> : <Save />}
+						{notifLoading ? 'Saving…' : 'Save notification settings'}
 					</Button>
-				</form>
 				</div>
-				)}
+			</div>
+		</PageContainer>
+	);
+}
 
-				{/* Notifications Tab */}
-				{activeTab === 'notifications' && (
-					<div className='space-y-6'>
-						{/* Email Notifications Section */}
-						<div className='space-y-4'>
-							<div className='flex items-center gap-2 mb-4'>
-								<Mail className='h-5 w-5 text-primary' />
-								<h3 className='text-lg font-semibold'>Email Notifications</h3>
-							</div>
+function SettingsSection({ title, description, icon: Icon, children }: { title: string; description: string; icon: LucideIcon; children: React.ReactNode }) {
+	return (
+		<section className='animate-slide-up'>
+			<div className='mb-3 flex items-center gap-3 px-1'>
+				<span className='grid h-8 w-8 place-items-center rounded-lg bg-primary/10 text-primary'>
+					<Icon className='h-4 w-4' />
+				</span>
+				<div>
+					<h2 className='font-display text-xl font-bold uppercase italic leading-none tracking-tight'>{title}</h2>
+					<p className='mt-1 text-xs text-muted-foreground'>{description}</p>
+				</div>
+			</div>
+			<Card className='overflow-hidden'>{children}</Card>
+		</section>
+	);
+}
 
-							{/* Master Switch */}
-							<div className='flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20'>
-								<div className='space-y-1'>
-									<Label htmlFor='pick-reminders' className='text-base font-semibold'>
-										Pick Reminders
-									</Label>
-									<p className='text-sm text-muted-foreground'>Receive email reminders when you haven&apos;t made your picks</p>
-								</div>
-								<Switch
-									id='pick-reminders'
-									checked={emailPreferences.pickReminders}
-									onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, pickReminders: checked }))}
-								/>
-							</div>
+function SettingRow({
+	id,
+	label,
+	description,
+	checked,
+	onCheckedChange,
+	nested = false
+}: {
+	id: string;
+	label: string;
+	description: string;
+	checked: boolean;
+	onCheckedChange: (checked: boolean) => void;
+	nested?: boolean;
+}) {
+	return (
+		<div className={cn('flex items-center justify-between gap-4 p-4 transition-colors hover:bg-white/[0.02] sm:px-6', nested && 'bg-white/[0.015] pl-8 sm:pl-10')}>
+			<div className='min-w-0'>
+				<Label htmlFor={id} className='cursor-pointer text-sm font-semibold'>
+					{label}
+				</Label>
+				<p className='mt-1 text-sm text-muted-foreground'>{description}</p>
+			</div>
+			<Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+		</div>
+	);
+}
 
-							{/* Thursday Reminder */}
-							{emailPreferences.pickReminders && (
-								<div className='space-y-4 p-4 rounded-lg border border-white/10'>
-									<div className='flex items-center justify-between'>
-										<div className='space-y-1'>
-											<Label htmlFor='thursday-reminder' className='text-base font-medium'>
-												Thursday Reminder
-											</Label>
-											<p className='text-sm text-muted-foreground'>Remind me about Thursday Night Football</p>
-										</div>
-										<Switch
-											id='thursday-reminder'
-											checked={emailPreferences.thursdayReminder}
-											onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, thursdayReminder: checked }))}
-										/>
-									</div>
-								</div>
-							)}
-
-							{/* Saturday Reminder */}
-							{emailPreferences.pickReminders && (
-								<div className='space-y-4 p-4 rounded-lg border border-white/10'>
-									<div className='flex items-center justify-between'>
-										<div className='space-y-1'>
-											<Label htmlFor='saturday-reminder' className='text-base font-medium'>
-												Saturday Reminder
-											</Label>
-											<p className='text-sm text-muted-foreground'>Last chance reminder before Sunday games</p>
-										</div>
-										<Switch
-											id='saturday-reminder'
-											checked={emailPreferences.saturdayReminder}
-											onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, saturdayReminder: checked }))}
-										/>
-									</div>
-								</div>
-							)}
-
-							{/* Weekly Score Email */}
-							<div className='flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20'>
-								<div className='space-y-1'>
-									<Label htmlFor='weekly-score-email' className='text-base font-semibold'>
-										Weekly Score Emails
-									</Label>
-									<p className='text-sm text-muted-foreground'>Receive a summary email every Tuesday with your weekly results</p>
-								</div>
-								<Switch
-									id='weekly-score-email'
-									checked={emailPreferences.weeklyScoreEmail}
-									onCheckedChange={checked => setEmailPreferences(prev => ({ ...prev, weeklyScoreEmail: checked }))}
-								/>
-							</div>
-						</div>
-
-						{/* Push Notifications Section */}
-						{pushSupported && (
-							<div className='space-y-4'>
-								<div className='flex items-center gap-2 mb-4'>
-									<Smartphone className='h-5 w-5 text-primary' />
-									<h3 className='text-lg font-semibold'>Push Notifications</h3>
-								</div>
-
-								<div className='flex items-center justify-between p-4 rounded-lg bg-primary/5 border border-primary/20'>
-									<div className='space-y-1'>
-										<Label htmlFor='push-notifications' className='text-base font-semibold'>
-											{pushEnabled ? (
-												<span className='flex items-center gap-2'>
-													<Bell className='h-4 w-4 text-green-500' />
-													Push Notifications Enabled
-												</span>
-											) : (
-												<span className='flex items-center gap-2'>
-													<BellOff className='h-4 w-4 text-muted-foreground' />
-													Push Notifications Disabled
-												</span>
-											)}
-										</Label>
-										<p className='text-sm text-muted-foreground'>Receive real-time notifications on this device</p>
-									</div>
-									{pushEnabled ? (
-										<Button onClick={handleDisablePush} variant='outline' className='text-red-500 border-red-500/50' disabled={notifLoading}>
-											{notifLoading ? (
-												<>
-													<Loader2 className='h-4 w-4 mr-2 animate-spin' />
-													Disabling...
-												</>
-											) : (
-												'Disable'
-											)}
-										</Button>
-									) : (
-										<Button onClick={handleEnablePush} className='bg-primary hover:bg-primary/90' disabled={notifLoading}>
-											{notifLoading ? (
-												<>
-													<Loader2 className='h-4 w-4 mr-2 animate-spin' />
-													Enabling...
-												</>
-											) : (
-												'Enable'
-											)}
-										</Button>
-									)}
-								</div>
-
-								{/* Game Result Notifications */}
-								{pushEnabled && (
-									<div className='space-y-4 p-4 rounded-lg border border-white/10'>
-										<div className='flex items-center justify-between'>
-											<div className='space-y-1'>
-												<Label htmlFor='game-results' className='text-base font-medium'>
-													Game Result Notifications
-												</Label>
-												<p className='text-sm text-muted-foreground'>Get notified when your picks win or lose</p>
-											</div>
-											<Switch
-												id='game-results'
-												checked={pushNotificationPreferences.gameResults}
-												onCheckedChange={checked => setPushNotificationPreferences(prev => ({ ...prev, gameResults: checked }))}
-											/>
-										</div>
-									</div>
-								)}
-
-								{/* Weekly Recap Notifications */}
-								{pushEnabled && (
-									<div className='space-y-4 p-4 rounded-lg border border-white/10'>
-										<div className='flex items-center justify-between'>
-											<div className='space-y-1'>
-												<Label htmlFor='weekly-recap' className='text-base font-medium'>
-													Weekly Recap Notifications
-												</Label>
-												<p className='text-sm text-muted-foreground'>Get a summary every Tuesday with your results and standings</p>
-											</div>
-											<Switch
-												id='weekly-recap'
-												checked={pushNotificationPreferences.weeklyRecap}
-												onCheckedChange={checked => setPushNotificationPreferences(prev => ({ ...prev, weeklyRecap: checked }))}
-											/>
-										</div>
-									</div>
-								)}
-							</div>
-						)}
-
-						{/* Save Button */}
-						<Button onClick={handleSaveNotifications} disabled={notifLoading} className='w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6'>
-							{notifLoading ? (
-								<>
-									<Loader2 className='h-4 w-4 mr-2 animate-spin' />
-									Saving Changes...
-								</>
-							) : (
-								<>
-									<Save className='h-4 w-4 mr-2' />
-									Save Notification Settings
-								</>
-							)}
-						</Button>
-
-						{/* Info Note */}
-						<div className='p-4 rounded-lg bg-primary/5 border border-primary/20'>
-							<p className='text-sm text-muted-foreground'>
-								<strong>Note:</strong> Reminders are only sent for leagues where you haven&apos;t submitted picks yet. If you&apos;ve made picks for all your leagues, you won&apos;t receive any reminders. Emails are sent once per day on Thursdays and Saturdays.
-							</p>
-						</div>
-					</div>
-				)}
-			</Card>
+function Field({ id, label, help, children }: { id: string; label: string; help: string; children: React.ReactNode }) {
+	return (
+		<div className='space-y-2'>
+			<Label htmlFor={id}>{label}</Label>
+			{children}
+			<p className='text-xs text-muted-foreground'>{help}</p>
 		</div>
 	);
 }

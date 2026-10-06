@@ -1,322 +1,222 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { MoreVertical, Link as LinkIcon, Trophy, CheckCircle2, Clock, Crown } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
-import { useState, useEffect, useRef } from 'react';
-import { NFLService } from '@/services/nflService';
-import { motion } from 'framer-motion';
-import { Skeleton } from '@/components/ui/skeleton';
-import CountUp from 'react-countup';
+import Link from 'next/link';
 import Image from 'next/image';
+import { toast } from 'sonner';
+import { ArrowUpRight, CheckCircle2, Clock, Crown, Link as LinkIcon, MoreHorizontal, Users } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Pill } from '@/components/ui/page';
+import { cn } from '@/lib/utils';
+import { MatchupMini, type MatchupMiniData } from './MatchupMini';
 
-interface League {
+export interface DashboardLeague {
 	_id: string;
 	name: string;
-	sport: string;
+	sport?: string;
 	creatorId?: string;
 	inviteCode?: string;
 	mode?: string;
 	members?: string[];
 }
 
-interface ActiveLeaguesProps {
-	leagues: League[];
-	userId?: string;
+export interface PickedTeam {
+	team: string;
+	abbreviation: string;
+	logo: string;
+	gameStatus: 'scheduled' | 'in_progress' | 'final';
+	isCorrect: boolean | null;
 }
 
-interface LeagueStats {
+export interface LeagueSummary {
 	hasPicks: boolean;
-	currentWeekPoints: number;
+	weekPoints: number;
+	seasonPoints: number;
 	rank: number | null;
 	totalMembers: number;
-	seasonPoints: number;
-	pickedTeams?: Array<{ team: string; abbreviation: string; logo: string; gameStatus: 'scheduled' | 'in_progress' | 'final'; isCorrect: boolean | null }>;
-	tfsPoints?: number;
+	pickedTeams: PickedTeam[];
+	tfsPoints: number;
 }
 
-export default function ActiveLeagues({ leagues, userId }: ActiveLeaguesProps) {
-	const router = useRouter();
-	const [copiedLeagueId, setCopiedLeagueId] = useState<string | null>(null);
-	const [leagueStats, setLeagueStats] = useState<Map<string, LeagueStats>>(new Map());
-	const [currentWeek, setCurrentWeek] = useState<number | null>(null);
-	const isLoadingRef = useRef(false);
+const RANK_STYLES: Record<number, { text: string; glow: string; label: string }> = {
+	1: { text: 'text-[#FFD66B]', glow: 'from-[#FFD66B]/20', label: 'Leader' },
+	2: { text: 'text-[#D5DCE6]', glow: 'from-[#D5DCE6]/15', label: '2nd' },
+	3: { text: 'text-[#E7A16B]', glow: 'from-[#E7A16B]/15', label: '3rd' }
+};
 
-	useEffect(() => {
-		const loadCurrentWeek = async () => {
-			const week = await NFLService.getCurrentWeek();
-			setCurrentWeek(week);
-		};
-		loadCurrentWeek();
-	}, []);
+function PickChip({ pick }: { pick: PickedTeam }) {
+	const ring =
+		pick.gameStatus === 'in_progress'
+			? 'ring-live/70'
+			: pick.gameStatus === 'final'
+				? pick.isCorrect
+					? 'ring-accent'
+					: 'ring-accent-2/80'
+				: 'ring-white/15';
+	return (
+		<div className={cn('relative h-9 w-9 rounded-full bg-gradient-to-b from-white/[0.14] to-white/[0.04] p-1.5 ring-2', ring, pick.gameStatus === 'final' && pick.isCorrect === false && 'opacity-50')} title={pick.team}>
+			<Image src={pick.logo} alt={pick.abbreviation} width={28} height={28} className='h-full w-full object-contain' unoptimized />
+			{pick.gameStatus === 'in_progress' && <span className='live-dot absolute -right-0.5 -top-0.5' />}
+		</div>
+	);
+}
 
-	useEffect(() => {
-		const loadLeagueStats = async () => {
-			// Prevent multiple simultaneous loads
-			if (isLoadingRef.current) return;
+function LeagueCard({
+	league,
+	summary,
+	isCommissioner,
+	index,
+	matchup,
+	userId
+}: {
+	league: DashboardLeague;
+	summary?: LeagueSummary;
+	isCommissioner: boolean;
+	index: number;
+	matchup?: MatchupMiniData;
+	userId?: string;
+}) {
+	const rank = summary?.rank ?? null;
+	const rankStyle = rank ? RANK_STYLES[rank] : undefined;
 
-			isLoadingRef.current = true;
-			const statsMap = new Map<string, LeagueStats>();
-
-			for (const league of leagues) {
-				try {
-					// Fetch leaderboard data for this league
-					const response = await fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${league._id}`);
-					if (response.ok) {
-						const data = await response.json();
-
-						// Find user's data in weekly results
-						const userWeeklyData = data.weeklyResults?.find((r: { userId?: string; player?: string; points?: number; hasPicks?: boolean; pickedTeams?: string[]; tfsPoints?: number }) => r.userId === userId);
-						const userSeasonData = data.seasonStats?.find((s: { player?: string; totalPoints?: number }) => s.player === userWeeklyData?.player);
-
-						// Calculate user's season rank (based on total season points)
-						const sortedSeasonStats = [...(data.seasonStats || [])].sort((a: { totalPoints?: number }, b: { totalPoints?: number }) => (b.totalPoints || 0) - (a.totalPoints || 0));
-						const userRank = sortedSeasonStats.findIndex((s: { player?: string }) => s.player === userWeeklyData?.player) + 1;
-
-						statsMap.set(league._id, {
-							hasPicks: userWeeklyData?.hasPicks || false,
-							currentWeekPoints: userWeeklyData?.points || 0,
-							rank: userRank > 0 ? userRank : null,
-							totalMembers: data.weeklyResults?.length || league.members?.length || 0,
-							seasonPoints: userSeasonData?.totalPoints || 0,
-							pickedTeams: userWeeklyData?.pickedTeams || [],
-							tfsPoints: userWeeklyData?.tfsPoints || 0
-						});
-					}
-				} catch (error) {
-					console.error(`Error loading stats for league ${league._id}:`, error);
-				}
-			}
-
-			setLeagueStats(statsMap);
-			isLoadingRef.current = false;
-		};
-
-		if (leagues.length > 0 && userId && currentWeek !== null) {
-			loadLeagueStats();
-		}
-	}, [leagues, userId, currentWeek]);
-
-	const handleCopyInviteLink = (e: React.MouseEvent, league: League) => {
-		e.stopPropagation();
+	const copyInvite = async () => {
 		if (!league.inviteCode) return;
-
-		const inviteUrl = `${window.location.origin}/league/join/${league.inviteCode}`;
-		navigator.clipboard.writeText(inviteUrl);
-
-		setCopiedLeagueId(league._id);
-		setTimeout(() => setCopiedLeagueId(null), 2000);
-	};
-
-	const handleDropdownClick = (e: React.MouseEvent) => {
-		e.stopPropagation();
-	};
-
-	// Helper functions for top 3 styling
-	const getRankBadgeStyle = (rank: number | null) => {
-		if (rank === 1) return 'bg-yellow-500/20 text-yellow-400';
-		if (rank === 2) return 'bg-gray-400/20 text-gray-300';
-		if (rank === 3) return 'bg-orange-500/20 text-orange-400';
-		return 'bg-primary/10 text-primary/80';
-	};
-
-	const getTop3BorderStyle = (rank: number | null) => {
-		if (rank === 1) return 'border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)] hover:shadow-[0_0_30px_rgba(234,179,8,0.25)]';
-		if (rank === 2) return 'border-gray-400/30 shadow-[0_0_15px_rgba(156,163,175,0.15)] hover:shadow-[0_0_25px_rgba(156,163,175,0.25)]';
-		if (rank === 3) return 'border-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.25)]';
-		return 'border-primary/20 hover:border-primary/40';
-	};
-
-	const getGradientBackground = (rank: number | null) => {
-		if (rank === 1) return 'bg-gradient-to-br from-yellow-500/15 via-yellow-500/5 to-transparent';
-		if (rank === 2) return 'bg-gradient-to-br from-gray-400/15 via-gray-400/5 to-transparent';
-		if (rank === 3) return 'bg-gradient-to-br from-orange-500/15 via-orange-500/5 to-transparent';
-		return '';
-	};
-
-	const getRankGradientText = (rank: number | null) => {
-		if (rank === 1) return 'bg-gradient-to-br from-yellow-300 via-yellow-400 to-yellow-600 bg-clip-text text-transparent';
-		if (rank === 2) return 'bg-gradient-to-br from-gray-200 via-gray-300 to-gray-500 bg-clip-text text-transparent';
-		if (rank === 3) return 'bg-gradient-to-br from-orange-300 via-orange-400 to-orange-600 bg-clip-text text-transparent';
-		return 'text-primary';
+		try {
+			await navigator.clipboard.writeText(`${window.location.origin}/league/join/${league.inviteCode}`);
+			toast.success('Invite link copied', { description: 'Send it to the group chat.' });
+		} catch {
+			toast.error('Couldn’t copy the link');
+		}
 	};
 
 	return (
-		<div className='grid grid-cols-1 gap-4'>
-			{leagues.map((league, index) => {
-				const isCommissioner = userId && league.creatorId === userId;
-				const stats = leagueStats.get(league._id);
-				const isLoading = !stats && leagues.length > 0;
-				const rank = stats?.rank || null;
-				const isTop3 = rank !== null && rank <= 3;
+		<div className='group relative animate-slide-up' style={{ animationDelay: `${index * 60}ms` }}>
+			<Link
+				href={`/league/${league._id}`}
+				className='glass card-hover relative flex flex-col gap-4 overflow-hidden rounded-2xl p-4 sm:flex-row sm:items-center sm:gap-6 sm:p-5'
+			>
+				{rankStyle && <div className={cn('pointer-events-none absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r to-transparent', rankStyle.glow)} />}
 
-				return (
-					<motion.div
-						key={league._id}
-						className='relative'
-						initial={{ opacity: 0, y: 20 }}
-						animate={{ opacity: 1, y: 0 }}
-						transition={{
-							duration: 0.3,
-							delay: index * 0.05,
-							ease: 'easeOut'
-						}}
-						whileHover={{ scale: 1.01 }}
-						whileTap={{ scale: 0.99 }}
-					>
-						<button
-							onClick={() => router.push(`/league/${league._id}`)}
-							className={`relative overflow-hidden w-full p-4 sm:p-6 glass border-2 rounded-2xl text-left transition-all duration-300 hover:bg-card/80 group ${getTop3BorderStyle(rank)} ${getGradientBackground(rank)}`}
-						>
-							<div className='flex items-center gap-3 sm:gap-6'>
-								{/* Large Rank Number on Left */}
-								{rank && (
-									<div className='flex-shrink-0 flex items-center justify-center w-20 sm:w-24'>
-										<div className={`text-5xl sm:text-7xl font-bold font-mono leading-none ${getRankGradientText(rank)} drop-shadow-lg`}>
-											#{rank}
-										</div>
-									</div>
-								)}
+				{/* Rank */}
+				<div className='relative flex items-center gap-4 sm:w-24 sm:shrink-0 sm:flex-col sm:items-start sm:gap-0'>
+					{summary ? (
+						<>
+							<span className='eyebrow hidden sm:block'>Rank</span>
+							<span className={cn('font-display text-5xl font-extrabold italic leading-none tabular sm:text-6xl', rankStyle?.text ?? 'text-foreground')}>
+								{rank ? `#${rank}` : '—'}
+							</span>
+							<span className='text-xs text-muted-foreground sm:mt-1'>of {summary.totalMembers}</span>
+						</>
+					) : (
+						<Skeleton className='h-14 w-20' />
+					)}
+				</div>
 
-								{/* Middle Section: League Info */}
-								<div className='flex-1 min-w-0 space-y-3'>
-									{/* League Name & Mode Badge */}
-									<div className='flex items-center gap-2.5 flex-wrap'>
-										<h3 className='font-oswald text-lg sm:text-xl uppercase tracking-wider text-foreground group-hover:text-primary transition-colors font-bold'>
-											{league.name}
-										</h3>
-										{league.mode && (
-											<span className={`text-xs px-2.5 py-1 rounded-full font-semibold whitespace-nowrap ${
-												league.mode === 'steve'
-													? 'bg-green-500/20 text-green-400'
-													: 'bg-blue-500/20 text-blue-400'
-											}`}>
-												{league.mode === 'steve' ? 'Steve' : 'Standard'}
-											</span>
-										)}
-									</div>
+				{/* Info */}
+				<div className='relative min-w-0 flex-1'>
+					<div className='flex items-center gap-2'>
+						<h3 className='truncate font-display text-2xl font-bold uppercase italic leading-none tracking-tight transition-colors group-hover:text-primary'>{league.name}</h3>
+						{rank === 1 && <Crown className='h-4 w-4 shrink-0 text-[#FFD66B]' />}
+					</div>
+					<div className='mt-2 flex flex-wrap items-center gap-2'>
+						<Pill tone={league.mode === 'steve' ? 'accent' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : 'Standard'}</Pill>
+						{summary &&
+							(summary.hasPicks ? (
+								<Pill tone='accent'>
+									<CheckCircle2 className='h-3 w-3' /> Picks in
+								</Pill>
+							) : (
+								<Pill tone='warning'>
+									<Clock className='h-3 w-3' /> Picks needed
+								</Pill>
+							))}
+						<span className='flex items-center gap-1 text-xs text-muted-foreground'>
+							<Users className='h-3.5 w-3.5' />
+							{league.members?.length ?? summary?.totalMembers ?? 0}
+						</span>
+					</div>
 
-									{/* Status & Stats Row */}
-									{isLoading ? (
-										<div className='flex items-center gap-3'>
-											<Skeleton className='h-4 w-28' />
-											<Skeleton className='h-4 w-20' />
-										</div>
-									) : stats ? (
-										<div className='flex flex-wrap items-center gap-3 text-sm'>
-											{/* Picks Status */}
-											<div className='flex items-center gap-1.5'>
-												{stats.hasPicks ? (
-													<>
-														<div className='px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30 flex items-center gap-1.5'>
-															<CheckCircle2 className='h-3.5 w-3.5 text-green-400 flex-shrink-0' />
-															<span className='text-green-400 font-semibold text-xs'>Picks In</span>
-														</div>
-													</>
-												) : (
-													<>
-														<div className='px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center gap-1.5'>
-															<Clock className='h-3.5 w-3.5 text-orange-400 flex-shrink-0' />
-															<span className='text-orange-400 font-semibold text-xs'>Picks Needed</span>
-														</div>
-													</>
-												)}
-											</div>
+					{summary && summary.pickedTeams.length > 0 && (
+						<div className='mt-3 flex flex-wrap items-center gap-1.5'>
+							{summary.pickedTeams.map((pick, i) => (
+								<PickChip key={`${pick.abbreviation}-${i}`} pick={pick} />
+							))}
+							{league.mode === 'steve' && summary.tfsPoints > 0 && <Pill tone='warning'>+{summary.tfsPoints} TFS</Pill>}
+						</div>
+					)}
 
-											{/* Members Count */}
-											<span className='text-xs text-muted-foreground'>
-												{stats.totalMembers} {stats.totalMembers === 1 ? 'member' : 'members'}
-											</span>
-										</div>
-									) : null}
+					{matchup && userId && <MatchupMini data={matchup} userId={userId} />}
+				</div>
 
-									{/* Team Logos - Always at bottom */}
-									{!isLoading && stats?.hasPicks && stats.pickedTeams && stats.pickedTeams.length > 0 && (
-										<div className='flex flex-wrap items-center gap-2'>
-											{stats.pickedTeams.map((teamData, idx) => {
-												// Determine background color based on game status and result
-												let bgClass = 'bg-white/10 border-white/20';
-												if (teamData.gameStatus === 'in_progress') {
-													bgClass = 'bg-blue-400/30 border-blue-400/50';
-												} else if (teamData.gameStatus === 'final') {
-													if (teamData.isCorrect === true) {
-														bgClass = 'bg-green-500/30 border-green-500/50';
-													} else if (teamData.isCorrect === false) {
-														bgClass = 'bg-red-500/30 border-red-500/50';
-													}
-												}
-
-												return (
-													<div key={idx} className={`w-9 h-9 sm:w-10 sm:h-10 relative rounded-md p-1 border-2 ${bgClass} transition-all duration-200 hover:scale-110`}>
-														<Image
-															src={teamData.logo}
-															alt={teamData.abbreviation}
-															width={40}
-															height={40}
-															className='rounded-sm object-contain'
-															unoptimized
-														/>
-													</div>
-												);
-											})}
-											{/* TFS Badge for Steve mode */}
-											{league.mode === 'steve' && stats.tfsPoints !== undefined && stats.tfsPoints > 0 && (
-												<span className='text-xs px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-400 font-bold whitespace-nowrap border border-purple-500/30'>
-													{stats.tfsPoints} TFS
-												</span>
-											)}
-										</div>
-									)}
-								</div>
-
-								{/* Right Side: Points Display */}
-								<div className='flex-shrink-0 flex items-center gap-3'>
-									{isLoading ? (
-										<div className='text-right space-y-1'>
-											<Skeleton className='h-10 w-20' />
-											<Skeleton className='h-3 w-24' />
-										</div>
-									) : stats ? (
-										<div className='text-right'>
-											<div className='flex items-baseline justify-end gap-1.5'>
-												<span className='text-3xl sm:text-5xl font-bold text-primary tabular-nums font-mono leading-none'>
-													<CountUp end={stats.seasonPoints} duration={0.5} />
-												</span>
-												<span className='text-xs sm:text-sm text-muted-foreground font-medium'>pts</span>
-											</div>
-											{stats.currentWeekPoints > 0 && (
-												<p className='text-[10px] sm:text-xs text-green-400 tabular-nums font-mono font-bold mt-1'>
-													+<CountUp end={stats.currentWeekPoints} duration={0.5} /> this week
-												</p>
-											)}
-										</div>
-									) : null}
-
-									{/* Commissioner Menu */}
-									{isCommissioner && (
-										<div onClick={handleDropdownClick} className='flex-shrink-0'>
-											<DropdownMenu>
-												<DropdownMenuTrigger asChild>
-													<Button variant='ghost' size='sm' className='h-8 w-8 p-0 hover:bg-primary/20'>
-														<MoreVertical className='h-4 w-4' />
-													</Button>
-												</DropdownMenuTrigger>
-												<DropdownMenuContent align='end' className='glass border-white/10 backdrop-blur-xl'>
-													<DropdownMenuItem onClick={e => handleCopyInviteLink(e, league)} className='cursor-pointer hover:bg-primary/10'>
-														<LinkIcon className='h-4 w-4 mr-2' />
-														{copiedLeagueId === league._id ? 'Copied!' : 'Copy League Link'}
-													</DropdownMenuItem>
-												</DropdownMenuContent>
-											</DropdownMenu>
-										</div>
-									)}
-								</div>
+				{/* Points */}
+				<div className='relative flex items-end justify-between gap-4 border-t border-white/[0.06] pt-3 sm:block sm:border-0 sm:pt-0 sm:text-right'>
+					{summary ? (
+						<>
+							<div>
+								<p className='eyebrow'>Season</p>
+								<p className='font-display text-4xl font-extrabold italic leading-none tabular'>
+									{summary.seasonPoints}
+									<span className='ml-1 text-sm font-semibold not-italic text-muted-foreground'>pts</span>
+								</p>
 							</div>
-						</button>
-					</motion.div>
-				);
-			})}
+							<p className={cn('text-xs font-bold tabular sm:mt-1', summary.weekPoints > 0 ? 'text-accent' : 'text-muted-foreground')}>
+								{summary.weekPoints > 0 ? `+${summary.weekPoints}` : '0'} this week
+							</p>
+						</>
+					) : (
+						<Skeleton className='h-12 w-24' />
+					)}
+				</div>
+
+				<ArrowUpRight className='absolute right-4 top-4 hidden h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 sm:block' />
+			</Link>
+
+			{isCommissioner && league.inviteCode && (
+				<div className='absolute right-2 top-2 sm:right-10 sm:top-3'>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<button type='button' className='grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground' aria-label='League options'>
+								<MoreHorizontal className='h-4 w-4' />
+							</button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align='end'>
+							<DropdownMenuItem onClick={copyInvite}>
+								<LinkIcon className='text-muted-foreground' />
+								Copy invite link
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
+			)}
+		</div>
+	);
+}
+
+export default function ActiveLeagues({
+	leagues,
+	summaries,
+	userId,
+	matchups
+}: {
+	leagues: DashboardLeague[];
+	summaries: Map<string, LeagueSummary>;
+	userId?: string;
+	/** Viewer's head-to-head matchup per league id (optional) */
+	matchups?: Map<string, MatchupMiniData>;
+}) {
+	return (
+		<div className='grid gap-3'>
+			{leagues.map((league, i) => (
+				<LeagueCard
+					key={league._id}
+					league={league}
+					summary={summaries.get(league._id)}
+					isCommissioner={!!userId && league.creatorId === userId}
+					index={i}
+					matchup={matchups?.get(league._id)}
+					userId={userId}
+				/>
+			))}
 		</div>
 	);
 }

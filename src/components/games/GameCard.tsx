@@ -1,9 +1,12 @@
-import Image from 'next/image';
-import { motion } from 'framer-motion';
+'use client';
+
 import CountUp from 'react-countup';
-import { Button } from '@/components/ui/button';
+import { Check, X, Flame, Lock } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { calculatePointsFromOdds, formatOdds, getOddsColorClass, getOddsBadgeClass } from '@/utils/oddsUtils';
+import { TeamLogo } from '@/components/ui/team-logo';
+import { cn } from '@/lib/utils';
+import { calculatePointsFromOdds, formatOdds, getOddsBadgeClass } from '@/utils/oddsUtils';
+import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
 
 interface TeamInfo {
 	team: string;
@@ -22,7 +25,7 @@ interface Game {
 	status?: string;
 	clock?: string; // Time remaining (e.g., "12:34")
 	period?: number; // Quarter/period number (1-4)
-	periodDisplay?: string; // e.g., "1st", "2nd", "3rd", "4th", "OT"
+	periodDisplay?: string; // e.g., "Q1", "OT"
 }
 
 interface UserPick {
@@ -47,402 +50,264 @@ interface GameCardProps {
 	leaguePicks?: GamePicksData;
 	leagueMode?: string;
 	forceShowOdds?: boolean; // Always show odds regardless of league mode
+	lockedTeam?: string; // The team picked as this week's Lock (scores double if correct)
 }
 
-// Component to render stacked avatars
-function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisible?: number }) {
-	if (!picks || picks.length === 0) return null;
+type GamePhase = 'pre' | 'live' | 'final';
 
-	const visiblePicks = picks.slice(0, maxVisible);
-	const remainingCount = picks.length - maxVisible;
-	const remainingNames = picks.slice(maxVisible).map(p => p.name).join(', ');
+const UPSET_ODDS = 250;
+
+function getPhase(status?: string): GamePhase {
+	const s = status?.toLowerCase();
+	if (s === 'post' || s === 'final') return 'final';
+	if (s === 'in' || s === 'in_progress') return 'live';
+	return 'pre';
+}
+
+function formatKickoff(date: Date) {
+	const d = new Date(date);
+	const today = new Date();
+	const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+	const diffDays = Math.round((startOfDay(d) - startOfDay(today)) / 86_400_000);
+	const day = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Tomorrow' : d.toLocaleDateString('en-US', { weekday: 'short' });
+	const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+	const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	return { day, time, monthDay };
+}
+
+const initials = (name: string) =>
+	name
+		.split(' ')
+		.map(n => n[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2);
+
+function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisible?: number }) {
+	if (!picks?.length) return null;
+	const visible = picks.slice(0, maxVisible);
+	const hidden = picks.slice(maxVisible);
 
 	return (
-		<div className='flex items-center gap-0.5 mt-2'>
-			<div className='flex -space-x-2'>
-				{visiblePicks.map((pick, index) => (
-					<div
-						key={pick.userId}
-						title={pick.name}
-						className='cursor-help relative'
-						style={{ zIndex: maxVisible - index }}
-					>
-						<Avatar className='w-6 h-6 border-2 border-card pointer-events-none'>
-							<AvatarImage src={pick.image || undefined} alt={pick.name} />
-							<AvatarFallback className='bg-primary/20 text-primary text-[10px] font-semibold'>
-								{pick.name
-									.split(' ')
-									.map(n => n[0])
-									.join('')
-									.toUpperCase()
-									.slice(0, 2)}
-							</AvatarFallback>
-						</Avatar>
-					</div>
+		<div className='flex items-center gap-1.5' title={picks.map(p => p.name).join(', ')}>
+			<div className='flex -space-x-1.5'>
+				{visible.map((pick, i) => (
+					<Avatar key={pick.userId} className='h-6 w-6 ring-2 ring-[hsl(var(--surface))]' style={{ zIndex: maxVisible - i }}>
+						<AvatarImage src={pick.image || undefined} alt={pick.name} />
+						<AvatarFallback className='bg-primary/20 text-[9px] font-bold text-primary'>{initials(pick.name)}</AvatarFallback>
+					</Avatar>
 				))}
 			</div>
-			{remainingCount > 0 && (
-				<span
-					className='text-xs text-black ml-1 cursor-help'
-					title={remainingNames}
-				>
-					+{remainingCount}
-				</span>
-			)}
+			{hidden.length > 0 && <span className='text-[11px] font-semibold text-muted-foreground tabular'>+{hidden.length}</span>}
 		</div>
 	);
 }
 
-export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode, forceShowOdds }: GameCardProps) {
-	if (!game) return null;
-
-	const isStandardMode = leagueMode === 'standard';
-	const shouldShowOdds = forceShowOdds || isStandardMode;
-
-	// Helper function to format game date and time
-	const formatGameDateTime = (date: Date) => {
-		const gameDate = new Date(date);
-		const now = new Date();
-		const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-		const tomorrow = new Date(today);
-		tomorrow.setDate(tomorrow.getDate() + 1);
-		const gameDay = new Date(gameDate.getFullYear(), gameDate.getMonth(), gameDate.getDate());
-
-		let dayText = '';
-		if (gameDay.getTime() === today.getTime()) {
-			dayText = 'Today';
-		} else if (gameDay.getTime() === tomorrow.getTime()) {
-			dayText = 'Tomorrow';
-		} else {
-			// Show day of week
-			dayText = gameDate.toLocaleDateString('en-US', { weekday: 'short' });
-		}
-
-		const timeText = gameDate.toLocaleTimeString('en-US', {
-			hour: 'numeric',
-			minute: '2-digit',
-			hour12: true
-		});
-
-		return { dayText, timeText, fullDate: gameDate };
-	};
-
-	// Helper function to get game status display
-	const getGameStatus = () => {
-		const status = game.status?.toLowerCase() || 'scheduled';
-		const { dayText, timeText, fullDate } = formatGameDateTime(game.date);
-
-		if (status === 'post' || status === 'final') {
-			return {
-				text: 'FINAL',
-				color: 'text-muted-foreground',
-				bgColor: 'bg-muted/30',
-				dayText,
-				timeText,
-				fullDate
-			};
-		}
-
-		if (status === 'in' || status === 'in_progress') {
-			const periodText = game.periodDisplay || (game.period ? `Q${game.period}` : '');
-			const clockText = game.clock || '';
-
-			return {
-				text: 'LIVE',
-				color: 'text-green-400',
-				bgColor: 'bg-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.2)]',
-				isLive: true,
-				periodText,
-				clockText,
-				dayText,
-				timeText,
-				fullDate
-			};
-		}
-
-		// Pre-game
-		return {
-			text: `${dayText} ${timeText}`,
-			color: 'text-primary',
-			bgColor: 'bg-primary/10',
-			isScheduled: true,
-			dayText,
-			timeText,
-			fullDate
-		};
-	};
-
-	const statusInfo = getGameStatus();
-
-	const getTeamButtonStyle = (isTeamSelected: boolean, isTeamCorrect: boolean | null, isWinner: boolean = false) => {
-		const fontWeight = isTeamSelected ? 'font-bold' : 'font-normal';
-		const baseStyle = `${fontWeight} !hover:bg-transparent !hover:border-current !active:scale-100 backdrop-blur-sm`;
-
-		// For user picks: only show color on the selected team (never both green and red)
-		if (isTeamSelected) {
-			// Correct pick: Semi-transparent green with white text
-			if (isTeamCorrect === true) return `bg-green-500/30 text-white border-green-500/40 ${baseStyle}`;
-			// Incorrect pick: Semi-transparent red with white text
-			if (isTeamCorrect === false) return `bg-red-500/30 text-white border-red-500/40 ${baseStyle}`;
-			// Selected but not graded yet
-			return `bg-primary text-black border-primary ${baseStyle}`;
-		}
-
-		// For All Games view: only show green for winner (no color for loser)
-		if (isWinner && showScores && isGameFinished) {
-			return `bg-green-500/30 text-white border-green-500/40 ${baseStyle}`;
-		}
-
-		return `border-primary/20 text-foreground ${baseStyle}`;
-	};
-
-	const buttonProps = noHover
-		? {
-				variant: 'outline' as const,
-				className: `w-full h-auto py-2 px-4 !ring-0 !ring-offset-0`,
-				onClick: undefined,
-				disabled: false
-		  }
-		: {
-				variant: 'outline' as const,
-				className: 'w-full h-auto py-2 px-4',
-				onClick: () => onSelect?.(game.id, game.away.team, game.home.team, false, game.away.odds),
-				disabled
-		  };
-
-	// Determine winner if game is finished and scores are shown
-	const isGameFinished = statusInfo.text === 'FINAL';
-	const awayWon = showScores && isGameFinished && (game.away.score ?? 0) > (game.home.score ?? 0);
-	const homeWon = showScores && isGameFinished && (game.home.score ?? 0) > (game.away.score ?? 0);
-
-	// Check if this is an upset (underdog with +250 or worse odds won)
-	const isUpset = isGameFinished && (
-		(awayWon && (game.away.odds ?? 0) >= 250) ||
-		(homeWon && (game.home.odds ?? 0) >= 250)
+/** Gold "LOCK 2×" marker for a player's lock of the week. `compact` drops the word for tight spots. */
+export function LockBadge({ compact = false, className }: { compact?: boolean; className?: string }) {
+	return (
+		<span
+			className={cn(
+				'inline-flex shrink-0 items-center gap-1 rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-extrabold uppercase leading-none tracking-wider text-warning-foreground shadow-[0_6px_18px_-6px_hsl(var(--warning)/0.8)]',
+				className
+			)}
+			title={`Lock of the week: scores ${LOCK_MULTIPLIER}× if correct`}
+		>
+			<Lock className='h-2.5 w-2.5' strokeWidth={3} aria-hidden />
+			{compact ? '' : 'Lock '}
+			<span className='tabular'>{LOCK_MULTIPLIER}×</span>
+		</span>
 	);
+}
+
+function StatusBar({ game, phase }: { game: Game; phase: GamePhase }) {
+	if (phase === 'live') {
+		const period = game.periodDisplay || (game.period ? `Q${game.period}` : '');
+		return (
+			<div className='flex items-center gap-2 text-xs font-semibold'>
+				<span className='live-dot' />
+				<span className='uppercase tracking-wider text-live'>Live</span>
+				{period && <span className='text-foreground'>{period}</span>}
+				{game.clock && <span className='font-mono text-muted-foreground'>{game.clock}</span>}
+			</div>
+		);
+	}
+
+	const { day, time, monthDay } = formatKickoff(game.date);
+	if (phase === 'final') {
+		return (
+			<div className='flex items-center gap-2 text-xs font-semibold'>
+				<span className='uppercase tracking-wider text-muted-foreground'>Final</span>
+				<span className='text-muted-foreground/60'>·</span>
+				<span className='text-muted-foreground/80'>
+					{day} {monthDay}
+				</span>
+			</div>
+		);
+	}
 
 	return (
-		<motion.div
-			className='relative'
-			initial={{ opacity: 0, y: 10 }}
-			whileInView={{ opacity: 1, y: 0 }}
-			viewport={{ once: true, margin: "-50px" }}
-			transition={{ duration: 0.3 }}
+		<div className='flex items-center gap-2 text-xs font-semibold'>
+			<span className='text-foreground'>{day}</span>
+			<span className='text-primary'>{time}</span>
+			<span className='text-muted-foreground/60'>·</span>
+			<span className='text-muted-foreground'>{monthDay}</span>
+		</div>
+	);
+}
+
+interface TeamTileProps {
+	team: TeamInfo;
+	side: 'away' | 'home';
+	isSelected: boolean;
+	isLock: boolean;
+	result: boolean | null; // graded result for the selected team
+	isWinner: boolean;
+	isLoser: boolean;
+	showScore: boolean;
+	showOdds: boolean;
+	interactive: boolean;
+	dimmed: boolean;
+	pickers?: UserPick[];
+	onClick?: () => void;
+}
+
+function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, showScore, showOdds, interactive, dimmed, pickers, onClick }: TeamTileProps) {
+	const graded = isSelected && typeof result === 'boolean';
+	const tone = graded ? (result ? 'win' : 'loss') : isSelected ? 'selected' : isWinner ? 'winner' : 'idle';
+
+	const toneClasses = {
+		idle: 'border-white/[0.07] bg-white/[0.025]',
+		winner: 'border-accent/25 bg-accent/[0.06]',
+		selected: isLock
+			? 'border-warning/70 bg-warning/[0.10] shadow-[0_0_0_1px_hsl(var(--warning)/0.4),0_12px_40px_-12px_hsl(var(--warning)/0.55)]'
+			: 'border-primary/70 bg-primary/[0.12] shadow-[0_0_0_1px_hsl(var(--primary)/0.4),0_12px_40px_-12px_hsl(var(--primary)/0.6)]',
+		win: 'border-accent/60 bg-accent/[0.12] shadow-[0_0_0_1px_hsl(var(--accent)/0.3),0_12px_40px_-14px_hsl(var(--accent)/0.55)]',
+		loss: 'border-accent-2/50 bg-accent-2/[0.10]'
+	}[tone];
+
+	// The lock's line pays double
+	const points = showOdds && team.odds !== undefined ? ScoringService.pointsForPick({ odds: team.odds }, 'standard', calculatePointsFromOdds, isLock) : null;
+	const Tag = interactive ? 'button' : 'div';
+
+	return (
+		<Tag
+			{...(interactive ? { type: 'button' as const, onClick, 'aria-pressed': isSelected } : {})}
+			className={cn(
+				'group/tile relative flex min-w-0 flex-1 flex-col items-center gap-2 rounded-xl border p-3 text-center transition-all duration-200 ease-out-expo sm:flex-row sm:gap-3 sm:p-3.5 sm:text-left',
+				side === 'home' && 'sm:flex-row-reverse sm:text-right',
+				toneClasses,
+				interactive && !isSelected && 'hover:border-white/20 hover:bg-white/[0.05] active:scale-[0.98]',
+				interactive && 'cursor-pointer',
+				dimmed && 'opacity-45',
+				isLoser && !isSelected && 'opacity-60'
+			)}
 		>
-			{/* Upset Badge - positioned safely inside card bounds */}
-			{isUpset && (
-				<div className='absolute top-1 right-1 z-10 bg-gradient-to-r from-orange-500 to-red-500 text-white text-[10px] xl:text-xs font-bold px-2 xl:px-3 py-0.5 xl:py-1 rounded-full shadow-lg'>
-					🔥 UPSET
-				</div>
+			{/* Selection / result badge */}
+			{(isSelected || graded) && (
+				<span
+					className={cn(
+						'absolute -top-2 grid h-5 w-5 place-items-center rounded-full ring-2 ring-[hsl(var(--background))] animate-scale-in',
+						side === 'away' ? '-left-1.5' : '-right-1.5',
+						tone === 'win' ? 'bg-accent text-accent-foreground' : tone === 'loss' ? 'bg-accent-2 text-white' : 'bg-primary text-primary-foreground'
+					)}
+				>
+					{tone === 'loss' ? <X className='h-3 w-3' strokeWidth={3} /> : <Check className='h-3 w-3' strokeWidth={3} />}
+				</span>
 			)}
 
-			{/* GameCard Container - flexible height, consistent team areas */}
-			<div className='rounded-lg p-4 bg-card/80 backdrop-blur-sm transition-all shadow-sm hover:shadow-md min-h-[200px] xl:min-h-[140px] flex flex-col justify-between'>
-				{/* Mobile Date (shown only on mobile at the top) */}
-				<div className='xl:hidden mb-3'>
-					<div className='flex justify-center'>
-						<div className={`px-3 py-1.5 rounded-full ${statusInfo.bgColor} relative inline-flex items-center gap-1.5`}>
-							{(statusInfo as any).isLive && (
-								<span className='flex h-2 w-2'>
-									<span className='animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75'></span>
-									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
-								</span>
-							)}
-							<div className='flex items-center gap-1.5'>
-								<span className={`text-xs font-semibold ${statusInfo.color}`}>
-									{statusInfo.isScheduled ? statusInfo.text : statusInfo.text}
-								</span>
-								{(statusInfo as any).isLive && (
-									<>
-										{(statusInfo as any).periodText && (
-											<>
-												<span className='text-muted-foreground'>•</span>
-												<span className='text-[11px] font-semibold text-green-400'>{(statusInfo as any).periodText}</span>
-											</>
-										)}
-										{(statusInfo as any).clockText && (
-											<span className='text-[11px] font-mono text-primary font-semibold'>{(statusInfo as any).clockText}</span>
-										)}
-									</>
-								)}
-								{statusInfo.isScheduled && (
-									<>
-										<span className='text-muted-foreground'>•</span>
-										<span className='text-[10px] text-muted-foreground'>{statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-									</>
-								)}
-								{!statusInfo.isScheduled && !(statusInfo as any).isLive && (
-									<>
-										<span className='text-muted-foreground'>•</span>
-										<span className='text-[10px] text-muted-foreground'>{statusInfo.dayText}</span>
-									</>
-								)}
-							</div>
-						</div>
+			{isLock && <LockBadge compact className={cn('absolute -top-2 animate-scale-in', side === 'away' ? '-right-1.5' : '-left-1.5')} />}
+
+			<TeamLogo src={team.logo} alt={team.team} size={44} />
+
+			<div className={cn('flex min-w-0 flex-1 flex-col items-center sm:items-start', side === 'home' && 'sm:items-end')}>
+				<span className='font-display text-xl font-bold uppercase italic leading-none tracking-tight sm:hidden'>{team.abbreviation}</span>
+				<span className='hidden max-w-full truncate font-display text-lg font-bold uppercase italic leading-tight tracking-tight sm:block lg:text-xl'>{team.team}</span>
+				{team.record && <span className='mt-0.5 text-[11px] font-medium text-muted-foreground tabular'>{team.record}</span>}
+
+				{points !== null && team.odds !== undefined && (
+					<div className={cn('mt-1.5 flex items-center gap-1.5', side === 'home' && 'sm:flex-row-reverse')}>
+						<span className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold', getOddsBadgeClass(team.odds))}>{formatOdds(team.odds)}</span>
+						<span className={cn('text-[11px] font-bold tabular', isSelected ? 'text-foreground' : 'text-primary')}>{points} pts</span>
 					</div>
-				</div>
+				)}
 
-				{/* Mobile Horizontal Layout */}
-				<div className='xl:hidden flex items-center justify-between gap-2'>
-					{/* Away Team - Mobile Compact */}
-					<Button {...buttonProps} className={`${buttonProps.className} flex-1 min-h-[160px] py-2 px-2 ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
-						<div className='flex flex-col items-center gap-1.5 w-full'>
-							<div className='relative w-12 h-12 flex-shrink-0 bg-white rounded-sm p-1.5'>
-								<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
-							</div>
-							<div className='text-center min-w-0 w-full'>
-								<div className={`font-oswald uppercase tracking-wide text-xs leading-tight ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.abbreviation}</div>
-								<div className={`text-[10px] leading-tight ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-medium text-white/80' : selected === game.away.team ? 'font-medium text-black/70' : 'text-muted-foreground'}`}>{game.away.record}</div>
-								{showScores && game.away.score !== undefined && (
-									<div className={`text-xl mt-1 font-mono leading-tight ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
-										<CountUp end={game.away.score} duration={0.8} preserveValue />
-									</div>
-								)}
-								{shouldShowOdds && game.away.odds !== undefined && (
-									<div className='flex flex-col items-center gap-0.5 mt-1'>
-										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-										<span className={`text-[10px] font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
-									</div>
-								)}
-								{leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
-							</div>
-						</div>
-					</Button>
-
-					{/* VS Symbol */}
-					<div className='flex-shrink-0'>
-						<span className='text-sm font-medium text-accent'>@</span>
+				{pickers && pickers.length > 0 && (
+					<div className='mt-2'>
+						<PickedByAvatars picks={pickers} />
 					</div>
-
-					{/* Home Team - Mobile Compact */}
-					<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} flex-1 min-h-[160px] py-2 px-2 ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
-						<div className='flex flex-col items-center gap-1.5 w-full'>
-							<div className='relative w-12 h-12 flex-shrink-0 bg-white rounded-sm p-1.5'>
-								<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
-							</div>
-							<div className='text-center min-w-0 w-full'>
-								<div className={`font-oswald uppercase tracking-wide text-xs leading-tight ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.abbreviation}</div>
-								<div className={`text-[10px] leading-tight ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-medium text-white/80' : selected === game.home.team ? 'font-medium text-black/70' : 'text-muted-foreground'}`}>{game.home.record}</div>
-								{showScores && game.home.score !== undefined && (
-									<div className={`text-xl mt-1 font-mono leading-tight ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
-										<CountUp end={game.home.score} duration={0.8} preserveValue />
-									</div>
-								)}
-								{shouldShowOdds && game.home.odds !== undefined && (
-									<div className='flex flex-col items-center gap-0.5 mt-1'>
-										<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${getOddsBadgeClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-										<span className={`text-[10px] font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
-									</div>
-								)}
-								{leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
-							</div>
-						</div>
-					</Button>
-				</div>
-
-				{/* Desktop Layout (unchanged) */}
-				<div className='hidden xl:flex xl:flex-row xl:justify-between xl:items-center'>
-					{/* Away Team */}
-					<div className='flex-1 xl:mr-4'>
-						<Button {...buttonProps} className={`${buttonProps.className} min-h-[100px] ${getTeamButtonStyle(selected === game.away.team, selected === game.away.team ? isCorrect ?? null : null, selected ? false : awayWon)}`}>
-							<div className='flex items-center space-x-3 w-full'>
-								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0 bg-white rounded-sm p-1 xl:p-1.5'>
-									<Image src={game.away.logo} alt={game.away.team} fill className='object-contain' unoptimized />
-								</div>
-								<div className='text-left flex-1'>
-									<div className={`font-oswald uppercase tracking-wide ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team ? 'font-bold text-black' : 'font-medium'}`}>{game.away.team}</div>
-									<div className={`text-xs ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white/80' : selected === game.away.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.away.record}</div>
-									{shouldShowOdds && game.away.odds !== undefined && (
-										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold px-2 py-0.5 rounded ${getOddsBadgeClass(game.away.odds)}`}>{formatOdds(game.away.odds)}</span>
-											<span className={`text-xs ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.away.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.away.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.away.odds)} pts</span>
-										</div>
-									)}
-									{showScores && game.away.score !== undefined && (
-										<div className={`text-lg mt-1 font-mono ${selected === game.away.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.away.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.away.team ? 'font-bold' : 'font-medium'}`}>
-											<CountUp end={game.away.score} duration={0.8} preserveValue />
-										</div>
-									)}
-									{leaguePicks && <PickedByAvatars picks={leaguePicks.away} />}
-								</div>
-							</div>
-						</Button>
-					</div>
-
-					{/* Center Section - Game Status & Time (Desktop only) */}
-					<div className='hidden xl:flex flex-col justify-center items-center my-4 xl:my-0 xl:mx-4 min-w-[140px] gap-2'>
-						<span className='text-sm font-medium text-accent'>@</span>
-						<div className={`px-3 py-1.5 rounded-full ${statusInfo.bgColor} relative inline-flex items-center gap-1.5`}>
-							{(statusInfo as any).isLive && (
-								<span className='flex h-2 w-2'>
-									<span className='animate-ping absolute inline-flex h-2 w-2 rounded-full bg-green-400 opacity-75'></span>
-									<span className='relative inline-flex rounded-full h-2 w-2 bg-green-500'></span>
-								</span>
-							)}
-							<div className='flex items-center gap-1.5'>
-								<span className={`text-xs font-semibold ${statusInfo.color}`}>
-									{statusInfo.isScheduled ? statusInfo.text : statusInfo.text}
-								</span>
-								{(statusInfo as any).isLive && (
-									<>
-										{(statusInfo as any).periodText && (
-											<>
-												<span className='text-muted-foreground'>•</span>
-												<span className='text-[11px] font-semibold text-green-400'>{(statusInfo as any).periodText}</span>
-											</>
-										)}
-										{(statusInfo as any).clockText && (
-											<span className='text-[11px] font-mono text-primary font-semibold'>{(statusInfo as any).clockText}</span>
-										)}
-									</>
-								)}
-								{statusInfo.isScheduled && (
-									<>
-										<span className='text-muted-foreground'>•</span>
-										<span className='text-[10px] text-muted-foreground'>{statusInfo.fullDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-									</>
-								)}
-								{!statusInfo.isScheduled && !(statusInfo as any).isLive && (
-									<>
-										<span className='text-muted-foreground'>•</span>
-										<span className='text-[10px] text-muted-foreground'>{statusInfo.dayText}</span>
-									</>
-								)}
-							</div>
-						</div>
-					</div>
-
-					{/* Home Team */}
-					<div className='flex-1 xl:ml-4'>
-						<Button {...buttonProps} onClick={noHover ? undefined : () => onSelect?.(game.id, game.home.team, game.away.team, true, game.home.odds)} className={`${buttonProps.className} min-h-[100px] ${getTeamButtonStyle(selected === game.home.team, selected === game.home.team ? isCorrect ?? null : null, selected ? false : homeWon)}`}>
-							<div className='flex items-center space-x-3 w-full'>
-								<div className='relative w-6 h-6 xl:w-8 xl:h-8 flex-shrink-0 bg-white rounded-sm p-1 xl:p-1.5'>
-									<Image src={game.home.logo} alt={game.home.team} fill className='object-contain' unoptimized />
-								</div>
-								<div className='text-left flex-1'>
-									<div className={`font-oswald uppercase tracking-wide ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team ? 'font-bold text-black' : 'font-medium'}`}>{game.home.team}</div>
-									<div className={`text-xs ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white/80' : selected === game.home.team ? 'font-bold text-black/70' : 'font-medium'}`}>{game.home.record}</div>
-									{shouldShowOdds && game.home.odds !== undefined && (
-										<div className='flex items-center gap-1.5 mt-1'>
-											<span className={`text-xs font-semibold px-2 py-0.5 rounded ${getOddsBadgeClass(game.home.odds)}`}>{formatOdds(game.home.odds)}</span>
-											<span className={`text-xs ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white/70' : selected === game.home.team ? 'text-black/60' : 'text-muted-foreground'}`}>•</span>
-											<span className={`text-xs font-bold ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'text-white' : selected === game.home.team ? 'text-black' : 'text-primary'}`}>{calculatePointsFromOdds(game.home.odds)} pts</span>
-										</div>
-									)}
-									{showScores && game.home.score !== undefined && (
-										<div className={`text-lg mt-1 font-mono ${selected === game.home.team && typeof isCorrect === 'boolean' ? 'font-bold text-white' : selected === game.home.team && typeof isCorrect !== 'boolean' ? 'font-bold text-black' : selected === game.home.team ? 'font-bold' : 'font-medium'}`}>
-											<CountUp end={game.home.score} duration={0.8} preserveValue />
-										</div>
-									)}
-									{leaguePicks && <PickedByAvatars picks={leaguePicks.home} />}
-								</div>
-							</div>
-						</Button>
-					</div>
-				</div>
+				)}
 			</div>
-		</motion.div>
+
+			{showScore && team.score !== undefined && (
+				<span className={cn('font-display text-3xl font-extrabold italic leading-none tabular sm:text-4xl', isLoser ? 'text-muted-foreground' : 'text-foreground')}>
+					<CountUp end={team.score} duration={0.8} preserveValue />
+				</span>
+			)}
+		</Tag>
+	);
+}
+
+export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode, forceShowOdds, lockedTeam }: GameCardProps) {
+	if (!game) return null;
+
+	const phase = getPhase(game.status);
+	const showOdds = !!forceShowOdds || leagueMode === 'standard';
+	const interactive = !noHover && !!onSelect && !disabled;
+
+	const awayScore = game.away.score ?? 0;
+	const homeScore = game.home.score ?? 0;
+	const decided = !!showScores && phase === 'final' && awayScore !== homeScore;
+	const awayWon = decided && awayScore > homeScore;
+	const homeWon = decided && homeScore > awayScore;
+	const isUpset = (awayWon && (game.away.odds ?? 0) >= UPSET_ODDS) || (homeWon && (game.home.odds ?? 0) >= UPSET_ODDS);
+
+	// Grey out games the user can't pick (5 already chosen) but which haven't kicked off
+	const dimmed = !!disabled && !noHover && !selected && phase === 'pre';
+
+	const tile = (side: 'away' | 'home') => {
+		const team = game[side];
+		const opponent = side === 'away' ? game.home : game.away;
+		const isSelected = selected === team.team;
+		return (
+			<TeamTile
+				team={team}
+				side={side}
+				isSelected={isSelected}
+				isLock={isSelected && lockedTeam === team.team}
+				result={isSelected ? (isCorrect ?? null) : null}
+				// Only highlight the winner when the viewer has no pick in this game
+				isWinner={!selected && (side === 'away' ? awayWon : homeWon)}
+				isLoser={side === 'away' ? homeWon : awayWon}
+				showScore={!!showScores}
+				showOdds={showOdds}
+				interactive={interactive}
+				dimmed={dimmed}
+				pickers={leaguePicks?.[side]}
+				onClick={() => onSelect?.(game.id, team.team, opponent.team, side === 'home', team.odds)}
+			/>
+		);
+	};
+
+	return (
+		<div className={cn('relative rounded-2xl p-3 sm:p-4', phase === 'live' && 'bg-live/[0.04]')}>
+			<div className='mb-3 flex items-center justify-between gap-2 px-1'>
+				<StatusBar game={game} phase={phase} />
+				{isUpset && (
+					<span className='inline-flex items-center gap-1 rounded-full bg-brand-hot px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-[0_6px_20px_-6px_rgba(255,61,90,0.8)]'>
+						<Flame className='h-3 w-3' /> Upset
+					</span>
+				)}
+			</div>
+
+			<div className='flex items-stretch gap-2 sm:gap-3'>
+				{tile('away')}
+				<div className='flex w-5 shrink-0 flex-col items-center justify-center sm:w-6'>
+					<span className='font-display text-sm font-bold italic text-muted-foreground/70'>@</span>
+				</div>
+				{tile('home')}
+			</div>
+		</div>
 	);
 }
 

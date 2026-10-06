@@ -13,17 +13,17 @@ const LeagueContext = createContext<{
 
 export const useLeague = () => useContext(LeagueContext);
 
+// /league/<segment> routes that are pages, not league ids
+const RESERVED_SEGMENTS = new Set(['create', 'join', 'browse']);
+
 export function LeagueProvider({ children }: { children: ReactNode }) {
 	const [leagueId, setLeagueId] = useState<string | null>(null);
 	const pathname = usePathname();
 
 	useEffect(() => {
-		// Extract leagueId from the URL (e.g., /league/[id])
-		const match = pathname?.match(/\/league\/([^/]+)/);
-		if (match) {
-			const id = match[1];
-			setLeagueId(id);
-			console.log('[LeagueProvider] leagueId set:', id);
+		const segment = pathname?.match(/^\/league\/([^/]+)/)?.[1];
+		if (segment && !RESERVED_SEGMENTS.has(segment)) {
+			setLeagueId(segment);
 		}
 	}, [pathname]);
 

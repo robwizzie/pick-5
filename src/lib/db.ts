@@ -48,6 +48,9 @@ function getMongoUri(): string {
 
 const isWorkerd = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
 
+/** True on Cloudflare Workers (per-request connections; no cross-request I/O). */
+export const isWorkersRuntime = isWorkerd;
+
 // Set per request by @opennextjs/cloudflare (an AsyncLocalStorage-backed getter), so it
 // is safe under concurrent requests in one isolate. Undefined outside Workers.
 const CF_CONTEXT = Symbol.for('__cloudflare-context__');
