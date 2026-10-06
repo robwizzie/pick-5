@@ -29,6 +29,8 @@ const PickSchema = new mongoose.Schema({
 			odds: Number // Store odds at time of pick submission
 		}
 	],
+	// Lock of the week: this game's pick scores double if correct (optional)
+	lockGameId: { type: String, default: null },
 	tfsGame: String,
 	tfsScore: Number,
 	tfsPoints: {

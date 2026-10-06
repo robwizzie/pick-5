@@ -13,6 +13,7 @@ import { hasGameStarted } from '@/services/gameUtils';
 import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 import type { Game } from '@/components/games/GameCard';
 import { revealStartedOnly } from '@/lib/pickScoring';
+import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,9 @@ export async function POST(req: Request) {
 
 		const body = await req.json();
 		const { week, picks, tfsGame, tfsScore, leagueId } = body;
+		// Lock of the week is optional and must be one of this week's five picks
+		const lockGameId: string | null =
+			typeof body.lockGameId === 'string' && Array.isArray(picks) && picks.some((p: { gameId?: string }) => p?.gameId === body.lockGameId) ? body.lockGameId : null;
 
 		await connectDB();
 
@@ -164,7 +168,10 @@ export async function POST(req: Request) {
 			picks,
 			gameResults,
 			isSteveMode ? tfsGame : null,
-			isSteveMode ? tfsScore : null
+			isSteveMode ? tfsScore : null,
+			league.mode || 'standard',
+			calculatePointsFromOdds,
+			lockGameId
 		);
 
 		// Create new picks with scores (will be 0 for games that haven't finished yet)
@@ -175,6 +182,7 @@ export async function POST(req: Request) {
 			season,
 			week,
 			picks: scoredPicks,
+			lockGameId,
 			tfsGame: isSteveMode ? tfsGame : null,
 			tfsScore: isSteveMode ? tfsScore : null,
 			weeklyPoints,
@@ -284,15 +292,14 @@ export async function GET(req: Request) {
 		}));
 
 		// Recalculate scores with current results (only scores finished games)
-		// For Standard mode, need to import and pass calculatePointsFromOdds
-		const { calculatePointsFromOdds } = await import('@/utils/oddsUtils');
 		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(
 			picks.picks,
 			gameResults,
 			picks.tfsGame,
 			picks.tfsScore,
 			leagueMode,
-			calculatePointsFromOdds
+			calculatePointsFromOdds,
+		picks.lockGameId
 		);
 
 		// Update picks with current scores if they've changed

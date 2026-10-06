@@ -75,7 +75,8 @@ export async function GET(req: Request) {
 				pick.tfsGame,
 				pick.tfsScore,
 				leagueMode,
-				calculatePointsFromOdds
+				calculatePointsFromOdds,
+			pick.lockGameId
 			);
 
 			// Extract team names and logos from picks by matching with games
@@ -182,7 +183,8 @@ export async function GET(req: Request) {
 				pick.tfsGame,
 				pick.tfsScore,
 				leagueMode,
-				calculatePointsFromOdds
+				calculatePointsFromOdds,
+			pick.lockGameId
 			);
 
 			// Aggregate into user's season stats
@@ -220,7 +222,8 @@ export async function GET(req: Request) {
 					pick.tfsGame,
 					pick.tfsScore,
 					leagueMode,
-					calculatePointsFromOdds
+					calculatePointsFromOdds,
+				pick.lockGameId
 				);
 
 				const userId = pick.userId.toString();

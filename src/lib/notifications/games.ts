@@ -3,6 +3,7 @@
 import type { Game } from '@/components/games/GameCard';
 import { NFLService } from '@/services/nflService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { ScoringService } from '@/services/scoringService';
 
 /** ESPN `status.type.state` is 'pre' | 'in' | 'post'; older data used 'final'. */
 export function isFinal(game: Pick<Game, 'status'>): boolean {
@@ -60,7 +61,6 @@ export function formatKickoffEt(date: Date | string): string {
 }
 
 /** Points for a correct pick, matching ScoringService.calculateWeekScore. */
-export function pointsForCorrectPick(leagueMode: string | undefined, odds: number | undefined | null): number {
-	if (leagueMode === 'standard' && typeof odds === 'number') return calculatePointsFromOdds(odds);
-	return 2;
+export function pointsForCorrectPick(leagueMode: string | undefined, odds: number | undefined | null, isLock = false): number {
+	return ScoringService.pointsForPick({ odds: typeof odds === 'number' ? odds : undefined }, leagueMode || 'standard', calculatePointsFromOdds, isLock);
 }

@@ -52,7 +52,7 @@ export interface GameResultsJobOptions {
 	includeAllFinal?: boolean;
 }
 
-type LeanPick = { userId: string; leagueId: string; picks: Array<{ gameId: string; team: string; odds?: number | null }> };
+type LeanPick = { userId: string; leagueId: string; lockGameId?: string | null; picks: Array<{ gameId: string; team: string; odds?: number | null }> };
 
 export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: GameResultsJobOptions): Promise<GameResultsJobResult> {
 	const budget = new RunBudget(budgetMs);
@@ -83,7 +83,7 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 		'picks.gameId': { $in: gameIds },
 		...seasonPickFilter(seasonStatus.seasonYear)
 	})
-		.select('userId leagueId picks.gameId picks.team picks.odds')
+		.select('userId leagueId lockGameId picks.gameId picks.team picks.odds')
 		.lean()) as unknown as LeanPick[];
 	if (pickDocs.length === 0) return { week, finishedGames: finished.length, pending: 0 };
 
@@ -133,7 +133,7 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 				gameId: pick.gameId,
 				team: pick.team,
 				outcome,
-				points: outcome === 'win' ? pointsForCorrectPick(league.mode, pick.odds) : 0
+				points: outcome === 'win' ? pointsForCorrectPick(league.mode, pick.odds, doc.lockGameId === pick.gameId) : 0
 			};
 			const key = `${userId}|${leagueId}`;
 			groups.set(key, [...(groups.get(key) ?? []), entry]);
