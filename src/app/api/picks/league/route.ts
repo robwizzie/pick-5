@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
 import { League } from '@/models/League';
+import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,8 @@ export async function GET(request: Request) {
 		// Fetch all picks for this week and league
 		const picks = await Pick.find({
 			leagueId,
-			week
+			week,
+			...seasonPickFilter(parseSeasonParam(searchParams.get('season')))
 		});
 
 		// Get user information for all picks

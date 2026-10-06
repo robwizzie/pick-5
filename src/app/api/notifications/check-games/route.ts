@@ -11,6 +11,7 @@ import webPush from 'web-push';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +86,7 @@ export async function GET() {
 		const currentWeek = await NFLService.getCurrentWeek(false);
 
 		// Get all games for current week
-		const games = await NFLService.getWeeklyGames(currentWeek);
+		const games = await NFLService.getWeeklyGames(currentWeek, seasonStatus.seasonYear);
 
 		// Find completed games
 		const completedGames: GameResult[] = games
@@ -117,7 +118,8 @@ export async function GET() {
 		const userPicks = await Pick.find({
 			userId: user._id,
 			week: currentWeek,
-			'picks.gameId': { $in: gameIds }
+			'picks.gameId': { $in: gameIds },
+			...seasonPickFilter(seasonStatus.seasonYear)
 		}).lean();
 
 		if (userPicks.length === 0) {

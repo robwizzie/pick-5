@@ -16,8 +16,8 @@ export function calculatePointsFromOdds(odds: number): number {
 	// Strong favorites (low risk)
 	if (odds <= -150) return 2;
 
-	// Slight favorites/Pick'em (balanced)
-	if (odds >= -100 && odds <= 100) return 2;
+	// Slight favorites/Pick'em (balanced): -149..+100
+	if (odds <= 100) return 2;
 
 	// Slight underdogs (moderate risk)
 	if (odds <= 150) return 3;

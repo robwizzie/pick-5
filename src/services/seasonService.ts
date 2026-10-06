@@ -8,6 +8,7 @@ import { User } from '@/models/User';
 import { NFLService } from './nflService';
 import { ScoringService } from './scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 
 export interface SeasonStatus {
 	isActive: boolean;
@@ -25,30 +26,27 @@ export class SeasonService {
 	 * Get the current NFL season year
 	 */
 	static getCurrentSeasonYear(): number {
-		const now = new Date();
-		const year = now.getFullYear();
-		// NFL season starts in September; before Sep -> use previous year
-		return now.getMonth() < 8 ? year - 1 : year;
+		return getCurrentSeasonYear();
 	}
 
 	/**
-	 * Get or create the season config for the current season
+	 * Get or create the season config for a season (default: the current season)
 	 */
-	static async getOrCreateSeasonConfig(): Promise<typeof SeasonConfig.prototype> {
+	static async getOrCreateSeasonConfig(seasonYear: number = getCurrentSeasonYear()): Promise<typeof SeasonConfig.prototype> {
 		await connectDB();
 
-		const seasonYear = this.getCurrentSeasonYear();
 		let config = await SeasonConfig.findOne({ seasonYear });
 
 		if (!config) {
 			// Create new season config
+			// A config created for a past season (e.g. to archive it) is already over.
+			const isPastSeason = seasonYear < getCurrentSeasonYear();
 			config = await SeasonConfig.create({
 				seasonYear,
-				isActive: true,
-				lastCompletedWeek: 0,
+				isActive: !isPastSeason,
+				lastCompletedWeek: isPastSeason ? 18 : 0,
 				isArchived: false
 			});
-			console.log(`[SeasonService] Created new season config for ${seasonYear}`);
 		}
 
 		return config;
@@ -124,11 +122,15 @@ export class SeasonService {
 	/**
 	 * Archive the season standings for all leagues
 	 * This saves the final standings to SeasonHistory
+	 * @param seasonYear season to archive (default: current). Pass the previous year to
+	 *   archive last season after the new one has started.
 	 */
-	static async archiveSeason(): Promise<{ success: boolean; leaguesArchived: number; errors: string[] }> {
+	static async archiveSeason(
+		seasonYear: number = getCurrentSeasonYear()
+	): Promise<{ success: boolean; leaguesArchived: number; errors: string[] }> {
 		await connectDB();
 
-		const config = await this.getOrCreateSeasonConfig();
+		const config = await this.getOrCreateSeasonConfig(seasonYear);
 
 		if (config.isArchived) {
 			return { success: false, leaguesArchived: 0, errors: ['Season already archived'] };
@@ -176,7 +178,6 @@ export class SeasonService {
 		// Check if already archived
 		const existingHistory = await SeasonHistory.findOne({ leagueId, seasonYear });
 		if (existingHistory) {
-			console.log(`[SeasonService] League ${league.name} already archived for season ${seasonYear}`);
 			return;
 		}
 
@@ -216,12 +217,8 @@ export class SeasonService {
 			}
 		}
 
-		// Calculate stats for each member
-		// Note: The Pick model currently doesn't have a seasonYear field.
-		// This works because picks are tied to game IDs from the ESPN API,
-		// which are unique per season. The scoring calculation uses game results
-		// fetched for the specific seasonYear, so mismatched picks will simply
-		// not match any game IDs and won't be scored incorrectly.
+		// Calculate stats for each member (only this season's picks)
+		const seasonFilter = seasonPickFilter(seasonYear);
 		for (const memberId of memberIds) {
 			const user = await User.findById(memberId);
 			if (!user) continue;
@@ -229,7 +226,8 @@ export class SeasonService {
 			const userPicks = await Pick.find({
 				userId: memberId,
 				leagueId,
-				week: { $lte: 18 }
+				week: { $lte: 18 },
+				...seasonFilter
 			}).lean();
 
 			let totalPoints = 0;
@@ -374,6 +372,10 @@ export class SeasonService {
 	static async startNewSeason(): Promise<{ success: boolean; message: string }> {
 		await connectDB();
 
+		// Make sure picks are season-scoped (and the legacy per-week unique index is gone)
+		// before the new season's picks start coming in.
+		await ensurePickSeasonMigration();
+
 		const newSeasonYear = this.getCurrentSeasonYear();
 
 		// Check if there's already a config for this year
@@ -399,11 +401,7 @@ export class SeasonService {
 			});
 		}
 
-		// Note: We don't delete picks here - they're preserved for history
-		// The LeaderBoard and SeasonStats components will need to be updated
-		// to only show picks from the current season
-
-		console.log(`[SeasonService] Started new season ${newSeasonYear}`);
+		// Picks are not deleted: they're preserved for history and scoped by `season`.
 
 		return { success: true, message: `Season ${newSeasonYear} is now active` };
 	}

@@ -1,8 +1,8 @@
 // src/app/api/admin/manual-picks/route.ts
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { checkAdminAuth } from '@/lib/adminAuth';
 import { connectDB } from '@/lib/db';
+import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
 import { League } from '@/models/League';
@@ -11,16 +11,15 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
 	try {
-		const session = await getServerSession(authOptions);
-		if (!session?.user?.id) {
-			return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+		const session = await checkAdminAuth();
+		if (!session) {
+			return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
 		}
-
-		// TODO: Add admin check if you want to restrict this endpoint
-		// For now, any authenticated user can access
 
 		const body = await req.json();
 		const { userId, leagueId, week, picks, tfsGame, tfsScore } = body;
+		// Optional explicit season (defaults to the current one)
+		const season = Number.isInteger(body.season) ? (body.season as number) : getCurrentSeasonYear();
 
 		// Validation
 		if (!userId || !leagueId || !week || !picks || picks.length !== 5) {
@@ -28,6 +27,7 @@ export async function POST(req: Request) {
 		}
 
 		await connectDB();
+		await ensurePickSeasonMigration();
 
 		// Verify user exists and is member of the league
 		const user = await User.findById(userId);
@@ -46,14 +46,15 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'User is not a member of this league' }, { status: 400 });
 		}
 
-		// Check if picks already exist for this user/league/week
-		const existingPick = await Pick.findOne({ userId, leagueId, week });
+		// Check if picks already exist for this user/league/season/week
+		const existingPick = await Pick.findOne({ userId, leagueId, week, ...seasonPickFilter(season) });
 
 		if (existingPick) {
 			// Update existing picks
 			existingPick.picks = picks;
 			existingPick.tfsGame = tfsGame || null;
 			existingPick.tfsScore = tfsScore || null;
+			existingPick.season = season;
 			existingPick.submitted = true;
 			existingPick.submittedAt = new Date();
 			await existingPick.save();
@@ -67,6 +68,7 @@ export async function POST(req: Request) {
 			const newPick = new Pick({
 				userId,
 				leagueId,
+				season,
 				week,
 				picks,
 				tfsGame: tfsGame || null,

@@ -9,6 +9,7 @@ import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { seasonPickFilter } from '@/lib/season';
 import SteveScoreEmail from '@/emails/SteveScoreEmail';
 import StandardScoreEmail from '@/emails/StandardScoreEmail';
 
@@ -59,8 +60,6 @@ export async function GET(req: Request) {
 
 		await connectDB();
 
-		const now = new Date();
-		console.log(`[Score Emails] Running cron job at ${now.toISOString()}`);
 
 		// Check if season can still send notifications
 		// This allows week 18 scoring emails even if ESPN reports week 19 (playoffs)
@@ -92,7 +91,7 @@ export async function GET(req: Request) {
 		console.log(`[Score Emails] Sending score emails for week ${weekToScore}`);
 
 		// Get game results for the week
-		const games = await NFLService.getWeeklyGames(weekToScore);
+		const games = await NFLService.getWeeklyGames(weekToScore, seasonStatus.seasonYear);
 		const gameResults: GameResult[] = games.map(game => ({
 			id: game.id,
 			homeScore: game.home.score || 0,
@@ -133,21 +132,16 @@ export async function GET(req: Request) {
 						// Get all picks for this week and league
 						const allPicks = await Pick.find({
 							week: weekToScore,
-							leagueId
+							leagueId,
+							...seasonPickFilter(seasonStatus.seasonYear)
 						}).lean();
 
-						if (allPicks.length === 0) {
-							console.log(`[Score Emails] No picks found for league ${league.name} week ${weekToScore}`);
-							continue;
-						}
+						if (allPicks.length === 0) continue;
 
 						// Find user's pick
 						const userPick = allPicks.find(p => p.userId.toString() === user._id.toString());
 
-						if (!userPick) {
-							console.log(`[Score Emails] User ${user.email} didn't make picks for league ${league.name}`);
-							continue;
-						}
+						if (!userPick) continue;
 
 						// Calculate scores for all users
 						const leaderboard: LeaderboardEntry[] = [];
@@ -354,7 +348,6 @@ export async function GET(req: Request) {
 							});
 
 							emailsSent++;
-							console.log(`[Score Emails] Sent email to ${user.email} for league ${league.name}`);
 						} catch (emailError) {
 							console.error(`[Score Emails] Failed to send email to ${user.email} for league ${league.name}:`, emailError);
 							errors.push(`Email failed for ${user.email} - ${league.name}`);

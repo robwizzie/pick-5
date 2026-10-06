@@ -2,6 +2,7 @@
 import type { Game, TeamInfo } from '@/components/games/GameCard';
 import type { EspnEvent, EspnGameSummary } from '@/types';
 import { cachedFetch } from './cacheService';
+import { getCurrentSeasonYear } from '@/lib/seasonYear';
 
 export class NFLService {
 	private static readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes for live data
@@ -35,11 +36,7 @@ export class NFLService {
 	}
 
 	private static getCurrentSeason(): number {
-		const now = new Date();
-		const year = now.getFullYear();
-		// NFL season typically starts in September; before Sep -> use previous year
-		const seasonYear = now.getMonth() < 8 ? year - 1 : year;
-		return seasonYear;
+		return getCurrentSeasonYear();
 	}
 
 	/**

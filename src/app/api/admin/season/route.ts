@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { ADMIN_USER_ID } from '@/lib/constants';
 import { SeasonService } from '@/services/seasonService';
+import { getCurrentSeasonYear, runPickSeasonMigration } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,15 +55,39 @@ export async function POST(req: Request) {
 			}
 
 			case 'archive': {
-				// Archive the current season (save standings to history)
-				const result = await SeasonService.archiveSeason();
+				// Archive a season's standings to history (default: current season;
+				// pass `seasonYear` to archive an earlier one, e.g. last season after a restart)
+				const currentSeason = getCurrentSeasonYear();
+				const seasonYear = body.seasonYear === undefined || body.seasonYear === null || body.seasonYear === ''
+					? currentSeason
+					: Number(body.seasonYear);
+				if (!Number.isInteger(seasonYear) || seasonYear < 2000 || seasonYear > currentSeason) {
+					return NextResponse.json(
+						{ error: `Invalid seasonYear: must be a year between 2000 and ${currentSeason}` },
+						{ status: 400 }
+					);
+				}
+				const result = await SeasonService.archiveSeason(seasonYear);
 				return NextResponse.json({
 					success: result.success,
+					seasonYear,
 					leaguesArchived: result.leaguesArchived,
 					errors: result.errors,
 					message: result.success
-						? `Successfully archived ${result.leaguesArchived} leagues`
-						: 'Failed to archive season'
+						? `Successfully archived ${result.leaguesArchived} leagues for season ${seasonYear}`
+						: `Failed to archive season ${seasonYear}`
+				});
+			}
+
+			case 'migrate_picks': {
+				// Backfill `season` on legacy picks and swap the unique index (idempotent)
+				const result = await runPickSeasonMigration();
+				return NextResponse.json({
+					success: true,
+					...result,
+					message: result.alreadyMigrated
+						? 'Picks are already season-scoped'
+						: `Backfilled season on ${result.backfilled} pick documents${result.droppedLegacyIndex ? '; dropped legacy unique index' : ''}`
 				});
 			}
 
@@ -77,7 +102,7 @@ export async function POST(req: Request) {
 
 			default:
 				return NextResponse.json(
-					{ error: 'Invalid action. Valid actions: deactivate, archive, start_new' },
+					{ error: 'Invalid action. Valid actions: deactivate, archive, start_new, migrate_picks' },
 					{ status: 400 }
 				);
 		}

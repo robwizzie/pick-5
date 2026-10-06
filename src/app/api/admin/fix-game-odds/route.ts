@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { checkAdminAuth } from '@/lib/adminAuth';
 import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
+import { getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,10 +32,9 @@ export async function POST(req: Request) {
 		// Find all picks for this week that include this game
 		const picksToUpdate = await Pick.find({
 			week: week,
-			'picks.gameId': gameId
+			'picks.gameId': gameId,
+			...seasonPickFilter(getCurrentSeasonYear())
 		});
-
-		console.log(`Found ${picksToUpdate.length} picks to update for game ${gameId}`);
 
 		let updatedCount = 0;
 
@@ -56,7 +56,6 @@ export async function POST(req: Request) {
 						return p;
 					}
 
-					console.log(`Updating pick for ${p.team}: old odds = ${p.odds}, new odds = ${newOdds}`);
 					modified = true;
 					return { ...p, odds: newOdds };
 				}

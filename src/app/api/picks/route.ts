@@ -10,6 +10,7 @@ import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { hasGameStarted } from '@/services/gameUtils';
+import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 import type { Game } from '@/components/games/GameCard';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,6 @@ export async function POST(req: Request) {
 		// Check if season is active and accepting picks
 		const seasonStatus = await SeasonService.getSeasonStatus();
 		if (!seasonStatus.canSubmitPicks) {
-			console.log('[Picks API] Season is not active, rejecting picks submission');
 			return NextResponse.json(
 				{
 					error: 'Season has ended',
@@ -67,17 +67,21 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'TFS game and score required for Steve mode' }, { status: 400 });
 		}
 
+		const season = getCurrentSeasonYear();
+		// The legacy unique index {userId, week, leagueId} would reject this season's picks
+		// for a week already picked last season. Don't block submissions if it fails;
+		// the next request retries.
+		try {
+			await ensurePickSeasonMigration();
+		} catch (error) {
+			console.error('[Picks API] Pick season migration failed:', error);
+		}
+
 		// Get game results for validation and scoring
-		console.log(`[Picks API] Fetching games for week ${week}`);
-		const games = await NFLService.getWeeklyGames(week);
-		console.log(`[Picks API] Received ${games?.length || 0} games from ESPN API`);
+		const games = await NFLService.getWeeklyGames(week, season);
 
 		if (!games || !games.length) {
-			console.error(`[Picks API] No games found for week ${week}. This could mean:
-- ESPN API returned no events
-- The week number is invalid
-- The season year is incorrect
-- ESPN API is temporarily unavailable`);
+			console.error(`[Picks API] No games found for week ${week} of season ${season}`);
 			return NextResponse.json(
 				{
 					error: 'No games found for week',
@@ -91,7 +95,8 @@ export async function POST(req: Request) {
 		const existingPicks = await Pick.findOne({
 			userId: session.user.id,
 			leagueId,
-			week
+			week,
+			...seasonPickFilter(season)
 		});
 
 		// Check if any of the new picks' games have started
@@ -140,7 +145,6 @@ export async function POST(req: Request) {
 
 			// If no games have started, allow update - delete existing picks
 			await Pick.deleteOne({ _id: existingPicks._id });
-			console.log('Deleted existing picks to allow update');
 		}
 
 		const gameResults = games.map(game => ({
@@ -153,8 +157,6 @@ export async function POST(req: Request) {
 			awayTeam: game.away.team
 		}));
 
-		console.log('Game results for scoring:', gameResults);
-
 		// Calculate scores (only for finished games)
 		// For Standard mode, pass null for TFS fields
 		const { scoredPicks, weeklyPoints, correctPicks, tfsPoints } = ScoringService.calculateWeekScore(
@@ -164,13 +166,12 @@ export async function POST(req: Request) {
 			isSteveMode ? tfsScore : null
 		);
 
-		console.log('Calculated scores:', { scoredPicks, weeklyPoints, correctPicks, tfsPoints });
-
 		// Create new picks with scores (will be 0 for games that haven't finished yet)
 		// For Standard mode, tfsGame and tfsScore will be null/undefined
 		const newPicks = await Pick.create({
 			userId: session.user.id,
 			leagueId,
+			season,
 			week,
 			picks: scoredPicks,
 			tfsGame: isSteveMode ? tfsGame : null,
@@ -181,11 +182,9 @@ export async function POST(req: Request) {
 			submitted: true
 		});
 
-		console.log('Created picks with user ID:', session.user.id);
-
-		// Update user's total stats
+		// Update user's total stats (current season, this league)
 		const totalStats = await Pick.aggregate([
-			{ $match: { userId: session.user.id, leagueId } },
+			{ $match: { userId: session.user.id, leagueId, ...seasonPickFilter(season) } },
 			{
 				$group: {
 					_id: null,
@@ -196,8 +195,6 @@ export async function POST(req: Request) {
 				}
 			}
 		]);
-
-		console.log('User total stats:', totalStats);
 
 		await User.findOneAndUpdate(
 			{ _id: session.user.id },
@@ -256,10 +253,12 @@ export async function GET(req: Request) {
 			}
 		}
 
+		const season = getCurrentSeasonYear();
 		const picks = await Pick.findOne({
 			userId: targetUserId,
 			week: parseInt(week, 10),
-			leagueId
+			leagueId,
+			...seasonPickFilter(season)
 		});
 
 		if (!picks) {
@@ -271,7 +270,7 @@ export async function GET(req: Request) {
 		const leagueMode = league?.mode || 'standard';
 
 		// Get current game results for re-scoring if needed
-		const games = await NFLService.getWeeklyGames(parseInt(week, 10));
+		const games = await NFLService.getWeeklyGames(parseInt(week, 10), season);
 		const gameResults = games.map(game => ({
 			id: game.id,
 			// Only include scores if they're actual numbers (not undefined)
@@ -301,6 +300,7 @@ export async function GET(req: Request) {
 			picks.weeklyPoints = weeklyPoints;
 			picks.correctPicks = correctPicks;
 			picks.tfsPoints = tfsPoints;
+			if (picks.season == null) picks.season = season;
 			await picks.save();
 
 			// Update user's total stats (only update if it's the current user's picks being fetched)
@@ -309,9 +309,9 @@ export async function GET(req: Request) {
 					{ _id: targetUserId },
 					{
 						$set: {
-							totalPoints: await Pick.aggregate([{ $match: { userId: targetUserId } }, { $group: { _id: null, total: { $sum: '$weeklyPoints' } } }]).then(result => result[0]?.total || 0),
-							correctPicks: await Pick.aggregate([{ $match: { userId: targetUserId } }, { $group: { _id: null, total: { $sum: '$correctPicks' } } }]).then(result => result[0]?.total || 0),
-							totalTFSPoints: await Pick.aggregate([{ $match: { userId: targetUserId } }, { $group: { _id: null, total: { $sum: '$tfsPoints' } } }]).then(result => result[0]?.total || 0)
+							totalPoints: await Pick.aggregate([{ $match: { userId: targetUserId, ...seasonPickFilter(season) } }, { $group: { _id: null, total: { $sum: '$weeklyPoints' } } }]).then(result => result[0]?.total || 0),
+							correctPicks: await Pick.aggregate([{ $match: { userId: targetUserId, ...seasonPickFilter(season) } }, { $group: { _id: null, total: { $sum: '$correctPicks' } } }]).then(result => result[0]?.total || 0),
+							totalTFSPoints: await Pick.aggregate([{ $match: { userId: targetUserId, ...seasonPickFilter(season) } }, { $group: { _id: null, total: { $sum: '$tfsPoints' } } }]).then(result => result[0]?.total || 0)
 						}
 					}
 				);

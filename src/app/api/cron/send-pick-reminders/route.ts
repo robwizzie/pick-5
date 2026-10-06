@@ -11,6 +11,7 @@ import ThursdayReminderEmail from '@/emails/ThursdayReminderEmail';
 import SaturdayReminderEmail from '@/emails/SaturdayReminderEmail';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
+import { seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minutes for cron job
@@ -35,7 +36,6 @@ if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
 async function getThursdayNightGame(week: number) {
 	try {
 		const games = await NFLService.getWeeklyGames(week);
-		console.log(`[Pick Reminders] Checking ${games.length} games for Thursday game`);
 
 		// Find the Thursday night game - check in both UTC and ET
 		const thursdayGame = games.find(game => {
@@ -43,8 +43,6 @@ async function getThursdayNightGame(week: number) {
 			// Check day of week in ET timezone (Thursday = 4)
 			const etDay = new Date(gameDate.toLocaleString('en-US', { timeZone: 'America/New_York' })).getDay();
 			const utcDay = gameDate.getDay();
-
-			console.log(`[Pick Reminders] Game: ${game.away.team} @ ${game.home.team}, Date: ${gameDate.toISOString()}, UTC Day: ${utcDay}, ET Day: ${etDay}`);
 
 			// Thursday night games are typically on Thursday (4) in ET, might be Friday (5) in UTC
 			return etDay === 4 || utcDay === 4;
@@ -59,16 +57,12 @@ async function getThursdayNightGame(week: number) {
 				timeZoneName: 'short'
 			});
 
-			console.log(`[Pick Reminders] Found Thursday game: ${thursdayGame.away.team} @ ${thursdayGame.home.team} at ${timeString}`);
-
 			return {
 				awayTeam: thursdayGame.away.team,
 				homeTeam: thursdayGame.home.team,
 				gameTime: timeString
 			};
 		}
-
-		console.log('[Pick Reminders] No Thursday game found, using fallback');
 	} catch (error) {
 		console.error('[Pick Reminders] Error fetching Thursday night game:', error);
 	}
@@ -163,7 +157,8 @@ export async function GET(req: Request) {
 					const existingPick = await Pick.findOne({
 						userId: user._id.toString(),
 						leagueId: league._id.toString(),
-						week: currentWeek
+						week: currentWeek,
+						...seasonPickFilter(seasonStatus.seasonYear)
 					});
 
 					if (!existingPick) {
@@ -258,8 +253,6 @@ export async function GET(req: Request) {
 									tag: 'pick-reminder'
 								};
 
-								console.log(`[Pick Reminders] Sending push to ${user.email}: ${JSON.stringify(pushPayload)}`);
-
 								await webPush.sendNotification(
 									{
 										endpoint: subscription.endpoint,
@@ -272,7 +265,6 @@ export async function GET(req: Request) {
 								);
 
 								pushNotificationsSent++;
-								console.log(`[Pick Reminders] Push notification sent successfully to ${user.email}`);
 							} catch (pushError: any) {
 								// If subscription is no longer valid, delete it
 								if (pushError.statusCode === 410) {
