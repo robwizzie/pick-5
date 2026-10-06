@@ -12,6 +12,7 @@ import { SeasonService } from '@/services/seasonService';
 import { hasGameStarted } from '@/services/gameUtils';
 import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 import type { Game } from '@/components/games/GameCard';
+import { revealStartedOnly } from '@/lib/pickScoring';
 
 export const dynamic = 'force-dynamic';
 
@@ -318,6 +319,10 @@ export async function GET(req: Request) {
 			}
 		}
 
+		// Another member's picks are only revealed once each game kicks off
+		if (targetUserId !== session.user.id) {
+			return NextResponse.json(revealStartedOnly(picks.toObject(), gameResults));
+		}
 		return NextResponse.json(picks);
 	} catch (error) {
 		console.error('Error fetching picks:', error);

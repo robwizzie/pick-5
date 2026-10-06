@@ -90,6 +90,7 @@ const getGameTotal = (game: Game) => {
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose, playerImage, weekPoints }: UserPicksModalProps) {
 	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
+	const [serverHiddenPicks, setServerHiddenPicks] = useState(0);
 	const [tfsGame, setTfsGame] = useState<string>('');
 	const [tfsScore, setTfsScore] = useState<number | null>(null);
 	const [games, setGames] = useState<Game[]>([]);
@@ -137,8 +138,10 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 				const leaguePicksData: LeaguePicksData = leaguePicksResponse.ok ? await leaguePicksResponse.json() : {};
 				setLeaguePicks(leaguePicksData);
 
+				setServerHiddenPicks(0);
 				if (picksData) {
 					setPicks(picksData.picks || []);
+					setServerHiddenPicks(picksData.hiddenPicks || 0);
 					setTfsGame(picksData.tfsGame || '');
 					setTfsScore(picksData.tfsScore ?? null);
 				}
@@ -201,7 +204,8 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 			return { pick, game, status, gameFinished, gameInProgress: status === 'in_progress', isCorrect, pickPoints };
 		});
 
-	const hiddenCount = picks.length - visiblePicks.length;
+	// Picks for games that haven't kicked off are withheld by the server; it sends the count
+	const hiddenCount = picks.length - visiblePicks.length + serverHiddenPicks;
 	const computedPoints = visiblePicks.reduce((sum, p) => sum + p.pickPoints, 0);
 	const correctCount = visiblePicks.filter(p => p.gameFinished && p.isCorrect === true).length;
 	const gradedCount = visiblePicks.filter(p => p.gameFinished).length;
