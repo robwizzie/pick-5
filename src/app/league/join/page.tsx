@@ -2,19 +2,20 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { PageContainer } from '@/components/ui/page';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function JoinLeaguePage() {
 	const router = useRouter();
 
 	useEffect(() => {
-		// Redirect to the new browse leagues page
-		router.push('/league/browse');
+		// Joining now happens from the browse leagues page
+		router.replace('/league/browse');
 	}, [router]);
 
 	return (
-		<div className='min-h-screen flex items-center justify-center'>
-			<Spinner />
-		</div>
+		<PageContainer size='narrow' className='flex min-h-[calc(100dvh-var(--nav-height))] items-center justify-center'>
+			<Spinner label='Finding leagues…' />
+		</PageContainer>
 	);
 }

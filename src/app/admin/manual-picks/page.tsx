@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { CheckCircle2, Circle, RefreshCw, Send, XCircle } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Spinner } from '@/components/ui/spinner';
-import { CheckCircle2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { PageContainer, PageHeader, Pill } from '@/components/ui/page';
+import { cn } from '@/lib/utils';
 
 interface League {
 	_id: string;
@@ -30,9 +32,18 @@ interface Game {
 	status: string;
 }
 
+interface SnapshotOdds {
+	id: string;
+	home?: { odds?: number };
+	away?: { odds?: number };
+}
+
+function formatOdds(odds?: number): string {
+	if (odds === undefined || odds === null) return 'N/A';
+	return odds > 0 ? `+${odds}` : String(odds);
+}
+
 export default function ManualPicksAdmin() {
-	const { data: session, status } = useSession();
-	const router = useRouter();
 	const [loading, setLoading] = useState(false);
 	const [submitting, setSubmitting] = useState(false);
 	const [message, setMessage] = useState('');
@@ -57,7 +68,7 @@ export default function ManualPicksAdmin() {
 			try {
 				const response = await fetch('/api/league/list');
 				if (response.ok) {
-					const data = await response.json();
+					const data: { leagues?: League[] } = await response.json();
 					setLeagues(data.leagues || []);
 				}
 			} catch (err) {
@@ -65,27 +76,22 @@ export default function ManualPicksAdmin() {
 			}
 		};
 
-		if (status === 'authenticated') {
-			fetchLeagues();
-		}
-	}, [status]);
+		fetchLeagues();
+	}, []);
 
-	// Fetch league members when league is selected
+	// Fetch league members and mode when league is selected
 	useEffect(() => {
 		const fetchMembers = async () => {
 			if (!selectedLeague) return;
 
 			try {
-				const response = await fetch(`/api/league/${selectedLeague}/members`);
-				if (response.ok) {
-					const members = await response.json();
+				const [membersResponse, leagueResponse] = await Promise.all([fetch(`/api/league/${selectedLeague}/members`), fetch(`/api/league/${selectedLeague}`)]);
+				if (membersResponse.ok) {
+					const members: User[] = await membersResponse.json();
 					setUsers(members);
 				}
-
-				// Get league mode
-				const leagueResponse = await fetch(`/api/league/${selectedLeague}`);
 				if (leagueResponse.ok) {
-					const leagueData = await leagueResponse.json();
+					const leagueData: { mode?: string } = await leagueResponse.json();
 					setLeagueMode(leagueData.mode || 'standard');
 				}
 			} catch (err) {
@@ -105,7 +111,7 @@ export default function ManualPicksAdmin() {
 				setLoading(true);
 				const response = await fetch(`/api/games/week/${week}`);
 				if (response.ok) {
-					const data = await response.json();
+					const data: { games?: Game[] } = await response.json();
 					let gamesData = data.games || [];
 
 					// Fetch odds for standard mode
@@ -113,11 +119,11 @@ export default function ManualPicksAdmin() {
 						try {
 							const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}`);
 							if (oddsResponse.ok) {
-								const oddsData = await oddsResponse.json();
+								const oddsData: { odds?: SnapshotOdds[] } = await oddsResponse.json();
 								const snapshotOdds = oddsData.odds || [];
 
-								gamesData = gamesData.map((game: Game) => {
-									const gameOdds = snapshotOdds.find((o: any) => o.id === game.id);
+								gamesData = gamesData.map(game => {
+									const gameOdds = snapshotOdds.find(o => o.id === game.id);
 									return {
 										...game,
 										home: { ...game.home, odds: gameOdds?.home?.odds },
@@ -143,53 +149,40 @@ export default function ManualPicksAdmin() {
 	}, [week, leagueMode]);
 
 	const handleGameSelection = (gameId: string) => {
-		setSelectedGames(prev => {
-			if (prev.includes(gameId)) {
-				// Remove game
-				const newGames = prev.filter(id => id !== gameId);
-				// Remove team selection for this game
-				const newTeams = { ...selectedTeams };
-				delete newTeams[gameId];
-				setSelectedTeams(newTeams);
-				return newGames;
-			} else {
-				// Add game (max 5)
-				if (prev.length >= 5) {
-					setError('You can only select 5 games');
-					setTimeout(() => setError(''), 3000);
-					return prev;
-				}
-				return [...prev, gameId];
-			}
-		});
+		if (selectedGames.includes(gameId)) {
+			// Remove game and its team selection
+			setSelectedGames(prev => prev.filter(id => id !== gameId));
+			setSelectedTeams(prev => {
+				const next = { ...prev };
+				delete next[gameId];
+				return next;
+			});
+			return;
+		}
+		// Add game (max 5)
+		if (selectedGames.length >= 5) {
+			toast.error('You can only select 5 games');
+			return;
+		}
+		setSelectedGames(prev => [...prev, gameId]);
 	};
 
 	const handleTeamSelection = (gameId: string, team: string) => {
 		setSelectedTeams(prev => ({ ...prev, [gameId]: team }));
 	};
 
+	const fail = (msg: string) => {
+		setError(msg);
+		toast.error(msg);
+	};
+
 	const handleSubmit = async () => {
 		// Validation
-		if (!selectedLeague) {
-			setError('Please select a league');
-			return;
-		}
-		if (!selectedUser) {
-			setError('Please select a user');
-			return;
-		}
-		if (selectedGames.length !== 5) {
-			setError('Please select exactly 5 games');
-			return;
-		}
-		if (Object.keys(selectedTeams).length !== 5) {
-			setError('Please select a team for each game');
-			return;
-		}
-		if (leagueMode === 'steve' && (!tfsGame || !tfsScore)) {
-			setError('Please select TFS game and enter TFS score for Steve mode');
-			return;
-		}
+		if (!selectedLeague) return fail('Please select a league');
+		if (!selectedUser) return fail('Please select a user');
+		if (selectedGames.length !== 5) return fail('Please select exactly 5 games');
+		if (Object.keys(selectedTeams).length !== 5) return fail('Please select a team for each game');
+		if (leagueMode === 'steve' && (!tfsGame || !tfsScore)) return fail('Please select TFS game and enter TFS score for Steve mode');
 
 		try {
 			setSubmitting(true);
@@ -226,77 +219,60 @@ export default function ManualPicksAdmin() {
 				body: JSON.stringify(payload)
 			});
 
+			const data: { message?: string; error?: string } = await response.json();
 			if (response.ok) {
-				const data = await response.json();
-				setMessage(data.message || 'Picks submitted successfully!');
+				const msg = data.message || 'Picks submitted successfully!';
+				setMessage(msg);
+				toast.success(msg);
 				// Reset form
 				setSelectedGames([]);
 				setSelectedTeams({});
 				setTfsGame('');
 				setTfsScore('');
 			} else {
-				const data = await response.json();
-				setError(data.error || 'Failed to submit picks');
+				fail(data.error || 'Failed to submit picks');
 			}
 		} catch (err) {
 			console.error('Error submitting picks:', err);
-			setError('An error occurred while submitting picks');
+			fail('An error occurred while submitting picks');
 		} finally {
 			setSubmitting(false);
 		}
 	};
 
-	if (status === 'loading') {
-		return (
-			<div className='flex items-center justify-center min-h-screen'>
-				<Spinner />
-			</div>
-		);
-	}
-
-	if (!session) {
-		router.push('/login');
-		return null;
-	}
-
 	return (
-		<div className='container mx-auto px-4 py-8 max-w-5xl'>
-			<Card className='bg-card border-primary/20'>
-				<CardHeader>
-					<CardTitle className='text-2xl font-oswald uppercase tracking-wide text-primary'>Manual Picks Entry</CardTitle>
-					<p className='text-sm text-muted-foreground'>Enter picks for a user even after games have started</p>
-				</CardHeader>
-				<CardContent className='space-y-6'>
-					{/* League Selection */}
-					<div>
-						<label className='text-sm font-medium text-foreground mb-2 block'>Select League</label>
-						<Select value={selectedLeague} onValueChange={setSelectedLeague}>
-							<SelectTrigger>
-								<SelectValue placeholder='Choose a league' />
-							</SelectTrigger>
-							<SelectContent>
-								{leagues.map(league => (
-									<SelectItem key={league._id} value={league._id}>
-										{league.name} ({league.mode})
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
+		<PageContainer size='narrow'>
+			<PageHeader eyebrow='Admin · Picks' title='Manual Picks' description='Enter picks for a user even after games have started' />
 
-					{/* Week Selection */}
-					<div>
-						<label className='text-sm font-medium text-foreground mb-2 block'>Week</label>
-						<Input type='number' min='1' max='18' value={week} onChange={e => setWeek(e.target.value)} placeholder='Week number' />
-					</div>
-
-					{/* User Selection */}
-					{selectedLeague && (
-						<div>
-							<label className='text-sm font-medium text-foreground mb-2 block'>Select User</label>
-							<Select value={selectedUser} onValueChange={setSelectedUser}>
+			<div className='space-y-6'>
+				<Card>
+					<CardContent className='grid gap-4 p-5 sm:grid-cols-2 sm:p-6'>
+						<div className='space-y-2 sm:col-span-2'>
+							<Label>League</Label>
+							<Select value={selectedLeague} onValueChange={setSelectedLeague}>
 								<SelectTrigger>
-									<SelectValue placeholder='Choose a user' />
+									<SelectValue placeholder='Choose a league' />
+								</SelectTrigger>
+								<SelectContent>
+									{leagues.map(league => (
+										<SelectItem key={league._id} value={league._id}>
+											{league.name} ({league.mode})
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+
+						<div className='space-y-2'>
+							<Label htmlFor='week'>Week</Label>
+							<Input id='week' type='number' inputMode='numeric' min='1' max='18' value={week} onChange={e => setWeek(e.target.value)} placeholder='Week number' className='tabular' />
+						</div>
+
+						<div className='space-y-2'>
+							<Label>User</Label>
+							<Select value={selectedUser} onValueChange={setSelectedUser} disabled={!selectedLeague}>
+								<SelectTrigger>
+									<SelectValue placeholder={selectedLeague ? 'Choose a user' : 'Select a league first'} />
 								</SelectTrigger>
 								<SelectContent>
 									{users.map(user => (
@@ -307,74 +283,79 @@ export default function ManualPicksAdmin() {
 								</SelectContent>
 							</Select>
 						</div>
-					)}
+					</CardContent>
+				</Card>
 
-					{/* Games Selection */}
-					{games.length > 0 && (
-						<div>
-							<label className='text-sm font-medium text-foreground mb-2 block'>
-								Select 5 Games ({selectedGames.length}/5 selected)
-							</label>
-							<div className='space-y-3'>
-								{games.map(game => (
-									<Card
-										key={game.id}
-										className={`cursor-pointer transition-all ${selectedGames.includes(game.id) ? 'border-primary bg-primary/10' : 'border-muted hover:border-primary/50'}`}
-										onClick={() => handleGameSelection(game.id)}>
-										<CardContent className='p-4'>
-											<div className='flex items-center justify-between'>
-												<div className='flex-1'>
-													<div className='font-semibold text-foreground'>
-														{game.away.team} @ {game.home.team}
-													</div>
-													{leagueMode === 'standard' && (game.away.odds || game.home.odds) && (
-														<div className='text-xs text-muted-foreground mt-1'>
-															Away: {game.away.odds || 'N/A'} | Home: {game.home.odds || 'N/A'}
+				{/* Games Selection */}
+				{loading ? (
+					<div className='space-y-2'>
+						{Array.from({ length: 5 }).map((_, i) => (
+							<Skeleton key={i} className='h-16 rounded-xl' />
+						))}
+					</div>
+				) : (
+					games.length > 0 && (
+						<Card>
+							<CardContent className='p-4 sm:p-6'>
+								<div className='mb-4 flex items-center justify-between gap-3'>
+									<h2 className='font-display text-xl font-bold uppercase italic tracking-tight'>Select 5 games</h2>
+									<Pill tone={selectedGames.length === 5 ? 'accent' : 'primary'}>
+										<span className='tabular'>{selectedGames.length}/5</span> selected
+									</Pill>
+								</div>
+								<div className='space-y-2'>
+									{games.map(game => {
+										const isSelected = selectedGames.includes(game.id);
+										return (
+											<div
+												key={game.id}
+												className={cn(
+													'rounded-xl border transition-colors',
+													isSelected ? 'border-primary/40 bg-primary/[0.08]' : 'border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.06]'
+												)}>
+												<button type='button' onClick={() => handleGameSelection(game.id)} className='flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'>
+													{isSelected ? <CheckCircle2 className='h-5 w-5 shrink-0 text-primary' /> : <Circle className='h-5 w-5 shrink-0 text-muted-foreground/50' />}
+													<div className='min-w-0 flex-1'>
+														<div className='font-semibold text-foreground'>
+															{game.away.team} @ {game.home.team}
 														</div>
-													)}
-													<div className='text-xs text-muted-foreground'>Status: {game.status}</div>
-												</div>
-												{selectedGames.includes(game.id) && <CheckCircle2 className='h-5 w-5 text-primary' />}
-											</div>
-
-											{/* Team Selection (only show if game is selected) */}
-											{selectedGames.includes(game.id) && (
-												<div className='mt-3 pt-3 border-t border-primary/20' onClick={e => e.stopPropagation()}>
-													<div className='text-sm font-medium text-foreground mb-2'>Select Team:</div>
-													<div className='grid grid-cols-2 gap-2'>
-														<Button
-															variant={selectedTeams[game.id] === game.away.team ? 'default' : 'outline'}
-															onClick={() => handleTeamSelection(game.id, game.away.team)}
-															className='w-full'>
-															{game.away.team}
-															{leagueMode === 'standard' && game.away.odds && (
-																<span className='ml-2 text-xs'>({game.away.odds})</span>
+														<div className='mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground'>
+															{leagueMode === 'standard' && (game.away.odds || game.home.odds) && (
+																<span className='font-mono'>
+																	Away {formatOdds(game.away.odds)} · Home {formatOdds(game.home.odds)}
+																</span>
 															)}
-														</Button>
-														<Button
-															variant={selectedTeams[game.id] === game.home.team ? 'default' : 'outline'}
-															onClick={() => handleTeamSelection(game.id, game.home.team)}
-															className='w-full'>
-															{game.home.team}
-															{leagueMode === 'standard' && game.home.odds && (
-																<span className='ml-2 text-xs'>({game.home.odds})</span>
-															)}
-														</Button>
+															<span>Status: {game.status}</span>
+														</div>
 													</div>
-												</div>
-											)}
-										</CardContent>
-									</Card>
-								))}
-							</div>
-						</div>
-					)}
+												</button>
 
-					{/* TFS Selection (Steve mode only) */}
-					{leagueMode === 'steve' && selectedGames.length > 0 && (
-						<div className='space-y-4'>
-							<div>
-								<label className='text-sm font-medium text-foreground mb-2 block'>TFS Game</label>
+												{/* Team Selection (only show if game is selected) */}
+												{isSelected && (
+													<div className='grid grid-cols-2 gap-2 border-t border-white/[0.07] p-3'>
+														{[game.away, game.home].map(side => (
+															<Button key={side.team} variant={selectedTeams[game.id] === side.team ? 'default' : 'outline'} onClick={() => handleTeamSelection(game.id, side.team)} className='h-auto min-h-10 w-full whitespace-normal py-2'>
+																{side.team}
+																{leagueMode === 'standard' && side.odds && <span className='font-mono text-xs opacity-80'>({formatOdds(side.odds)})</span>}
+															</Button>
+														))}
+													</div>
+												)}
+											</div>
+										);
+									})}
+								</div>
+							</CardContent>
+						</Card>
+					)
+				)}
+
+				{/* TFS Selection (Steve mode only) */}
+				{leagueMode === 'steve' && selectedGames.length > 0 && (
+					<Card>
+						<CardContent className='grid gap-4 p-5 sm:grid-cols-2 sm:p-6'>
+							<div className='space-y-2'>
+								<Label>TFS game</Label>
 								<Select value={tfsGame} onValueChange={setTfsGame}>
 									<SelectTrigger>
 										<SelectValue placeholder='Select TFS game' />
@@ -391,32 +372,34 @@ export default function ManualPicksAdmin() {
 									</SelectContent>
 								</Select>
 							</div>
-							<div>
-								<label className='text-sm font-medium text-foreground mb-2 block'>TFS Score Prediction</label>
-								<Input type='number' min='0' value={tfsScore} onChange={e => setTfsScore(e.target.value)} placeholder='Enter predicted total score' />
+							<div className='space-y-2'>
+								<Label htmlFor='tfs-score'>TFS score prediction</Label>
+								<Input id='tfs-score' type='number' inputMode='numeric' min='0' value={tfsScore} onChange={e => setTfsScore(e.target.value)} placeholder='Predicted total score' className='tabular' />
 							</div>
-						</div>
-					)}
+						</CardContent>
+					</Card>
+				)}
 
-					{/* Messages */}
-					{error && (
-						<Alert variant='destructive'>
-							<AlertDescription>{error}</AlertDescription>
-						</Alert>
-					)}
+				{/* Messages */}
+				{error && (
+					<Alert variant='destructive'>
+						<XCircle />
+						<AlertDescription>{error}</AlertDescription>
+					</Alert>
+				)}
 
-					{message && (
-						<Alert className='border-green-500 bg-green-500/10'>
-							<AlertDescription className='text-green-600'>{message}</AlertDescription>
-						</Alert>
-					)}
+				{message && (
+					<Alert variant='success'>
+						<CheckCircle2 />
+						<AlertDescription>{message}</AlertDescription>
+					</Alert>
+				)}
 
-					{/* Submit Button */}
-					<Button onClick={handleSubmit} disabled={submitting || selectedGames.length !== 5 || !selectedUser} className='w-full' size='lg'>
-						{submitting ? 'Submitting...' : 'Submit Picks'}
-					</Button>
-				</CardContent>
-			</Card>
-		</div>
+				<Button onClick={handleSubmit} disabled={submitting || selectedGames.length !== 5 || !selectedUser} className='w-full' size='lg'>
+					{submitting ? <RefreshCw className='animate-spin' /> : <Send />}
+					{submitting ? 'Submitting…' : 'Submit Picks'}
+				</Button>
+			</div>
+		</PageContainer>
 	);
 }

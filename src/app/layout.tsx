@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { Inter, Barlow_Condensed, JetBrains_Mono } from 'next/font/google';
 import SessionProviderWrapper from '@/components/providers/SessionProviderWrapper';
 import { StatsProvider } from '@/contexts/StatsContext';
 import { WeekProvider } from '@/contexts/WeekContext';
@@ -6,62 +7,76 @@ import { LeagueProvider } from '@/contexts/LeagueContext';
 import { Nav } from '@/components/games/Nav';
 import { AnimatedBackground } from '@/components/ui/animated-background';
 import { GameNotificationPoller } from '@/components/notifications/GameNotificationPoller';
+import { Toaster } from 'sonner';
 import '../styles/globals.css';
-import '@fontsource/space-grotesk/400.css';
-import '@fontsource/space-grotesk/500.css';
-import '@fontsource/space-grotesk/700.css';
-import '@fontsource/jetbrains-mono/400.css';
-import '@fontsource/jetbrains-mono/700.css';
+
+const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const display = Barlow_Condensed({
+	subsets: ['latin'],
+	weight: ['500', '600', '700', '800', '900'],
+	style: ['normal', 'italic'],
+	variable: '--font-display',
+	display: 'swap'
+});
+const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500', '700'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-	title: 'Pick 5 - NFL Fantasy League',
-	description: 'The ultimate NFL Pick 5 fantasy experience. Compete with friends, make strategic picks, and dominate your league.',
-	keywords: ['NFL', 'Fantasy', 'Pick 5', 'Football', 'League', 'Competition'],
-	authors: [{ name: 'Pick 5 Team' }],
+	metadataBase: new URL(process.env.NEXTAUTH_URL || 'https://sportspick5.com'),
+	title: {
+		default: 'Pick 5 — Five picks. Every week. Bragging rights.',
+		template: '%s · Pick 5'
+	},
+	description: 'The weekly NFL pick’em for you and your crew. Pick five games, back the underdogs for bigger points, and climb your league leaderboard.',
+	keywords: ['NFL', 'pick em', 'Pick 5', 'football', 'league', 'picks', 'underdogs'],
+	applicationName: 'Pick 5',
+	manifest: '/manifest.json',
+	icons: { icon: '/favicon.ico', apple: '/icon-512.png' },
+	appleWebApp: { capable: true, title: 'Pick 5', statusBarStyle: 'black-translucent' },
 	openGraph: {
-		title: 'Pick 5 - NFL Fantasy League',
-		description: 'The ultimate NFL Pick 5 fantasy experience',
+		title: 'Pick 5 — The weekly NFL pick’em',
+		description: 'Pick five games. Back the underdogs. Beat your friends.',
 		type: 'website',
-		locale: 'en_US'
-	}
+		locale: 'en_US',
+		images: [{ url: '/og-image.jpg', width: 1200, height: 630, alt: 'Pick 5' }]
+	},
+	twitter: { card: 'summary_large_image', images: ['/og-image.jpg'] }
 };
 
-export const viewport = {
+export const viewport: Viewport = {
 	width: 'device-width',
 	initialScale: 1,
-	maximumScale: 1,
 	viewportFit: 'cover',
-	themeColor: '#141414' // Match the background color (hsl(0 0% 8%) = #141414)
+	themeColor: '#07090e'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang='en' style={{ backgroundColor: '#141414' }}>
-			<head>
-				<link rel='preconnect' href='https://fonts.googleapis.com' />
-				<link rel='preconnect' href='https://fonts.gstatic.com' crossOrigin='anonymous' />
-				<link href='https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Oswald:wght@200..700&display=swap' rel='stylesheet' />
-				<link rel='manifest' href='/manifest.json' />
-				<meta name='apple-mobile-web-app-capable' content='yes' />
-				<meta name='apple-mobile-web-app-status-bar-style' content='black' />
-				<meta name='apple-mobile-web-app-title' content='Pick 5' />
-				<link rel='apple-touch-icon' href='/icon-512.png' />
-			</head>
-			<body className='font-sans antialiased' style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', backgroundColor: '#141414' }}>
+		<html lang='en' className={`${sans.variable} ${display.variable} ${mono.variable}`}>
+			<body>
 				<AnimatedBackground />
 				<SessionProviderWrapper>
 					<GameNotificationPoller />
 					<StatsProvider>
 						<WeekProvider>
 							<LeagueProvider>
-								<div className='min-h-screen animated-bg'>
+								<div className='relative flex min-h-dvh flex-col pt-safe'>
 									<Nav />
-									<main className='relative z-10'>{children}</main>
+									<main className='relative z-10 flex-1'>{children}</main>
 								</div>
 							</LeagueProvider>
 						</WeekProvider>
 					</StatsProvider>
 				</SessionProviderWrapper>
+				<Toaster
+					theme='dark'
+					position='top-center'
+					toastOptions={{
+						classNames: {
+							toast: '!bg-[hsl(var(--surface-raised))] !border !border-white/10 !text-foreground !rounded-xl !shadow-2xl',
+							description: '!text-muted-foreground'
+						}
+					}}
+				/>
 			</body>
 		</html>
 	);
