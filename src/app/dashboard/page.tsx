@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button';
 import { LeagueCardSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, PageContainer, SectionHeader, StatTile } from '@/components/ui/page';
 import { useWeek } from '@/contexts/WeekContext';
+import type { MatchupMiniData } from '@/components/league/MatchupMini';
+import type { MatchupsResponse } from '@/lib/matchups';
+import { LiveNowBanner } from '@/components/league/LiveNowBanner';
 
 interface LeaderboardResponse {
 	weeklyResults?: Array<{ userId: string; points: number; hasPicks: boolean; tfsPoints: number; pickedTeams: PickedTeam[] }>;
@@ -41,6 +44,7 @@ export default function Dashboard() {
 	const [leagues, setLeagues] = useState<DashboardLeague[] | null>(null);
 	const [summaries, setSummaries] = useState<Map<string, LeagueSummary>>(new Map());
 	const [totals, setTotals] = useState<{ correct: number; graded: number } | null>(null);
+	const [matchups, setMatchups] = useState<Map<string, MatchupMiniData>>(new Map());
 
 	useEffect(() => {
 		if (status !== 'authenticated') return;
@@ -53,17 +57,29 @@ export default function Dashboard() {
 			});
 	}, [status]);
 
-	// One leaderboard request per league, all in parallel
+	// One leaderboard + one matchups request per league, all in parallel
 	useEffect(() => {
 		if (!leagues?.length || !userId || liveWeek === null) return;
 		let cancelled = false;
 
+		const loadMatchup = async (leagueId: string): Promise<MatchupMiniData | null> => {
+			try {
+				const res = await fetch(`/api/league/${leagueId}/matchups?week=${liveWeek}`);
+				if (!res.ok) return null;
+				const data: MatchupsResponse = await res.json();
+				return { matchup: data.matchups.find(m => m.id === data.myMatchupId) ?? null, record: data.records[userId] };
+			} catch (error) {
+				console.error(`Error loading matchups for league ${leagueId}:`, error);
+				return null;
+			}
+		};
+
 		Promise.all(
 			leagues.map(async league => {
 				try {
-					const res = await fetch(`/api/leaderboard?week=${liveWeek}&leagueId=${league._id}`);
+					const [res, matchup] = await Promise.all([fetch(`/api/leaderboard?week=${liveWeek}&leagueId=${league._id}`), loadMatchup(league._id)]);
 					if (!res.ok) return null;
-					return { id: league._id, ...summarize(await res.json(), userId, league) };
+					return { id: league._id, matchup, ...summarize(await res.json(), userId, league) };
 				} catch (error) {
 					console.error(`Error loading league ${league._id}:`, error);
 					return null;
@@ -71,16 +87,19 @@ export default function Dashboard() {
 			})
 		).then(results => {
 			if (cancelled) return;
+			const matchupMap = new Map<string, MatchupMiniData>();
 			const map = new Map<string, LeagueSummary>();
 			let correct = 0;
 			let graded = 0;
 			for (const r of results) {
 				if (!r) continue;
 				map.set(r.id, r.summary);
+				if (r.matchup) matchupMap.set(r.id, r.matchup);
 				correct += r.correct;
 				graded += r.graded;
 			}
 			setSummaries(map);
+			setMatchups(matchupMap);
 			setTotals({ correct, graded });
 		});
 
@@ -134,6 +153,9 @@ export default function Dashboard() {
 				)}
 			</section>
 
+			{/* Live games: secured/projected points per league (renders nothing when no games are live) */}
+			{!!leagues?.length && <LiveNowBanner leagues={leagues} className='mb-8' />}
+
 			{/* KPIs */}
 			{!!leagues?.length && (
 				<section className='mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4'>
@@ -172,7 +194,7 @@ export default function Dashboard() {
 							))}
 						</div>
 					) : leagues.length > 0 ? (
-						<ActiveLeagues leagues={leagues} summaries={summaries} userId={userId} />
+						<ActiveLeagues leagues={leagues} summaries={summaries} userId={userId} matchups={matchups} />
 					) : (
 						<EmptyState
 							icon={Users}
