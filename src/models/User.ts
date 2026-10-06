@@ -60,6 +60,11 @@ const UserSchema = new mongoose.Schema({
 		weeklyRecap: {
 			type: Boolean,
 			default: true
+		},
+		// Push pick reminders (still also require the email reminder opt-ins). Missing = on.
+		pickReminders: {
+			type: Boolean,
+			default: true
 		}
 	},
 	// Unsubscribe token for one-click email unsubscribe
