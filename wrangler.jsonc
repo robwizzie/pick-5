@@ -18,10 +18,13 @@
 			"service": "pick-5"
 		}
 	],
-	// Same schedules as vercel.json (UTC). Both hit /api/cron/master, which decides
-	// what to do from the day of week.
+	// UTC. Both run /api/cron/master, which picks the jobs from the trigger and the time in
+	// US Eastern (DST-aware); see src/lib/notifications/schedule.ts, which must list the same
+	// two strings, and DEPLOY-CLOUDFLARE.md section 3.
+	//  - every 10 min during the hours a game can finish (game-result pushes)
+	//  - hourly at :05 (pick reminders, score emails, weekly recap, odds; each runs only in its window)
 	"triggers": {
-		"crons": ["0 9 * * 0", "0 14 * * 1,2,4,5,6"]
+		"crons": ["*/10 0-8,15-23 * * *", "5 * * * *"]
 	},
 	"observability": {
 		"enabled": true

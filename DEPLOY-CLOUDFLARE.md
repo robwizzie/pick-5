@@ -11,13 +11,13 @@ same URLs, same Google login, same MongoDB Atlas database, same emails and push 
 
 | File | Purpose |
 | --- | --- |
-| `wrangler.jsonc` | Worker config: name `pick-5`, `nodejs_compat`, static assets, the two cron schedules |
+| `wrangler.jsonc` | Worker config: name `pick-5`, `nodejs_compat`, static assets, the two cron triggers |
 | `open-next.config.ts` | OpenNext config. Prerendered pages are served from Workers Static Assets (no R2/KV needed) |
 | `cloudflare/worker.ts` | Worker entry: the generated Next.js worker, a `scheduled` handler for cron, and closing each request's MongoDB connection |
 | `src/lib/db.ts` | On Workers each request gets its own MongoDB connection. On Node.js and Vercel it works as before |
 | `.dev.vars.example` | Template for local `npm run preview` secrets |
 
-`vercel.json` is unchanged, so the app still builds and runs on Vercel.
+`vercel.json` is unchanged (legacy, for rollback only; see section 3), so the app still builds and runs on Vercel.
 
 ## Before you start: the free-plan limits
 
@@ -33,8 +33,10 @@ The Workers **Free** plan allows **10 ms of CPU time per invocation** (Cron Trig
   with error **1102**.
 - **CPU, bcrypt:** creating a league with a password, or joining one, runs bcrypt (about
   80–100 ms of CPU). These requests will fail on the Free plan.
-- **CPU, cron:** the weekly cron jobs render one email per user (about 6 ms each, plus about
-  60 ms the first time). These will also exceed 10 ms on the Free plan.
+- **CPU, cron:** the cron jobs use the database and render one email per user (about 6 ms each,
+  plus about 60 ms the first time). These will also exceed 10 ms on the Free plan. A run that is
+  cut off is resumed by the next run (every job keeps "sent" markers), but on the Free plan most
+  runs that have real work to do will be cut off, so notifications need **Workers Paid**.
 
 **Recommendation:** deploy on the Free plan and watch the Worker's Observability logs for
 `exceededCpu` / error 1102 outcomes. If they appear, upgrade to **Workers Paid** ($5/month,
@@ -86,27 +88,78 @@ None of these are needed at **build** time. The code reads all of them at runtim
 | `VAPID_PRIVATE_KEY` | **secret** | yes (push) | Must be the same pair as on Vercel, or existing push subscriptions stop working |
 | `VAPID_SUBJECT` | plain | optional | Defaults to `mailto:noreply@sportspick5.com` |
 | `ODDS_API_KEY` | **secret** | yes (odds) | New name. The old `NEXT_PUBLIC_ODDS_API_KEY` is still read as a fallback. The key is only used server-side |
-| `NEXT_PUBLIC_BASE_URL` | plain | optional | Used only in email links. Defaults to `https://www.sportspick5.com` |
+| `NEXT_PUBLIC_BASE_URL` | plain | optional | Used only in email links (and the emails' `List-Unsubscribe` header). Defaults to `https://www.sportspick5.com` |
+| `RESEND_MAX_PER_SECOND` | plain | optional | Email send rate. Defaults to `2` (Resend's default per-team limit); raise it only if your Resend plan allows more |
 
 Don't set `NODE_ENV`. The build sets it to `production`, which is what makes the cron routes
 require `CRON_SECRET`.
 
-## 3. Cron Triggers
+## 3. Cron Triggers and the notification schedule
 
-Nothing to click: `wrangler.jsonc` declares the same two UTC schedules as `vercel.json`:
+`wrangler.jsonc` declares two UTC cron triggers. Both run the `scheduled` handler in
+`cloudflare/worker.ts`, which calls `GET /api/cron/master` in-process with
+`Authorization: Bearer $CRON_SECRET` plus the cron expression (`x-cron-trigger`) and scheduled time
+(`x-cron-scheduled-time`). The route converts the time to US Eastern (so DST is handled in code,
+not in the cron strings) and runs the jobs whose window is open
+(`src/lib/notifications/schedule.ts`, which must list the same two strings as `wrangler.jsonc`;
+an unknown string runs every job whose window is open).
 
-- `0 9 * * 0` (Sunday 09:00 UTC)
-- `0 14 * * 1,2,4,5,6` (Mon/Tue/Thu/Fri/Sat 14:00 UTC)
+| Cron (UTC) | What it is for |
+| --- | --- |
+| `*/10 0-8,15-23 * * *` | Game-result pushes. Every 10 min from 11:00 to 03:59 Eastern, any day (Thanksgiving, Christmas, Saturday and international games included). Each run makes one ESPN request; it only touches the database when a game has gone final within ~8 hours of its kickoff, so most runs are no-ops |
+| `5 * * * *` | Hourly at :05: reminders, score emails, recap push and odds, each only inside its window below |
 
-Both run the `scheduled` handler in `cloudflare/worker.ts`. It calls `GET /api/cron/master`
-in-process with `Authorization: Bearer $CRON_SECRET`, so the route's own auth check still gates
-the job, and the route decides what to do from the day of the week (as on Vercel). After the
-first deploy, the Worker's **Settings → Trigger Events** should list both crons. Past runs and
-their logs are on the Worker's cron/observability views. Cron runs count against the same
-Free-plan CPU limit (see above).
+Schedule in Eastern time (EDT or EST, whichever is in effect):
+
+| Job | When | Notes |
+| --- | --- | --- |
+| Game result push | Within ~10 min of each game going final | One push per (user, league) per batch of games that finished together; opens the league page |
+| Thursday pick reminder (email + push) | Thu from 10:05, retried hourly until 18:05 | Only users with a league still missing picks. Skipped once the Thursday game has kicked off, and in weeks with no Thursday game (e.g. week 18) |
+| Final pick reminder (email + push) | Sat from 10:05, retried hourly until 17:05 | Same rules. Push replaces Thursday's on the device |
+| Weekly score emails | Tue from 10:05 (after MNF), until Thu 08:05 | Waits until every game of the week is final, so a week with a late/rescheduled game goes out when it ends |
+| Weekly recap push | Same as score emails | |
+| Odds snapshot | Tue 10:05, Fri 10:05, Sun 05:05 | |
+
+Every send is recorded before it goes out (unique indexes in MongoDB: `gamenotifications` for
+pushes, `notificationmarkers` for reminders, score emails and "job done" flags), so overlapping or
+repeated runs never send anything twice, and a run that runs out of time (each job stops itself
+after 1 min on the 10-minute trigger, 4 min on the hourly one) is finished by the next run. Failed
+emails are retried on later runs, up to 3 attempts. Emails also carry the marker as a Resend
+idempotency key.
+
+The `notificationmarkers` collection and its indexes are created automatically on first use.
+
+**Plan limits:** this uses 2 cron triggers (Cloudflare allows 5 per account on Free, 250 on Paid).
+About 108 + 24 cron invocations a day, which is negligible next to the request budget. On Free,
+the 10 ms CPU limit will cut off any run that does real work (see "Before you start"), so use
+Workers Paid for reliable notifications.
+
+**Removed:** the browser-side poller (`useGameNotificationPolling`, which had every signed-in tab
+call `/api/notifications/check-games` every 5 min during games) existed only because the cron ran
+once a day. The 10-minute cron replaces it, so it is gone (fewer requests, no duplicate pushes from
+racing tabs). `/api/notifications/check-games` remains as a no-op for tabs still running old code.
+
+Manual runs (same auth header):
+
+- `GET /api/cron/master?trigger=hourly` (or `tick`, `all`): run what the schedule says for now.
+- `GET /api/cron/master?jobs=score-emails,weekly-recap`: run the named jobs regardless of time.
+  Job names: `game-results`, `pick-reminder-thursday`, `pick-reminder-saturday`, `score-emails`,
+  `weekly-recap`, `fetch-odds`. All are safe to repeat.
+- The old per-job routes (`/api/cron/send-score-emails`, `send-pick-reminders?kind=thursday`,
+  `send-game-notifications?all=1`, …) still work and do the same thing.
+
+After the first deploy, the Worker's **Settings → Trigger Events** should list both crons. Past runs
+and their logs are on the Worker's cron/observability views; each run logs one line per job.
 
 Run cron locally: `npm run preview`, then
-`curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=0+14+*+*+1,2,4,5,6"`.
+`curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=5+*+*+*+*"`.
+
+**Vercel (`vercel.json`) is legacy.** It keeps the old daily schedules, because Vercel Hobby only
+allows daily crons. If you ever roll back to Vercel, those runs carry no trigger header, so the
+master route runs every job whose window is open at that moment: at 14:00 UTC that is still
+reminders on Thu/Sat and score emails, recap and odds on Tue (as before), but game-result pushes
+would only come from that daily run. Disable the Vercel crons while Cloudflare is live so jobs
+don't run on both.
 
 ## 4. Test on the workers.dev URL first
 
@@ -180,7 +233,6 @@ counted. Everything else (pages, `/api/*`) counts. The client polls:
 | League page recap check | 2 min, always | 1 |
 | Leaderboard / Results / SeasonStats (active tab) | 2 min during game windows, else 5 min | 1–3 |
 | WeeklyPicks | same, only while games are live | ~1–2 |
-| `useGameNotificationPolling` (every page, signed-in users) | 5 min during game windows | 1 |
 
 One league tab left open costs about **55 requests/hour** outside game windows and about
 **100/hour** during games, which is roughly **1,300–2,400 requests/day**. Background tabs keep
