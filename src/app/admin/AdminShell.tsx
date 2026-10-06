@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { ADMIN_USER_ID } from '@/lib/constants';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminShell({ children }: { children: React.ReactNode }) {
 	const { data: session, status } = useSession();
 	const pathname = usePathname();
 	const isAdminHome = pathname === '/admin';
