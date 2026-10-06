@@ -2,6 +2,7 @@
 import { connectDB } from '@/lib/db';
 import { OddsSnapshot } from '@/models/OddsSnapshot';
 import { NFLService } from '@/services/nflService';
+import { getCurrentSeasonYear } from '@/lib/seasonYear';
 
 interface OddsData {
 	home: { odds: number; bookmaker: string };
@@ -156,11 +157,11 @@ export class OddsService {
 
 			// Get current week and season
 			const currentWeek = targetWeek || (await NFLService.getCurrentWeek());
-			const currentSeason = new Date().getFullYear();
+			const currentSeason = getCurrentSeasonYear();
 			console.log(`[OddsService] Fetching odds for Week ${currentWeek}, Season ${currentSeason}`);
 
 			// Fetch weekly games from ESPN to match game IDs
-			const weeklyGames = await NFLService.getWeeklyGames(currentWeek);
+			const weeklyGames = await NFLService.getWeeklyGames(currentWeek, currentSeason);
 
 			let snapshotsCreated = 0;
 			let snapshotsUpdated = 0;
