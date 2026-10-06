@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import CountUp from 'react-countup';
 import { useSession } from 'next-auth/react';
-import { Crown, Trophy, Users } from 'lucide-react';
+import { Crown, Swords, Trophy, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -15,6 +15,9 @@ import { useLeague } from '@/contexts/LeagueContext';
 import { NFLService } from '@/services/nflService';
 import { cn } from '@/lib/utils';
 import { UserPicksModal } from './UserPicksModal';
+import { MatchupsBoard } from '@/components/league/MatchupsBoard';
+import { BadgeStrip } from '@/components/badges/BadgeStrip';
+import type { Badge, LeagueBadgesResponse } from '@/lib/badges';
 
 interface PickedTeam {
 	team: string;
@@ -107,7 +110,19 @@ function PlayerAvatar({ name, image, className, ringClass }: { name: string; ima
 }
 
 /** Top-3 podium: 2nd · 1st · 3rd, with the leader raised. */
-function Podium({ entries, sub, currentUserId, onSelect }: { entries: BoardEntry[]; sub: (entry: BoardEntry) => React.ReactNode; currentUserId?: string; onSelect: (entry: BoardEntry) => void }) {
+function Podium({
+	entries,
+	sub,
+	currentUserId,
+	onSelect,
+	badgesByUser
+}: {
+	entries: BoardEntry[];
+	sub: (entry: BoardEntry) => React.ReactNode;
+	currentUserId?: string;
+	onSelect: (entry: BoardEntry) => void;
+	badgesByUser?: Map<string, Badge[]>;
+}) {
 	const order = [entries[1], entries[0], entries[2]];
 	const heights = ['h-14', 'h-20', 'h-10'];
 
@@ -138,6 +153,11 @@ function Podium({ entries, sub, currentUserId, onSelect }: { entries: BoardEntry
 							<span className={cn('absolute -bottom-1.5 left-1/2 grid h-5 min-w-5 -translate-x-1/2 place-items-center rounded-full bg-background px-1 font-display text-[11px] font-extrabold italic tabular ring-1 ring-white/10', m.text)}>{entry.rank}</span>
 						</div>
 						<p className={cn('mt-3 w-full truncate text-center text-xs font-semibold sm:text-sm', isMe ? 'text-primary' : 'text-foreground')}>{entry.player}</p>
+						{entry.userId && badgesByUser?.get(entry.userId)?.some(b => b.earned) && (
+							<span className='mb-0.5 mt-0.5'>
+								<BadgeStrip badges={badgesByUser.get(entry.userId)} />
+							</span>
+						)}
 						<p className={cn('font-display font-extrabold italic leading-none tabular tracking-tight', isLeader ? 'text-3xl sm:text-4xl' : 'text-2xl sm:text-3xl', m.text)}>
 							<CountUp end={entry.points} duration={0.8} preserveValue />
 						</p>
@@ -162,7 +182,8 @@ function Row({
 	isMe,
 	onSelect,
 	children,
-	right
+	right,
+	badges
 }: {
 	entry: BoardEntry;
 	index: number;
@@ -170,6 +191,7 @@ function Row({
 	onSelect: (entry: BoardEntry) => void;
 	children: React.ReactNode;
 	right: React.ReactNode;
+	badges?: Badge[];
 }) {
 	const Tag = entry.clickable ? 'button' : 'div';
 	return (
@@ -188,6 +210,7 @@ function Row({
 				<p className='flex items-center gap-1.5 truncate text-sm font-semibold'>
 					<span className='truncate'>{entry.player}</span>
 					{isMe && <span className='shrink-0 text-[10px] font-bold uppercase tracking-wider text-primary'>You</span>}
+					<BadgeStrip badges={badges} />
 				</p>
 				<div className='mt-0.5'>{children}</div>
 			</div>
@@ -255,6 +278,26 @@ export function Leaderboard() {
 	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 	const [leagueMode, setLeagueMode] = useState<string>('');
 	const [gamesStarted, setGamesStarted] = useState<boolean>(false);
+	const [badgesByUser, setBadgesByUser] = useState<Map<string, Badge[]>>(new Map());
+
+	// Season badges for the row icons (only finished games count, so no polling needed)
+	useEffect(() => {
+		if (!leagueId) return;
+		let cancelled = false;
+		const loadBadges = () =>
+			fetch(`/api/league/${leagueId}/badges`)
+				.then(res => (res.ok ? (res.json() as Promise<LeagueBadgesResponse>) : null))
+				.then(data => {
+					if (!cancelled && data) setBadgesByUser(new Map(data.members.map(m => [m.userId, m.badges])));
+				})
+				.catch(err => console.error('[Leaderboard] Error fetching badges:', err));
+		loadBadges();
+		window.addEventListener('refreshLeaderboard', loadBadges);
+		return () => {
+			cancelled = true;
+			window.removeEventListener('refreshLeaderboard', loadBadges);
+		};
+	}, [leagueId]);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -407,7 +450,7 @@ export function Leaderboard() {
 
 		return (
 			<div>
-				{showPodium && <Podium entries={entries} sub={sub} currentUserId={currentUserId} onSelect={handleSelect} />}
+				{showPodium && <Podium entries={entries} sub={sub} currentUserId={currentUserId} onSelect={handleSelect} badgesByUser={badgesByUser} />}
 				{rest.length > 0 && (
 					<div className='-mx-1 space-y-1'>
 						{rest.map((entry, i) => {
@@ -420,6 +463,7 @@ export function Leaderboard() {
 										index={i}
 										isMe={isMe(entry)}
 										onSelect={handleSelect}
+										badges={entry.userId ? badgesByUser.get(entry.userId) : undefined}
 										right={
 											<div className='flex items-baseline gap-3'>
 												{leagueMode === 'steve' && (
@@ -455,6 +499,7 @@ export function Leaderboard() {
 									index={i}
 									isMe={isMe(entry)}
 									onSelect={handleSelect}
+									badges={entry.userId ? badgesByUser.get(entry.userId) : undefined}
 									right={
 										<span>
 											<span className='block font-display text-2xl font-extrabold italic leading-none tabular'>
@@ -521,15 +566,26 @@ export function Leaderboard() {
 				<p className='rounded-xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive'>{error}</p>
 			) : (
 				<Tabs value={tab} onValueChange={setTab}>
-					<TabsList className='mb-6 grid w-full grid-cols-2'>
-						<TabsTrigger value='weekly'>Week {currentWeek}</TabsTrigger>
-						<TabsTrigger value='season'>Season</TabsTrigger>
+					<TabsList className='mb-6 grid w-full grid-cols-3'>
+						<TabsTrigger value='weekly' className='px-2'>
+							Week {currentWeek}
+						</TabsTrigger>
+						<TabsTrigger value='season' className='px-2'>
+							Season
+						</TabsTrigger>
+						<TabsTrigger value='matchups' className='px-2'>
+							<Swords aria-hidden />
+							H2H
+						</TabsTrigger>
 					</TabsList>
 					<TabsContent value='weekly' className='mt-0'>
 						{renderBoard(weeklyEntries, 'weekly')}
 					</TabsContent>
 					<TabsContent value='season' className='mt-0'>
 						{renderBoard(seasonEntries, 'season')}
+					</TabsContent>
+					<TabsContent value='matchups' className='mt-0'>
+						{leagueId && <MatchupsBoard leagueId={leagueId} week={currentWeek} currentUserId={currentUserId} badgesByUser={badgesByUser} />}
 					</TabsContent>
 				</Tabs>
 			)}

@@ -11,6 +11,8 @@ import { Card } from '@/components/ui/card';
 import { EmptyState, PageContainer, PageHeader, Pill, SectionHeader, StatTile } from '@/components/ui/page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { BadgeCard } from '@/components/badges/BadgeCard';
+import type { UserBadge, UserBadgesResponse } from '@/lib/badges';
 
 interface LeagueStats {
 	leagueId: string;
@@ -120,6 +122,20 @@ const StatsPage = () => {
 	const [allTimeStats, setAllTimeStats] = useState<AllTimeStats | null>(null);
 	const [leagueStats, setLeagueStats] = useState<LeagueStats[]>([]);
 	const [weekTotals, setWeekTotals] = useState<WeekTotal[]>([]);
+	const [badges, setBadges] = useState<UserBadge[] | null>(null);
+
+	// Badges load independently (in parallel with the stats below)
+	const fetchBadges = useCallback(async () => {
+		try {
+			const res = await fetch('/api/user/badges');
+			if (!res.ok) throw new Error(`Failed to fetch badges (${res.status})`);
+			const data: UserBadgesResponse = await res.json();
+			setBadges(data.badges);
+		} catch (error) {
+			console.error('Error fetching badges:', error);
+			setBadges([]);
+		}
+	}, []);
 
 	const fetchStats = useCallback(async () => {
 		try {
@@ -324,8 +340,9 @@ const StatsPage = () => {
 
 		if (status === 'authenticated') {
 			fetchStats();
+			fetchBadges();
 		}
-	}, [status, router, fetchStats]);
+	}, [status, router, fetchStats, fetchBadges]);
 
 
 	const achievements = useMemo(() => (allTimeStats ? getAchievements(allTimeStats) : []), [allTimeStats]);
@@ -469,6 +486,9 @@ const StatsPage = () => {
 				</Card>
 			</div>
 
+			{/* Badges */}
+			<BadgesSection badges={badges} multiLeague={leagueStats.length > 1} />
+
 			{/* Week by week */}
 			{weekTotals.length > 0 && (
 				<section className='mt-8'>
@@ -558,6 +578,25 @@ function Metric({ label, value, sub, accent, compact }: { label: string; value: 
 			<dd className={cn('mt-1 font-display font-extrabold italic leading-none tabular', compact ? 'text-xl' : 'text-3xl', accent && 'text-accent')}>{value}</dd>
 			{sub && <dd className='mt-1 text-[11px] text-muted-foreground'>{sub}</dd>}
 		</div>
+	);
+}
+
+function BadgesSection({ badges, multiLeague }: { badges: UserBadge[] | null; multiLeague: boolean }) {
+	if (badges && badges.length === 0) return null;
+	const earned = badges?.filter(b => b.earned).length ?? 0;
+	// Earned first (keeping prestige order), then locked by progress
+	const ordered = badges
+		? [...badges].sort((a, b) => Number(b.earned) - Number(a.earned) || (b.earned ? 0 : b.progress.current / b.progress.target - a.progress.current / a.progress.target))
+		: [];
+	return (
+		<section className='mt-8'>
+			<SectionHeader title='Badges' icon={Medal} action={badges && <Pill tone={earned ? 'accent' : 'muted'}>{earned}/{badges.length} earned</Pill>} />
+			<div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+				{badges
+					? ordered.map((b, i) => <BadgeCard key={b.id} badge={b} index={i} showLeague={multiLeague} />)
+					: Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className='h-44 rounded-2xl' />)}
+			</div>
+		</section>
 	);
 }
 
@@ -654,12 +693,12 @@ function WeekColumns({ weeks }: { weeks: WeekTotal[] }) {
 
 function getAchievements(s: AllTimeStats): Achievement[] {
 	const list: Achievement[] = [];
-	if (s.perfectWeeks > 0) list.push({ icon: Crown, label: 'Perfect Week', value: `${s.perfectWeeks}x`, tone: 'gold', description: 'Got all 5 picks correct in a week' });
 	if (s.totalPoints >= 100) list.push({ icon: Trophy, label: 'Century Club', value: '100+', tone: 'primary', description: 'Earned 100+ total points' });
 	if (s.totalPoints >= 200) list.push({ icon: Rocket, label: 'Points Machine', value: '200+', tone: 'hot', description: 'Earned 200+ total points' });
 	if (s.winPercentage >= 60) list.push({ icon: Star, label: 'Elite Picker', value: `${Math.round(s.winPercentage)}%`, tone: 'accent', description: 'Maintained 60%+ win rate' });
 	if (s.winPercentage >= 80) list.push({ icon: Crosshair, label: 'Sharpshooter', value: `${Math.round(s.winPercentage)}%`, tone: 'hot', description: 'Achieved 80%+ win rate' });
-	if (s.bestStreak >= 5) list.push({ icon: Flame, label: 'Hot Streak', value: `${s.bestStreak}`, tone: 'warning', description: '5+ weeks with 60%+ win rate' });
+	// (Perfect Week and the pick-level Hot Streak are season badges now; this one is week-based)
+	if (s.bestStreak >= 5) list.push({ icon: Flame, label: 'Steady Hand', value: `${s.bestStreak}`, tone: 'warning', description: '5+ weeks with 60%+ win rate' });
 	if (s.bestStreak >= 10) list.push({ icon: Sparkles, label: 'Unstoppable', value: `${s.bestStreak}`, tone: 'gold', description: '10+ week winning streak' });
 	if (s.totalTFSPoints >= 20) list.push({ icon: Zap, label: 'TFS Master', value: `${s.totalTFSPoints}`, tone: 'violet', description: 'Earned 20+ TFS bonus points' });
 	if (s.totalTFSPoints >= 50) list.push({ icon: Zap, label: 'TFS Expert', value: `${s.totalTFSPoints}`, tone: 'violet', description: 'Earned 50+ TFS bonus points' });
