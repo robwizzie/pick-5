@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import crypto from 'crypto';
+import { cleanSettings } from '@/lib/leagueRules';
+
+const MODES = ['standard', 'steve', 'survivor'];
 
 export const dynamic = 'force-dynamic';
 
@@ -21,9 +24,18 @@ export async function POST(req: Request) {
 		}
 
 		// Parse request body
-		const { sport, scoringMode, name, password } = await req.json();
+		const { sport, scoringMode, name, password, settings: rawSettings } = await req.json();
 		if (!sport || !scoringMode || !name || !password) {
 			return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+		}
+		if (!MODES.includes(scoringMode)) {
+			return NextResponse.json({ error: 'Unknown league type' }, { status: 400 });
+		}
+		let settings = {};
+		if (rawSettings !== undefined) {
+			const cleaned = cleanSettings(rawSettings);
+			if ('error' in cleaned) return NextResponse.json({ error: cleaned.error }, { status: 400 });
+			settings = cleaned.settings;
 		}
 
 		// Connect to the database
@@ -50,6 +62,7 @@ export async function POST(req: Request) {
 		const newLeague = await League.create({
 			sport,
 			mode: scoringMode,
+			settings,
 			name,
 			password,
 			creatorId: session.user.id, // Set creatorId from the session

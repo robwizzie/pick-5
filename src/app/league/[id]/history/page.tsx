@@ -62,6 +62,47 @@ interface League {
 	name: string;
 	sport: string;
 	mode: string;
+	settings?: { trophyName?: string; lastPlacePunishment?: string };
+}
+
+interface DynastyRow {
+	userId: string;
+	userName: string;
+	userImage: string | null;
+	titles: number[];
+	seasons: number;
+	totalPoints: number;
+	correctPicks: number;
+	totalPicks: number;
+	weeksWon: number;
+	bestFinish: number;
+	avgFinish: number;
+}
+
+/**
+ * All-time totals per player across every archived season (newest first, so a player's latest
+ * name and photo are kept). Titles first, then average finish.
+ */
+function buildDynasty(history: SeasonHistory[]): DynastyRow[] {
+	const rows = new Map<string, DynastyRow & { finishSum: number }>();
+	for (const season of history) {
+		const champs = new Set(season.champions.map(c => c.userId));
+		for (const p of season.standings) {
+			const row = rows.get(p.userId) ?? { userId: p.userId, userName: p.userName, userImage: p.userImage, titles: [], seasons: 0, totalPoints: 0, correctPicks: 0, totalPicks: 0, weeksWon: 0, bestFinish: Infinity, avgFinish: 0, finishSum: 0 };
+			row.seasons++;
+			row.totalPoints += p.totalPoints;
+			row.correctPicks += p.correctPicks;
+			row.totalPicks += p.totalPicks;
+			row.weeksWon += p.weeksWon;
+			row.bestFinish = Math.min(row.bestFinish, p.rank);
+			row.finishSum += p.rank;
+			if (champs.has(p.userId)) row.titles.push(season.seasonYear);
+			rows.set(p.userId, row);
+		}
+	}
+	return Array.from(rows.values())
+		.map(({ finishSum, ...row }) => ({ ...row, titles: row.titles.sort((a, b) => a - b), avgFinish: finishSum / row.seasons }))
+		.sort((a, b) => b.titles.length - a.titles.length || a.avgFinish - b.avgFinish || b.totalPoints - a.totalPoints);
 }
 
 const RANK_COLORS: Record<number, string> = {
@@ -249,7 +290,7 @@ export default function LeagueHistoryPage() {
 					</div>
 
 					{/* Champion hero */}
-					<ChampionHero season={selectedSeason} />
+					<ChampionHero season={selectedSeason} trophyName={league?.settings?.trophyName} />
 
 					{/* Season stats */}
 					<section>
@@ -329,6 +370,17 @@ export default function LeagueHistoryPage() {
 											);
 										})}
 									</ol>
+									{league?.settings?.lastPlacePunishment && selectedSeason.standings.length > 1 && (
+										<div className='mx-1 mb-1 mt-2 flex items-start gap-2.5 rounded-xl border border-accent-2/25 bg-accent-2/[0.07] px-3 py-2.5'>
+											<span className='text-lg leading-none' aria-hidden>
+												🥄
+											</span>
+											<p className='min-w-0 text-xs text-muted-foreground'>
+												<span className='font-semibold text-foreground'>{selectedSeason.standings.at(-1)!.userName}</span> finished last and owes the league:{' '}
+												<span className='text-foreground/90'>{league.settings.lastPlacePunishment}</span>
+											</p>
+										</div>
+									)}
 								</Card>
 							</TabsContent>
 
@@ -362,13 +414,16 @@ export default function LeagueHistoryPage() {
 							</TabsContent>
 						</Tabs>
 					</section>
+
+					{/* All-time */}
+					<DynastyBoard rows={buildDynasty(history)} currentUserId={currentUserId} seasons={history.length} />
 				</div>
 			)}
 		</PageContainer>
 	);
 }
 
-function ChampionHero({ season }: { season: SeasonHistory }) {
+function ChampionHero({ season, trophyName }: { season: SeasonHistory; trophyName?: string }) {
 	const champion = season.champions[0];
 	const championStats = champion ? season.standings.find(p => p.userId === champion.userId) : undefined;
 	const coChamps = season.champions.length > 1;
@@ -389,7 +444,7 @@ function ChampionHero({ season }: { season: SeasonHistory }) {
 
 				<div className='min-w-0 flex-1'>
 					<div className='mb-2 flex flex-wrap items-center gap-2'>
-						<p className='eyebrow text-[#FFD66B]'>{coChamps ? 'Season co-champions' : 'Season champion'}</p>
+						<p className='eyebrow text-[#FFD66B]'>{trophyName ? `${coChamps ? 'Co-winners' : 'Winner'} of ${trophyName}` : coChamps ? 'Season co-champions' : 'Season champion'}</p>
 						<Pill tone='muted'>{seasonLabel(season.seasonYear)}</Pill>
 						{season.leagueMode && <Pill tone={season.leagueMode === 'steve' ? 'accent' : 'primary'}>{season.leagueMode === 'steve' ? 'Steve' : 'Standard'}</Pill>}
 					</div>
@@ -413,6 +468,68 @@ function ChampionHero({ season }: { season: SeasonHistory }) {
 			</div>
 		</section>
 	);
+}
+
+function DynastyBoard({ rows, currentUserId, seasons }: { rows: DynastyRow[]; currentUserId?: string; seasons: number }) {
+	if (rows.length === 0) return null;
+	return (
+		<section>
+			<SectionHeader title='Dynasty' icon={Crown} action={<Pill>{seasons === 1 ? '1 season' : `All ${seasons} seasons`}</Pill>} />
+			<Card className='p-2 sm:p-3'>
+				<div className='hidden items-center gap-3 px-3 pb-2 pt-1 sm:flex'>
+					<span className='eyebrow flex-1'>Player</span>
+					<span className='eyebrow w-16 text-right'>Titles</span>
+					<span className='eyebrow w-20 text-right'>Career</span>
+					<span className='eyebrow w-16 text-right'>Avg finish</span>
+					<span className='eyebrow w-16 text-right'>Pts</span>
+				</div>
+				<ol className='space-y-1'>
+					{rows.map((row, index) => {
+						const isYou = row.userId === currentUserId;
+						const winPct = row.totalPicks > 0 ? Math.round((row.correctPicks / row.totalPicks) * 100) : 0;
+						return (
+							<li key={row.userId} className={cn('flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-white/[0.04]', isYou && 'bg-primary/[0.08] ring-1 ring-primary/30')}>
+								<span className={cn('w-6 text-center font-display text-lg font-extrabold italic tabular', RANK_COLORS[index + 1] ?? 'text-muted-foreground')}>{index + 1}</span>
+								<Avatar className='h-9 w-9 ring-1 ring-white/10'>
+									<AvatarImage src={row.userImage || undefined} alt={row.userName} />
+									<AvatarFallback className='bg-primary/15 text-xs font-bold text-primary'>{initials(row.userName)}</AvatarFallback>
+								</Avatar>
+								<div className='min-w-0 flex-1'>
+									<p className={cn('truncate font-semibold', isYou && 'text-primary')}>{row.userName}</p>
+									<p className='text-xs text-muted-foreground tabular'>
+										{row.titles.length > 0 ? (
+											<span className='text-[#FFD66B]'>
+												{'🏆'.repeat(Math.min(row.titles.length, 5))} {row.titles.map(y => `’${String(y).slice(-2)}`).join(', ')}
+											</span>
+										) : (
+											`Best finish: ${ordinal(row.bestFinish)}`
+										)}
+										<span className='sm:hidden'>
+											{' '}
+											· {winPct}% · {row.seasons} {row.seasons === 1 ? 'season' : 'seasons'}
+										</span>
+									</p>
+								</div>
+								<span className='hidden w-16 text-right font-display text-xl font-extrabold italic tabular text-[#FFD66B] sm:block'>{row.titles.length}</span>
+								<span className='hidden w-20 text-right text-sm tabular text-muted-foreground sm:block'>
+									{row.correctPicks}/{row.totalPicks}
+									<span className='block text-[11px]'>{winPct}%</span>
+								</span>
+								<span className='hidden w-16 text-right text-sm font-semibold tabular sm:block'>{row.avgFinish.toFixed(1)}</span>
+								<span className='w-16 text-right font-display text-2xl font-extrabold italic tabular leading-none'>{row.totalPoints}</span>
+							</li>
+						);
+					})}
+				</ol>
+			</Card>
+		</section>
+	);
+}
+
+function ordinal(n: number) {
+	const mod100 = n % 100;
+	const suffix = mod100 >= 11 && mod100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+	return `${n}${suffix}`;
 }
 
 function MiniStat({ label, value }: { label: string; value: React.ReactNode }) {

@@ -6,7 +6,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { TeamLogo } from '@/components/ui/team-logo';
 import { cn } from '@/lib/utils';
 import { calculatePointsFromOdds, formatOdds, getOddsBadgeClass } from '@/utils/oddsUtils';
-import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
+import { ScoringService } from '@/services/scoringService';
+import { useLeagueRules } from '@/contexts/LeagueRulesContext';
 
 interface TeamInfo {
 	team: string;
@@ -26,6 +27,16 @@ interface Game {
 	clock?: string; // Time remaining (e.g., "12:34")
 	period?: number; // Quarter/period number (1-4)
 	periodDisplay?: string; // e.g., "Q1", "OT"
+}
+
+/** A correct pick taken by at most this share of the league is called out as contrarian. */
+const CONTRARIAN_SHARE = 25;
+
+/** League members with any pick this week, from the per-game picks map. */
+export function countLeaguePickers(byGame: Record<string, GamePicksData | undefined>): number {
+	const ids = new Set<string>();
+	Object.values(byGame).forEach(g => [...(g?.away ?? []), ...(g?.home ?? [])].forEach(p => ids.add(p.userId)));
+	return ids.size;
 }
 
 interface UserPick {
@@ -48,6 +59,8 @@ interface GameCardProps {
 	isCorrect?: boolean | null;
 	noHover?: boolean;
 	leaguePicks?: GamePicksData;
+	/** League members with picks this week: turns pickers into "% of the league" */
+	leagueSize?: number;
 	leagueMode?: string;
 	forceShowOdds?: boolean; // Always show odds regardless of league mode
 	lockedTeam?: string; // The team picked as this week's Lock (scores double if correct)
@@ -105,17 +118,18 @@ function PickedByAvatars({ picks, maxVisible = 4 }: { picks: UserPick[]; maxVisi
 
 /** Gold "LOCK 2×" marker for a player's lock of the week. `compact` drops the word for tight spots. */
 export function LockBadge({ compact = false, className }: { compact?: boolean; className?: string }) {
+	const multiplier = useLeagueRules().lockMultiplier;
 	return (
 		<span
 			className={cn(
 				'inline-flex shrink-0 items-center gap-1 rounded-full bg-warning px-1.5 py-0.5 text-[10px] font-extrabold uppercase leading-none tracking-wider text-warning-foreground shadow-[0_6px_18px_-6px_hsl(var(--warning)/0.8)]',
 				className
 			)}
-			title={`Lock of the week: scores ${LOCK_MULTIPLIER}× if correct`}
+			title={`Lock of the week: scores ${multiplier}× if correct`}
 		>
 			<Lock className='h-2.5 w-2.5' strokeWidth={3} aria-hidden />
 			{compact ? '' : 'Lock '}
-			<span className='tabular'>{LOCK_MULTIPLIER}×</span>
+			<span className='tabular'>{multiplier}×</span>
 		</span>
 	);
 }
@@ -169,10 +183,12 @@ interface TeamTileProps {
 	interactive: boolean;
 	dimmed: boolean;
 	pickers?: UserPick[];
+	/** Share of the league on this team (0-100), once the game has kicked off */
+	pickShare?: number | null;
 	onClick?: () => void;
 }
 
-function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, showScore, showOdds, interactive, dimmed, pickers, onClick }: TeamTileProps) {
+function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, showScore, showOdds, interactive, dimmed, pickers, pickShare, onClick }: TeamTileProps) {
 	const graded = isSelected && typeof result === 'boolean';
 	const tone = graded ? (result ? 'win' : 'loss') : isSelected ? 'selected' : isWinner ? 'winner' : 'idle';
 
@@ -186,8 +202,9 @@ function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, s
 		loss: 'border-accent-2/50 bg-accent-2/[0.10]'
 	}[tone];
 
-	// The lock's line pays double
-	const points = showOdds && team.odds !== undefined ? ScoringService.pointsForPick({ odds: team.odds }, 'standard', calculatePointsFromOdds, isLock) : null;
+	// The lock's line pays the league's lock multiplier
+	const { lockMultiplier } = useLeagueRules();
+	const points = showOdds && team.odds !== undefined ? ScoringService.pointsForPick({ odds: team.odds }, { mode: 'standard', lockMultiplier, tfsEnabled: false }, calculatePointsFromOdds, isLock) : null;
 	const Tag = interactive ? 'button' : 'div';
 
 	return (
@@ -233,9 +250,18 @@ function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, s
 				)}
 
 				{pickers && pickers.length > 0 && (
-					<div className='mt-2'>
+					<div className={cn('mt-2 flex items-center gap-1.5', side === 'home' && 'sm:flex-row-reverse')}>
 						<PickedByAvatars picks={pickers} />
+						{pickShare != null && (
+							<span className='text-[10px] font-bold text-muted-foreground tabular' title='Share of the league that picked this team'>
+								{pickShare}%
+							</span>
+						)}
 					</div>
+				)}
+				{/* A pick few others made, and it hit */}
+				{graded && result && pickShare != null && pickShare <= CONTRARIAN_SHARE && (
+					<span className='mt-1.5 inline-flex items-center gap-1 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent'>Contrarian hit</span>
 				)}
 			</div>
 
@@ -248,7 +274,7 @@ function TeamTile({ team, side, isSelected, isLock, result, isWinner, isLoser, s
 	);
 }
 
-export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueMode, forceShowOdds, lockedTeam }: GameCardProps) {
+export function GameCard({ game, selected, onSelect, showScores, disabled, isCorrect, noHover, leaguePicks, leagueSize, leagueMode, forceShowOdds, lockedTeam }: GameCardProps) {
 	if (!game) return null;
 
 	const phase = getPhase(game.status);
@@ -284,6 +310,7 @@ export function GameCard({ game, selected, onSelect, showScores, disabled, isCor
 				interactive={interactive}
 				dimmed={dimmed}
 				pickers={leaguePicks?.[side]}
+				pickShare={leaguePicks && leagueSize ? Math.round(((leaguePicks[side]?.length ?? 0) / leagueSize) * 100) : null}
 				onClick={() => onSelect?.(game.id, team.team, opponent.team, side === 'home', team.odds)}
 			/>
 		);

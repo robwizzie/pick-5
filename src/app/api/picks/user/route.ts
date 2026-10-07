@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { League } from '@/models/League';
 import { authOptions } from '@/lib/auth';
+import { rulesFor } from '@/lib/leagueRules';
 import { countedWeeks, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 import { loadGameResults, rescore, revealStartedOnly, type PickDocLike } from '@/lib/pickScoring';
 
@@ -48,7 +49,7 @@ export async function GET(req: Request) {
 
 		const [docs, leagues] = await Promise.all([
 			Pick.find(query).sort({ week: 1 }).lean<PickDoc[]>(),
-			leagueId ? League.find({ _id: leagueId }, 'mode members').lean() : League.find({ members: userId }, 'mode members').lean()
+			leagueId ? League.find({ _id: leagueId }, 'mode settings members').lean() : League.find({ members: userId }, 'mode settings members').lean()
 		]);
 
 		if (!isSelf) {
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
 			}
 		}
 
-		const modeByLeague = new Map(leagues.map(l => [String(l._id), (l as { mode?: string }).mode || 'standard']));
+		const modeByLeague = new Map(leagues.map(l => [String(l._id), rulesFor(l as { mode?: string; settings?: object })]));
 		const resultsByWeek = await loadGameResults(
 			docs.map(d => d.week),
 			season

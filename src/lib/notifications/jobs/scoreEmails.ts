@@ -8,7 +8,8 @@ import { seasonPickFilter } from '@/lib/season';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
-import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
+import { ScoringService } from '@/services/scoringService';
+import { rulesFor, type ScoringRules } from '@/lib/leagueRules';
 import { SeasonService } from '@/services/seasonService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import SteveScoreEmail from '@/emails/SteveScoreEmail';
@@ -97,8 +98,8 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 	}
 
 	const leagues = (await League.find({ members: { $in: Array.from(recipientById.keys()) } })
-		.select('name mode')
-		.lean()) as unknown as Array<{ _id: unknown; name: string; mode?: string }>;
+		.select('name mode settings')
+		.lean()) as unknown as Array<{ _id: unknown; name: string; mode?: string; settings?: object }>;
 	const leagueIds = leagues.map(l => String(l._id));
 	const allPicks = (await Pick.find({ week, leagueId: { $in: leagueIds }, ...seasonPickFilter(season) })
 		.select('userId leagueId picks tfsGame tfsScore lockGameId')
@@ -127,8 +128,9 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 		result.leagues!++;
 
 		const mode = league.mode || 'standard';
+		const rules = rulesFor(league);
 		const scored: ScoredEntry[] = leaguePicks.map(doc => {
-			const score = ScoringService.calculateWeekScore(doc.picks, gameResults, doc.tfsGame ?? null, doc.tfsScore ?? null, mode, calculatePointsFromOdds, doc.lockGameId);
+			const score = ScoringService.calculateWeekScore(doc.picks, gameResults, doc.tfsGame ?? null, doc.tfsScore ?? null, rules, calculatePointsFromOdds, doc.lockGameId);
 			return {
 				doc,
 				isCorrect: score.scoredPicks.map(p => p.isCorrect ?? null),
@@ -161,7 +163,7 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 					leagueName: league.name,
 					weekNumber: week,
 					userPoints: entry.weeklyPoints,
-					maxPoints: maxPossiblePoints(mode, entry.doc, leaguePicks, gameById),
+					maxPoints: maxPossiblePoints(rules, entry.doc, leaguePicks, gameById),
 					userRank: leaderboard.findIndex(e => e.userId === userId) + 1,
 					totalPlayers: leaderboard.length,
 					leaderboard: leaderboard.slice(0, 5),
@@ -169,7 +171,7 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 					unsubscribeToken: user.unsubscribeToken || '',
 					leagueId,
 					userCorrect: entry.correctPicks,
-					picks: pickResults(mode, entry)
+					picks: pickResults(rules, entry)
 				};
 				const html = await render(
 					mode === 'steve' ? SteveScoreEmail({ ...props, tfs: tfsResult(entry, gameMeta) }) : StandardScoreEmail(props)
@@ -204,16 +206,16 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 	return result;
 }
 
-function pickResults(mode: string, entry: ScoredEntry): PickResult[] {
+function pickResults(rules: ScoringRules, entry: ScoredEntry): PickResult[] {
 	return entry.doc.picks.map((pick, i) => {
 		const isCorrect = entry.isCorrect[i];
-		const isLock = !!entry.doc.lockGameId && entry.doc.lockGameId === pick.gameId;
+		const isLock = rules.lockMultiplier > 1 && !!entry.doc.lockGameId && entry.doc.lockGameId === pick.gameId;
 		return {
 			team: pick.team,
 			opponent: pick.opponent,
 			isCorrect,
 			odds: typeof pick.odds === 'number' ? pick.odds : undefined,
-			points: isCorrect ? pointsForCorrectPick(mode, pick.odds, isLock) : 0,
+			points: isCorrect ? pointsForCorrectPick(rules, pick.odds, isLock) : 0,
 			isLock
 		};
 	});
@@ -233,18 +235,19 @@ function tfsResult(entry: ScoredEntry, games: Map<string, { home: { abbreviation
 }
 
 /** Most points the user could have scored with the picks they made (finished games only). */
-function maxPossiblePoints(mode: string, userPick: LeanPickDoc, leaguePicks: LeanPickDoc[], gameById: Map<string, GameResultRow>): number {
+function maxPossiblePoints(rules: ScoringRules, userPick: LeanPickDoc, leaguePicks: LeanPickDoc[], gameById: Map<string, GameResultRow>): number {
 	const finished = userPick.picks.filter(p => {
 		const game = gameById.get(p.gameId);
 		return !!game && isFinal(game);
 	});
 
-	if (mode === 'steve') {
+	const lockMultiplier = rules.lockMultiplier;
+	if (rules.mode === 'steve') {
 		// 2 per correct pick, plus the TFS tiebreaker when it was graded.
 		const tfsGame = userPick.tfsGame ? gameById.get(userPick.tfsGame) : undefined;
-		const tfsGraded = !!tfsGame && isFinal(tfsGame) && userPick.tfsScore !== null && userPick.tfsScore !== undefined;
+		const tfsGraded = rules.tfsEnabled && !!tfsGame && isFinal(tfsGame) && userPick.tfsScore !== null && userPick.tfsScore !== undefined;
 		// A winning lock doubles one pick, so it's part of the best possible week
-		const lockBonus = finished.length > 0 ? 2 * (LOCK_MULTIPLIER - 1) : 0;
+		const lockBonus = finished.length > 0 ? 2 * (lockMultiplier - 1) : 0;
 		return finished.length * 2 + lockBonus + (tfsGraded ? MAX_TFS_POINTS : 0);
 	}
 
@@ -261,7 +264,7 @@ function maxPossiblePoints(mode: string, userPick: LeanPickDoc, leaguePicks: Lea
 		max += best;
 		bestSingle = Math.max(bestSingle, best);
 	}
-	return max + bestSingle * (LOCK_MULTIPLIER - 1);
+	return max + bestSingle * (lockMultiplier - 1);
 }
 
 /**

@@ -26,6 +26,7 @@ interface LeaderboardEntry {
 
 interface LeagueSummary {
 	_id: string;
+	mode?: string;
 }
 
 interface SeasonStat {
@@ -84,7 +85,8 @@ export default function GlobalLeaderboard() {
 
 				const leaguesRes = await fetch('/api/user/leagues');
 				if (!leaguesRes.ok) return;
-				const leagues: LeagueSummary[] = await leaguesRes.json();
+				// Survivor pools have no points, so they don't feed the points leaderboard
+				const leagues = ((await leaguesRes.json()) as LeagueSummary[]).filter(l => l.mode !== 'survivor');
 				if (leagues.length === 0) return;
 
 				// Fetch every league's standings concurrently

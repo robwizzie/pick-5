@@ -10,10 +10,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { EmptyState, Pill } from '@/components/ui/page';
 import { GameCardSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { TeamLogo } from '@/components/ui/team-logo';
-import { GameCard } from './GameCard';
+import { GameCard, countLeaguePickers } from './GameCard';
 import { PickGameCard } from './PickGameCard';
 import { NFLService } from '@/services/nflService';
-import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
+import { ScoringService } from '@/services/scoringService';
+import { useLeagueRules } from '@/contexts/LeagueRulesContext';
 import { useStats } from '@/contexts/StatsContext';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
@@ -94,20 +95,20 @@ function gradePick(pick: Pick, game: Game | undefined): boolean | null {
 	});
 }
 
-/** Points available for a pick at the current line (standard mode), doubled for the lock. */
-function potentialPoints(pick: Pick, game: Game | undefined, isLock = false) {
+/** Points available for a pick at the current line (standard mode), multiplied for the lock. */
+function potentialPoints(pick: Pick, game: Game | undefined, isLock = false, lockMultiplier = 2) {
 	const team = pick.isHome ? game?.home : game?.away;
-	return team?.odds ? ScoringService.pointsForPick({ odds: team.odds }, 'standard', calculatePointsFromOdds, isLock) : 0;
+	return team?.odds ? ScoringService.pointsForPick({ odds: team.odds }, { mode: 'standard', lockMultiplier, tfsEnabled: false }, calculatePointsFromOdds, isLock) : 0;
 }
 
 /** Steve mode: 2 per correct pick, doubled for the lock. */
 const STEVE_PICK_POINTS = ScoringService.pointsForPick({}, 'steve');
 const TFS_MAX = 5;
 // Short enough for the sticky bar at 375px
-const LOCK_HINT = 'Pick a Lock to double one pick';
+const LOCK_HINT = 'Pick a Lock to boost one pick';
 
 /** Lock of the week toggle: tap to lock this pick (moves the lock), tap the locked pick to clear it. */
-function LockToggle({ active, onToggle, team, compact = false }: { active: boolean; onToggle: () => void; team: string; compact?: boolean }) {
+function LockToggle({ active, onToggle, team, multiplier, compact = false }: { active: boolean; onToggle: () => void; team: string; multiplier: number; compact?: boolean }) {
 	return (
 		<button
 			type='button'
@@ -123,7 +124,7 @@ function LockToggle({ active, onToggle, team, compact = false }: { active: boole
 			)}
 		>
 			<Lock className='h-3.5 w-3.5' strokeWidth={active ? 3 : 2} aria-hidden />
-			{!compact && (active ? <span className='tabular'>Lock · {LOCK_MULTIPLIER}×</span> : 'Lock')}
+			{!compact && (active ? <span className='tabular'>Lock · {multiplier}×</span> : 'Lock')}
 		</button>
 	);
 }
@@ -177,6 +178,9 @@ function WeeklyPicksSkeleton() {
 
 export function WeeklyPicks() {
 	const { currentWeek, season, isPastSeason } = useWeek();
+	const rules = useLeagueRules();
+	const lockMultiplier = rules.lockMultiplier;
+	const locksOn = lockMultiplier > 1;
 	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const { refreshStats } = useStats();
@@ -452,8 +456,8 @@ export function WeeklyPicks() {
 			lockGameId: activeLock
 		};
 
-		// Only include TFS for Steve mode
-		if (leagueMode === 'steve') {
+		// Only include TFS for Steve leagues that play it
+		if (leagueMode === 'steve' && rules.tfsEnabled) {
 			requestBody.tfsGame = tfsGame;
 			requestBody.tfsScore = parseInt(tfsScore);
 		}
@@ -467,7 +471,7 @@ export function WeeklyPicks() {
 
 	const autoSave = async (isUpdate: boolean = false) => {
 		// For Steve mode, require TFS. For Standard mode, don't require it
-		const hasRequiredFields = leagueMode === 'steve' ? picks.length === MAX_PICKS && tfsGame && !isNaN(parseInt(tfsScore)) : picks.length === MAX_PICKS;
+		const hasRequiredFields = leagueMode === 'steve' && rules.tfsEnabled ? picks.length === MAX_PICKS && tfsGame && !isNaN(parseInt(tfsScore)) : picks.length === MAX_PICKS;
 
 		if (!session || !leagueId || !hasRequiredFields || isPastSeason) return; // Don't save if incomplete (or a past season)
 
@@ -560,7 +564,7 @@ export function WeeklyPicks() {
 	// Auto-save when picks, TFS game, or score changes (only if we have existing picks)
 	useEffect(() => {
 		// For Steve mode, require TFS. For Standard mode, don't require it
-		const hasRequiredFields = leagueMode === 'steve' ? picks.length === MAX_PICKS && tfsGame && tfsScore && !isNaN(parseInt(tfsScore)) : picks.length === MAX_PICKS;
+		const hasRequiredFields = leagueMode === 'steve' && rules.tfsEnabled ? picks.length === MAX_PICKS && tfsGame && tfsScore && !isNaN(parseInt(tfsScore)) : picks.length === MAX_PICKS;
 
 		// Don't auto-save on initial load or if incomplete
 		if (initialLoadRef.current || !hasExistingPicks || !hasRequiredFields || isSaving) return;
@@ -593,8 +597,8 @@ export function WeeklyPicks() {
 			return;
 		}
 
-		// TFS validation only for Steve mode
-		if (leagueMode === 'steve') {
+		// TFS validation only for Steve leagues that play it
+		if (leagueMode === 'steve' && rules.tfsEnabled) {
 			if (!tfsGame) {
 				toast.error('Please select a TFS game');
 				return;
@@ -661,11 +665,13 @@ export function WeeklyPicks() {
 	}
 
 	const isSteve = leagueMode === 'steve';
+	const leagueSize = countLeaguePickers(leaguePicks);
+	const playsTfs = isSteve && rules.tfsEnabled;
 	const pickCount = picks.length;
 	const slateFull = pickCount === MAX_PICKS;
 	const totalPotential = isSteve
-		? picks.reduce((total, pick) => total + ScoringService.pointsForPick(pick, 'steve', undefined, pick.gameId === activeLock), 0) + (tfsGame ? TFS_MAX : 0)
-		: picks.reduce((total, pick) => total + potentialPoints(pick, games.find(g => g.id === pick.gameId), pick.gameId === activeLock), 0);
+		? picks.reduce((total, pick) => total + ScoringService.pointsForPick(pick, rules, undefined, pick.gameId === activeLock), 0) + (playsTfs && tfsGame ? TFS_MAX : 0)
+		: picks.reduce((total, pick) => total + potentialPoints(pick, games.find(g => g.id === pick.gameId), pick.gameId === activeLock, lockMultiplier), 0);
 	// Picks (and the lock) can be changed until the first picked game kicks off (server rule)
 	const slateEditable = !picks.some(p => {
 		const game = games.find(g => g.id === p.gameId);
@@ -673,7 +679,7 @@ export function WeeklyPicks() {
 	});
 	const lockedPick = activeLock ? picks.find(p => p.gameId === activeLock) : undefined;
 	const tfsReady = !!tfsGame && !!tfsScore && !tfsError;
-	const canSubmit = slateFull && !isSaving && (!isSteve || tfsReady);
+	const canSubmit = slateFull && !isSaving && (!playsTfs || tfsReady);
 	// Saved picks auto-save; show where that stands instead of a redundant Update button
 	const saved = lastSavedRef.current;
 	const isDirty = !!saved && JSON.stringify({ picks, tfsGame, tfsScore, lockGameId: activeLock }) !== JSON.stringify({ picks: saved.picks, tfsGame: saved.tfsGame, tfsScore: saved.tfsScore, lockGameId: saved.lockGameId });
@@ -694,9 +700,10 @@ export function WeeklyPicks() {
 				gameInProgress={gameInProgress}
 				showScores
 				isCorrect={isCorrect}
-				pickPoints={gameFinished && isCorrect ? ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, pick.gameId === activeLock) : 0}
+				pickPoints={gameFinished && isCorrect ? ScoringService.pointsForPick(pick, rules, calculatePointsFromOdds, pick.gameId === activeLock) : 0}
 				isLock={pick.gameId === activeLock}
 				leaguePicks={gameFinished || gameInProgress ? leaguePicks[game.id] : undefined}
+				leagueSize={leagueSize}
 				leagueMode={leagueMode}
 				variant='results'
 			/>
@@ -734,15 +741,16 @@ export function WeeklyPicks() {
 					disabled={gameStarted || lockedBySlate}
 					showScores={gameStarted}
 					leaguePicks={gameStarted || gameFinished ? leaguePicks[game.id] : undefined}
+					leagueSize={leagueSize}
 					leagueMode={leagueMode}
 					lockedTeam={isLock ? pick.team : undefined}
 				/>
-				{pick && slateEditable && (
+				{pick && slateEditable && locksOn && (
 					<div className='flex items-center justify-between gap-3 border-t border-white/[0.06] py-2 pl-4 pr-3'>
 						<p className={cn('min-w-0 truncate text-xs', isLock ? 'font-semibold text-warning' : 'text-muted-foreground')}>
-							{isLock ? `${(pick.isHome ? game.home : game.away).abbreviation} is your Lock of the Week` : 'Lock it in for double points'}
+							{isLock ? `${(pick.isHome ? game.home : game.away).abbreviation} is your Lock of the Week` : `Lock it in for ${lockMultiplier}× points`}
 						</p>
-						<LockToggle active={isLock} team={pick.team} onToggle={() => toggleLock(pick.gameId)} />
+						<LockToggle active={isLock} team={pick.team} multiplier={lockMultiplier} onToggle={() => toggleLock(pick.gameId)} />
 					</div>
 				)}
 			</div>
@@ -760,13 +768,13 @@ export function WeeklyPicks() {
 
 	const actionHint = (() => {
 		if (!slateFull) return hasExistingPicks ? `Pick ${MAX_PICKS - pickCount} more to save your changes` : `Pick ${MAX_PICKS - pickCount} more game${MAX_PICKS - pickCount === 1 ? '' : 's'}`;
-		if (isSteve) {
+		if (playsTfs) {
 			if (!tfsGame) return 'Choose your TFS game below';
 			if (!tfsScore || tfsError) return 'Enter your total score below';
-			if (!activeLock && slateEditable) return LOCK_HINT;
+			if (!activeLock && slateEditable && locksOn) return LOCK_HINT;
 			return `TFS locked in: ${tfsScore}`;
 		}
-		if (!activeLock && slateEditable) return LOCK_HINT;
+		if (!activeLock && slateEditable && locksOn) return LOCK_HINT;
 		return hasExistingPicks ? 'Changes save automatically' : 'Ready to submit';
 	})();
 
@@ -786,7 +794,7 @@ export function WeeklyPicks() {
 					<div className='flex shrink-0 flex-col items-end gap-1.5'>
 						{isSteve ? (
 							<Pill tone='warning'>
-								<Target className='h-3 w-3' /> Steve · TFS
+								<Target className='h-3 w-3' /> {playsTfs ? 'Steve · TFS' : 'Steve'}
 							</Pill>
 						) : (
 							<Pill tone='primary'>
@@ -919,17 +927,17 @@ export function WeeklyPicks() {
 												<span className={cn('rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold', getOddsBadgeClass(team.odds))}>{formatOdds(team.odds)}</span>
 											)}
 											<span className={cn('min-w-14 text-right text-sm font-bold tabular', isLock ? 'text-warning' : 'text-primary')}>
-												{isLock && <span className='mr-1 text-[10px] font-extrabold'>{LOCK_MULTIPLIER}×</span>}
+												{isLock && <span className='mr-1 text-[10px] font-extrabold'>{lockMultiplier}×</span>}
 												{potentialPoints(pick, game, isLock)} pts
 											</span>
-											{slateEditable && <LockToggle compact active={isLock} team={pick.team} onToggle={() => toggleLock(pick.gameId)} />}
+											{slateEditable && locksOn && <LockToggle compact multiplier={lockMultiplier} active={isLock} team={pick.team} onToggle={() => toggleLock(pick.gameId)} />}
 										</li>
 									);
 								})}
 							</ul>
-							{!lockedPick && slateEditable && (
+							{!lockedPick && slateEditable && locksOn && (
 								<p className='mt-3 flex items-center gap-1.5 text-xs text-muted-foreground'>
-									<Lock className='h-3 w-3 text-warning' aria-hidden /> Tap a lock to double one pick: it scores {LOCK_MULTIPLIER}× if it wins.
+									<Lock className='h-3 w-3 text-warning' aria-hidden /> Tap a lock to boost one pick: it scores {lockMultiplier}× if it wins.
 								</p>
 							)}
 							<div className='mt-3 flex items-baseline justify-between border-t border-white/[0.07] pt-3'>
@@ -940,7 +948,7 @@ export function WeeklyPicks() {
 					)}
 
 					{/* Steve mode: TFS prediction + scoring */}
-					{slateFull && isSteve && (
+					{slateFull && playsTfs && (
 						<div className='glass space-y-5 rounded-2xl p-4 sm:p-5'>
 							<div>
 								<p className='eyebrow mb-1'>Total final score</p>
@@ -1023,7 +1031,7 @@ export function WeeklyPicks() {
 												<span className='truncate'>{lockedPick ? `Lock bonus · ${lockedPick.team}` : 'Lock bonus (no lock yet)'}</span>
 											</span>
 											<span className={cn('font-semibold tabular', lockedPick ? 'text-warning' : 'text-muted-foreground')}>
-												{lockedPick ? `+${STEVE_PICK_POINTS * (LOCK_MULTIPLIER - 1)}` : '0'}
+												{lockedPick ? `+${STEVE_PICK_POINTS * (lockMultiplier - 1)}` : '0'}
 											</span>
 										</li>
 										<li className='flex justify-between'>
@@ -1034,7 +1042,7 @@ export function WeeklyPicks() {
 									<div className='mt-2 flex items-baseline justify-between border-t border-white/[0.07] pt-2'>
 										<span className='text-xs font-semibold'>Max total</span>
 										<span className='font-display text-2xl font-extrabold italic text-primary tabular'>
-											{MAX_PICKS * STEVE_PICK_POINTS + (lockedPick ? STEVE_PICK_POINTS * (LOCK_MULTIPLIER - 1) : 0) + TFS_MAX}
+											{MAX_PICKS * STEVE_PICK_POINTS + (lockedPick ? STEVE_PICK_POINTS * (lockMultiplier - 1) : 0) + TFS_MAX}
 										</span>
 									</div>
 								</div>

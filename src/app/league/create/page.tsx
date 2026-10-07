@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Eye, EyeOff, Info, Loader2, Lock, Target, TrendingUp, Trophy, type LucideIcon } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, Info, Loader2, Lock, Skull, Target, TrendingUp, Trophy, type LucideIcon } from 'lucide-react';
 import { FaFootballBall, FaBasketballBall, FaBaseballBall, FaHockeyPuck } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ const SCORING_EXAMPLES = [
 	{ label: 'Long shot', odds: 1000 }
 ];
 
-type ScoringMode = 'steve' | 'standard';
+type ScoringMode = 'steve' | 'standard' | 'survivor';
 
 const sports = [
 	{ name: 'NFL', icon: FaFootballBall, available: true },
@@ -58,8 +58,24 @@ const modes: Array<{
 			{ value: '2', label: 'pts per correct pick' },
 			{ value: '+5', label: 'max TFS bonus' }
 		]
+	},
+	{
+		id: 'survivor',
+		name: 'Survivor',
+		tagline: 'One team a week, never the same team twice. Lose and you’re out.',
+		icon: Skull,
+		points: [
+			{ value: '1', label: 'team picked per week' },
+			{ value: '1', label: 'player left standing wins' }
+		]
 	}
 ];
+
+const MODE_TITLES: Record<ScoringMode, { title: string; subtitle: string }> = {
+	standard: { title: 'Standard Mode', subtitle: 'Moneyline-Based Scoring' },
+	steve: { title: 'Steve Mode', subtitle: 'Simple Pick 5 with TFS Bonus' },
+	survivor: { title: 'Survivor', subtitle: 'Last one standing wins' }
+};
 
 export default function CreateLeaguePage() {
 	const router = useRouter();
@@ -76,7 +92,7 @@ export default function CreateLeaguePage() {
 
 	const trimmedName = leagueName.trim();
 	const fieldErrors = {
-		mode: !scoringMode ? 'Choose a scoring mode' : null,
+		mode: !scoringMode ? 'Choose a league type' : null,
 		name: !trimmedName ? 'Give your league a name' : null,
 		password: !password ? 'Set a password so only your crew can join' : null
 	};
@@ -167,8 +183,8 @@ export default function CreateLeaguePage() {
 
 				{/* Scoring mode */}
 				<section className='animate-slide-up' style={{ animationDelay: '120ms' }}>
-					<p className='eyebrow mb-3'>2 · Scoring mode</p>
-					<div role='radiogroup' aria-label='Scoring mode' className='grid gap-3 sm:grid-cols-2'>
+					<p className='eyebrow mb-3'>2 · League type</p>
+					<div role='radiogroup' aria-label='League type' className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
 						{modes.map(mode => {
 							const active = scoringMode === mode.id;
 							const Icon = mode.icon;
@@ -202,7 +218,7 @@ export default function CreateLeaguePage() {
 										</span>
 									</div>
 									<h3 className='mt-4 font-display text-3xl font-extrabold uppercase italic leading-none tracking-tight'>
-										{mode.name} <span className='text-muted-foreground'>Mode</span>
+										{mode.name} {mode.id !== 'survivor' && <span className='text-muted-foreground'>Mode</span>}
 									</h3>
 									<p className='mt-2 text-sm text-muted-foreground'>{mode.tagline}</p>
 									<div className='mt-4 grid grid-cols-2 gap-2'>
@@ -221,7 +237,7 @@ export default function CreateLeaguePage() {
 										}}
 										className='mt-4 inline-flex items-center gap-1.5 self-start text-xs font-semibold text-primary hover:underline'
 									>
-										<Info className='h-3.5 w-3.5' /> How scoring works
+										<Info className='h-3.5 w-3.5' /> {mode.id === 'survivor' ? 'How survivor works' : 'How scoring works'}
 									</button>
 								</div>
 							);
@@ -320,12 +336,24 @@ export default function CreateLeaguePage() {
 			<Dialog open={showModeInfo !== null} onOpenChange={open => !open && setShowModeInfo(null)}>
 				<DialogContent className='sm:max-w-lg'>
 					<DialogHeader>
-						<DialogTitle>{showModeInfo === 'steve' ? 'Steve Mode' : 'Standard Mode'}</DialogTitle>
-						<DialogDescription>{showModeInfo === 'steve' ? 'Simple Pick 5 with TFS Bonus' : 'Moneyline-Based Scoring'}</DialogDescription>
+						<DialogTitle>{showModeInfo ? MODE_TITLES[showModeInfo].title : ''}</DialogTitle>
+						<DialogDescription>{showModeInfo ? MODE_TITLES[showModeInfo].subtitle : ''}</DialogDescription>
 					</DialogHeader>
 
 					<div className='space-y-3'>
-						{showModeInfo === 'steve' ? (
+						{showModeInfo === 'survivor' ? (
+							<>
+								<p className='text-sm text-muted-foreground'>Every week, pick one team to win. If it wins, you survive to the next week. If it loses or ties, you’re out.</p>
+								<InfoPanel title='Rules'>
+									<InfoRow label='Picks per week' value='1 team' />
+									<InfoRow label='Reusing a team' value='Not allowed' />
+									<InfoRow label='Your team loses or ties' value='Eliminated' />
+									<InfoRow label='No pick by kickoff of the last game' value='Eliminated' />
+									<InfoRow label='Everyone left loses the same week' value='All survive' />
+								</InfoPanel>
+								<BestFor>Groups who want one simple, high-stakes pick a week, and a long run of “don’t mess this up.”</BestFor>
+							</>
+						) : showModeInfo === 'steve' ? (
 							<>
 								<p className='text-sm text-muted-foreground'>Pick 5 winners each week plus predict a Total Final Score (TFS) for bonus points. Simple, straightforward scoring!</p>
 								<InfoPanel title='Scoring'>

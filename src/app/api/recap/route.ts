@@ -6,11 +6,23 @@ import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
 import { GET as getOddsSnapshot } from '@/app/api/odds/snapshot/route';
 import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { rulesFor } from '@/lib/leagueRules';
+import { rescore } from '@/lib/pickScoring';
+import { loadLeagueSeason } from '@/lib/leagueSeason';
+import { computeStreaks, loadKickoffs } from '@/lib/badges';
+import type { RecapAwards } from '@/lib/recapAwards';
+import { computeRecapAwards } from '@/lib/recapAwards';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
 	try {
+		const session = await getServerSession(authOptions);
+		const viewerId = session?.user?.id;
+		if (!viewerId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
 		const { searchParams } = new URL(req.url);
 		const week = parseInt(searchParams.get('week') || '0', 10);
 		const leagueId = searchParams.get('leagueId');
@@ -28,6 +40,7 @@ export async function GET(req: Request) {
 		if (!league) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
+		if (!league.members.map(String).includes(viewerId)) return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
 		const leagueMode = (league as any).mode || 'standard';
 
 		// Get all picks for this week and league
@@ -50,7 +63,7 @@ export async function GET(req: Request) {
 				// Call the snapshot handler in-process instead of fetching our own public URL:
 				// one fewer request against the hosting quota, and a Worker fetching its own
 				// hostname is not guaranteed to route back to itself on Cloudflare.
-				const oddsResponse = await getOddsSnapshot(new Request(`http://internal/api/odds/snapshot?week=${week}`));
+				const oddsResponse = await getOddsSnapshot(new Request(`http://internal/api/odds/snapshot?week=${week}&season=${season}`));
 				if (oddsResponse.ok) {
 					const oddsData = await oddsResponse.json();
 					const snapshotOdds = oddsData.odds || [];
@@ -79,10 +92,11 @@ export async function GET(req: Request) {
 			return status === 'post' || status === 'final' || status === 'status_final';
 		});
 
-		if (!allGamesCompleted) {
+		// ?check=1 only asks whether a recap exists (no analytics)
+		if (!allGamesCompleted || searchParams.get('check') === '1') {
 			return NextResponse.json({
 				hasPicks: true,
-				weekCompleted: false
+				weekCompleted: allGamesCompleted
 			});
 		}
 
@@ -253,10 +267,36 @@ export async function GET(req: Request) {
 		mostPickedCorrect.sort((a, b) => b.pickCount - a.pickCount);
 		mostPickedIncorrect.sort((a, b) => b.pickCount - a.pickCount);
 
+		// Weekly awards (and who's on a heater right now)
+		let awards: RecapAwards | null = null;
+		try {
+			const results = games.map(g => ({ id: g.id, homeScore: g.home.score, awayScore: g.away.score, homeTeam: g.home.team, awayTeam: g.away.team, status: g.status }));
+			const rules = rulesFor(league);
+			const members = new Set(league.members.map(String));
+			const scored = allPicksForWeek
+				.filter(p => members.has(String(p.userId)))
+				.map(p => ({ userId: String(p.userId), lockGameId: p.lockGameId ?? null, ...rescore(p as unknown as Parameters<typeof rescore>[0], results, rules) }));
+			const leagueSeason = await loadLeagueSeason(leagueId, season);
+			const streaks = leagueSeason ? computeStreaks(leagueSeason, await loadKickoffs(Array.from(leagueSeason.weeks.keys()), season)) : {};
+			awards = computeRecapAwards({
+				scored,
+				games,
+				rules,
+				user: id => {
+					const u = userMap.get(id);
+					return { userId: id, name: u?.name || 'Unknown Player', image: u?.image ?? null };
+				},
+				streaks
+			});
+		} catch (error) {
+			console.error('Error computing recap awards:', error);
+		}
+
 		return NextResponse.json({
 			hasPicks: true,
 			weekCompleted: true,
 			leagueMode,
+			awards,
 			upsets: upsets.slice(0, 5), // Top 5 upsets
 			mostPickedCorrect: mostPickedCorrect.slice(0, 3), // Top 3
 			mostPickedIncorrect: mostPickedIncorrect.slice(0, 3) // Top 3
