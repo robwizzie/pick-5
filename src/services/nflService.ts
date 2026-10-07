@@ -3,6 +3,7 @@ import type { Game, TeamInfo } from '@/components/games/GameCard';
 import type { EspnEvent, EspnGameSummary } from '@/types';
 import { cachedFetch } from './cacheService';
 import { getCurrentSeasonYear } from '@/lib/seasonYear';
+import { fetchEspnScoreboard } from '@/lib/espnScoreboard';
 
 export class NFLService {
 	private static readonly CACHE_TTL = 2 * 60 * 1000; // 2 minutes for live data
@@ -52,22 +53,10 @@ export class NFLService {
 
 			// If we're on the server, call ESPN API directly to avoid relative URL issues
 			if (this.isServer()) {
-				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&season=${effectiveSeason}`;
-
-				const response = await fetch(espnUrl, {
-					headers: {
-						'User-Agent': 'pick-5/1.0',
-						'Accept': 'application/json'
-					},
-					next: { revalidate: 120 } // Cache for 2 minutes
-				});
-
-				if (!response.ok) {
-					console.error(`ESPN API error: ${response.status} ${response.statusText}`);
-					return [];
-				}
-
-				const data = await response.json();
+				// dates=YYYY selects the season; the response is checked against it (see espnScoreboard.ts).
+				// Past seasons never change, so they can be cached far longer than live weeks.
+				const revalidate = effectiveSeason < this.getCurrentSeason() ? 60 * 60 * 24 : 120;
+				const data = (await fetchEspnScoreboard(week, effectiveSeason, { init: { next: { revalidate } } })) as { events?: EspnEvent[] };
 
 				if (!data.events || data.events.length === 0) {
 					console.warn(`No games found for week ${week}, season ${effectiveSeason}`);

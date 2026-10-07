@@ -9,6 +9,7 @@ import type { Badge } from '@/lib/badges';
 import { formatRecord, pairKey, type Matchup, type MatchupSide, type MatchupsResponse, type PairRecord } from '@/lib/matchups';
 import { cn } from '@/lib/utils';
 import { SideAvatar, StatusPill, fmtPoints, shortName } from './matchupParts';
+import { NudgeButton } from './NudgeButton';
 
 /** "Steve M. leads 5–3", "Series tied 2–2" or "First meeting" for a pair's all-time record. */
 function rivalryLine(matchup: Matchup, rivalries?: Record<string, PairRecord>): string | null {
@@ -43,7 +44,15 @@ function SideRow({ side, matchup, record, isMe, badges }: { side: MatchupSide; m
 					{side.kind === 'median' ? (
 						'Bye week · plays the median'
 					) : !side.hasPicks ? (
-						<span className='text-warning'>No picks yet</span>
+						<span className='inline-flex flex-wrap items-center gap-1.5'>
+							<span className='text-warning'>No picks yet</span>
+							<NudgeButton userId={side.userId} name={side.name} />
+						</span>
+					) : matchup.status === 'upcoming' ? (
+						<>
+							<span className='font-semibold text-accent'>✓ Picks in</span>
+							{record && <span> · {record}</span>}
+						</>
 					) : (
 						<>
 							{side.correct}/{side.totalGames} correct
