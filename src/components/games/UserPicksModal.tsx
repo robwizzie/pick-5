@@ -8,12 +8,14 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TeamLogo } from '@/components/ui/team-logo';
 import { PickGameCard } from './PickGameCard';
+import { countLeaguePickers } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { hasGameStarted, hasGameFinished } from '@/services/gameUtils';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import { cn } from '@/lib/utils';
 import { useWeek } from '@/contexts/WeekContext';
+import { useLeagueRules } from '@/contexts/LeagueRulesContext';
 import type { Game } from './GameCard';
 
 interface UserPicksModalProps {
@@ -90,6 +92,7 @@ const getGameTotal = (game: Game) => {
 
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose, playerImage, weekPoints }: UserPicksModalProps) {
 	const { season } = useWeek();
+	const rules = useLeagueRules();
 	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
 	const [serverHiddenPicks, setServerHiddenPicks] = useState(0);
@@ -204,7 +207,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 			const isLock = !!lockGameId && lockGameId === pick.gameId;
 
 			// Points depend on league mode; the lock scores double
-			const pickPoints = gameFinished && isCorrect === true ? ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock) : 0;
+			const pickPoints = gameFinished && isCorrect === true ? ScoringService.pointsForPick(pick, { ...rules, mode: leagueMode }, calculatePointsFromOdds, isLock) : 0;
 			return { pick, game, status, gameFinished, gameInProgress: status === 'in_progress', isCorrect, isLock, pickPoints };
 		});
 
@@ -270,6 +273,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 										pickPoints={p.pickPoints}
 										isLock={p.isLock}
 										leaguePicks={p.gameFinished || p.gameInProgress ? leaguePicks[p.pick.gameId] : undefined}
+										leagueSize={countLeaguePickers(leaguePicks)}
 										leagueMode={leagueMode}
 										variant='picks'
 									/>

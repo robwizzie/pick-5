@@ -29,6 +29,8 @@ interface PickGameCardProps {
 	isCorrect?: boolean | null;
 	pickPoints?: number;
 	leaguePicks?: GamePicksData;
+	/** League members with picks this week (for pick percentages) */
+	leagueSize?: number;
 	leagueMode?: string;
 	variant?: 'picks' | 'results'; // 'picks' for WeeklyPicks, 'results' for Results
 	/** This pick is the player's lock of the week (pickPoints should already be doubled). */
@@ -46,6 +48,7 @@ export function PickGameCard({
 	isCorrect = null,
 	pickPoints = 0,
 	leaguePicks,
+	leagueSize,
 	leagueMode = 'standard',
 	variant = 'results',
 	isLock = false
@@ -116,6 +119,7 @@ export function PickGameCard({
 					isCorrect={gameFinished ? isCorrect : null}
 					noHover
 					leaguePicks={gameFinished || gameInProgress ? leaguePicks : undefined}
+					leagueSize={leagueSize}
 					leagueMode={leagueMode}
 					lockedTeam={isLock ? pick.team : undefined}
 				/>

@@ -8,6 +8,7 @@ import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { rulesFor } from '@/lib/leagueRules';
 import { countedWeeks, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,8 @@ export async function GET(req: Request) {
 		if (!league.members.map(String).includes(viewerId)) {
 			return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
 		}
-		const leagueMode = (league as any).mode || 'standard';
+		// The league's scoring rules (mode, lock multiplier, TFS on/off)
+		const leagueMode = rulesFor(league);
 
 		// Fetch only users who are members of this league
 		const allUsers = await User.find({ _id: { $in: league.members } }, 'name image');

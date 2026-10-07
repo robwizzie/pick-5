@@ -4,6 +4,7 @@
 import type { AnyBulkWriteOperation } from 'mongoose';
 import { connectDB } from '@/lib/db';
 import { getCurrentSeasonYear, getSeasonWeeks, seasonPickFilter } from '@/lib/season';
+import { rulesFor } from '@/lib/leagueRules';
 import { GameNotification } from '@/models/GameNotification';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
@@ -104,8 +105,8 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 	const relevant = pickDocs.filter(p => eligible.has(String(p.userId)));
 	const leagueIds = Array.from(new Set(relevant.map(p => String(p.leagueId))));
 	const leagues = (await League.find({ _id: { $in: leagueIds } })
-		.select('name mode')
-		.lean()) as unknown as Array<{ _id: unknown; name: string; mode?: string }>;
+		.select('name mode settings')
+		.lean()) as unknown as Array<{ _id: unknown; name: string; mode?: string; settings?: object }>;
 	const leagueById = new Map(leagues.map(l => [String(l._id), l]));
 
 	const sent = (await GameNotification.find({
@@ -136,7 +137,7 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 				gameId: pick.gameId,
 				team: pick.team,
 				outcome,
-				points: outcome === 'win' ? pointsForCorrectPick(league.mode, pick.odds, isLock) : 0,
+				points: outcome === 'win' ? pointsForCorrectPick(rulesFor(league), pick.odds, isLock) : 0,
 				isLock
 			};
 			const key = `${userId}|${leagueId}`;

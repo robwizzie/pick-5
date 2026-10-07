@@ -153,7 +153,8 @@ const StatsPage = () => {
 			// Fetch user's leagues
 			const leaguesResponse = await fetch('/api/user/leagues');
 			if (!leaguesResponse.ok) throw new Error('Failed to fetch leagues');
-			const leagues: LeagueData[] = await leaguesResponse.json();
+			// Survivor pools have no points to report
+			const leagues: LeagueData[] = ((await leaguesResponse.json()) as LeagueData[]).filter(l => l.mode !== 'survivor');
 
 			// Fetch picks + season stats for every league concurrently
 			const perLeague = await Promise.all(

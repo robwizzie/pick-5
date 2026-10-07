@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { isMember, loadLeagueSeason } from '@/lib/leagueSeason';
 import { parseSeasonParam } from '@/lib/season';
-import { computeLeagueBadges, loadKickoffs, type LeagueBadgesResponse } from '@/lib/badges';
+import { championsBySeason, computeLeagueBadges, computeStreaks, loadKickoffs, type LeagueBadgesResponse } from '@/lib/badges';
+import { SeasonHistory } from '@/models/SeasonHistory';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,12 +22,16 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 		if (!data) return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		if (!isMember(data, viewerId)) return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
 
-		const kickoffs = await loadKickoffs(Array.from(data.weeks.keys()), season);
-		const badges = computeLeagueBadges(data, kickoffs);
+		const [kickoffs, history] = await Promise.all([
+			loadKickoffs(Array.from(data.weeks.keys()), season),
+			SeasonHistory.find({ leagueId: id }, 'seasonYear champions.userId').lean<Array<{ seasonYear: number; champions?: Array<{ userId?: string }> }>>()
+		]);
+		const badges = computeLeagueBadges(data, kickoffs, championsBySeason(history));
 		const body: LeagueBadgesResponse = {
 			leagueId: id,
 			season,
-			members: data.members.map(m => ({ userId: m.userId, badges: badges.get(m.userId) ?? [] }))
+			members: data.members.map(m => ({ userId: m.userId, badges: badges.get(m.userId) ?? [] })),
+			streaks: computeStreaks(data, kickoffs)
 		};
 		return NextResponse.json(body);
 	} catch (error) {

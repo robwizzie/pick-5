@@ -5,7 +5,8 @@ import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import { loadLeagueSeason } from '@/lib/leagueSeason';
 import { parseSeasonParam } from '@/lib/season';
-import { computeLeagueBadges, loadKickoffs, mergeUserBadges, type UserBadgesResponse } from '@/lib/badges';
+import { championsBySeason, computeLeagueBadges, loadKickoffs, mergeUserBadges, type UserBadgesResponse } from '@/lib/badges';
+import { SeasonHistory } from '@/models/SeasonHistory';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,16 +19,20 @@ export async function GET(req: Request) {
 
 		const season = parseSeasonParam(new URL(req.url).searchParams.get('season'));
 		await connectDB();
-		const leagues = await League.find({ members: viewerId }, '_id').lean<Array<{ _id: unknown }>>();
+		// Survivor pools have no pick 'em badges
+		const leagues = await League.find({ members: viewerId, mode: { $ne: 'survivor' } }, '_id').lean<Array<{ _id: unknown }>>();
 
 		const seasons = (await Promise.all(leagues.map(l => loadLeagueSeason(String(l._id), season)))).filter(s => s !== null);
 		// One schedule fetch per week across all leagues
-		const kickoffs = await loadKickoffs(seasons.flatMap(s => Array.from(s.weeks.keys())), season);
+		const [kickoffs, history] = await Promise.all([
+			loadKickoffs(seasons.flatMap(s => Array.from(s.weeks.keys())), season),
+			SeasonHistory.find({ leagueId: { $in: seasons.map(s => s.leagueId) } }, 'leagueId seasonYear champions.userId').lean<Array<{ leagueId: string; seasonYear: number; champions?: Array<{ userId?: string }> }>>()
+		]);
 
 		const perLeague = seasons.map(s => ({
 			leagueId: s.leagueId,
 			leagueName: s.leagueName,
-			badges: computeLeagueBadges(s, kickoffs).get(viewerId) ?? []
+			badges: computeLeagueBadges(s, kickoffs, championsBySeason(history.filter(h => h.leagueId === s.leagueId))).get(viewerId) ?? []
 		}));
 		const body: UserBadgesResponse = { season, badges: mergeUserBadges(perLeague) };
 		return NextResponse.json(body);

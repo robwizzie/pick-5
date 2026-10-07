@@ -9,11 +9,12 @@ import { EmptyState, StatTile } from '@/components/ui/page';
 import { GameCardSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { TeamLogo } from '@/components/ui/team-logo';
 import { PickGameCard } from './PickGameCard';
-import { GameCard } from './GameCard';
+import { GameCard, countLeaguePickers } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { useWeek } from '@/contexts/WeekContext';
+import { useLeagueRules } from '@/contexts/LeagueRulesContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { hasGameFinished, hasGameStarted } from '@/services/gameUtils';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
@@ -174,6 +175,7 @@ function ResultsSkeleton() {
 
 export function Results() {
 	const { currentWeek, season, isPastSeason } = useWeek();
+	const rules = useLeagueRules();
 	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const [picks, setPicks] = useState<WeeklyPicks | null>(null);
@@ -308,7 +310,7 @@ export function Results() {
 			// Points depend on league mode; the lock scores double
 			let points = 0;
 			if (finished && isCorrect === true) {
-				points = ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock);
+				points = ScoringService.pointsForPick(pick, { ...rules, mode: leagueMode }, calculatePointsFromOdds, isLock);
 				totalPoints += points;
 				correctPicks += 1;
 			}
@@ -334,7 +336,7 @@ export function Results() {
 			correctPicks,
 			tfsPoints
 		};
-	}, [picks, games, viewingSelf, leagueMode]);
+	}, [picks, games, viewingSelf, leagueMode, rules]);
 
 	if (sessionStatus === 'loading' || loading) {
 		return <ResultsSkeleton />;
@@ -420,7 +422,7 @@ export function Results() {
 					<div className='space-y-3'>
 						{group.games.map((game, index) => (
 							<div key={game.id} className='glass animate-slide-up rounded-2xl' style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
-								<GameCard game={game} showScores disabled noHover leaguePicks={leaguePicks[game.id]} leagueMode={leagueMode} />
+								<GameCard game={game} showScores disabled noHover leaguePicks={leaguePicks[game.id]} leagueSize={countLeaguePickers(leaguePicks)} leagueMode={leagueMode} />
 							</div>
 						))}
 					</div>
@@ -512,6 +514,7 @@ export function Results() {
 										pickPoints={row.points}
 										isLock={row.isLock}
 										leaguePicks={leaguePicks[row.pick.gameId]}
+										leagueSize={countLeaguePickers(leaguePicks)}
 										leagueMode={leagueMode}
 										variant='results'
 									/>

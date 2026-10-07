@@ -14,6 +14,7 @@ import { ensurePickSeasonMigration, getCurrentSeasonYear, parseSeasonParam, seas
 import type { Game } from '@/components/games/GameCard';
 import { revealStartedOnly } from '@/lib/pickScoring';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { rulesFor } from '@/lib/leagueRules';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,8 +67,9 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
 
-		// TFS is only required for Steve mode
-		const isSteveMode = league.mode === 'steve';
+		// TFS is only required for Steve mode leagues that play it
+		const rules = rulesFor(league);
+		const isSteveMode = rules.tfsEnabled;
 		if (isSteveMode && (!tfsGame || typeof tfsScore !== 'number')) {
 			return NextResponse.json({ error: 'TFS game and score required for Steve mode' }, { status: 400 });
 		}
@@ -169,7 +171,7 @@ export async function POST(req: Request) {
 			gameResults,
 			isSteveMode ? tfsGame : null,
 			isSteveMode ? tfsScore : null,
-			league.mode || 'standard',
+			rules,
 			calculatePointsFromOdds,
 			lockGameId
 		);
@@ -278,7 +280,7 @@ export async function GET(req: Request) {
 
 		// Get league for mode
 		const league = await League.findById(leagueId);
-		const leagueMode = league?.mode || 'standard';
+		const leagueMode = rulesFor(league);
 
 		// Get current game results for re-scoring if needed
 		const games = await NFLService.getWeeklyGames(parseInt(week, 10), season);

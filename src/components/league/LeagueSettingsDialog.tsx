@@ -11,6 +11,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Pill } from '@/components/ui/page';
+import { Switch } from '@/components/ui/switch';
+import { LOCK_MULTIPLIER_OPTIONS, PUNISHMENT_MAX, TROPHY_NAME_MAX, rulesFor, type LeagueSettings } from '@/lib/leagueRules';
+import { cn } from '@/lib/utils';
 
 interface Member {
 	_id: string;
@@ -22,7 +25,10 @@ export interface SettingsLeague {
 	name: string;
 	mode?: string;
 	creatorId?: string;
+	settings?: LeagueSettings;
 }
+
+const MODE_LABELS: Record<string, string> = { standard: 'Standard Mode', steve: 'Steve Mode', survivor: 'Survivor' };
 
 const initials = (name: string) =>
 	name
@@ -48,6 +54,10 @@ export function LeagueSettingsDialog({
 	const [tab, setTab] = useState<'general' | 'members'>('general');
 	const [name, setName] = useState(league.name);
 	const [password, setPassword] = useState('');
+	const [trophyName, setTrophyName] = useState('');
+	const [punishment, setPunishment] = useState('');
+	const [lockMultiplier, setLockMultiplier] = useState(2);
+	const [tfsEnabled, setTfsEnabled] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [members, setMembers] = useState<Member[] | null>(null);
@@ -68,6 +78,11 @@ export function LeagueSettingsDialog({
 		setTab('general');
 		setName(league.name);
 		setPassword('');
+		const rules = rulesFor(league);
+		setTrophyName(league.settings?.trophyName ?? '');
+		setPunishment(league.settings?.lastPlacePunishment ?? '');
+		setLockMultiplier(rules.lockMultiplier);
+		setTfsEnabled(rules.tfsEnabled);
 		setShowPassword(false);
 		setMembers(null);
 		loadMembers();
@@ -75,11 +90,19 @@ export function LeagueSettingsDialog({
 	}, [open]);
 
 	const passwordTooShort = password.trim().length > 0 && password.trim().length < 4;
+	const isSurvivor = league.mode === 'survivor';
 
 	const save = async () => {
-		const update: { name?: string; password?: string } = {};
+		const update: { name?: string; password?: string; settings?: LeagueSettings } = {};
 		if (name.trim() !== league.name) update.name = name.trim();
 		if (password.trim()) update.password = password;
+		const rules = rulesFor(league);
+		const settings: LeagueSettings = {};
+		if (trophyName.trim() !== (league.settings?.trophyName ?? '')) settings.trophyName = trophyName.trim();
+		if (punishment.trim() !== (league.settings?.lastPlacePunishment ?? '')) settings.lastPlacePunishment = punishment.trim();
+		if (!isSurvivor && lockMultiplier !== rules.lockMultiplier) settings.lockMultiplier = lockMultiplier;
+		if (league.mode === 'steve' && tfsEnabled !== rules.tfsEnabled) settings.tfsEnabled = tfsEnabled;
+		if (Object.keys(settings).length) update.settings = settings;
 		if (!Object.keys(update).length) return onOpenChange(false);
 
 		setSaving(true);
@@ -170,11 +193,71 @@ export function LeagueSettingsDialog({
 
 							<div className='flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3'>
 								<div>
-									<p className='text-sm font-semibold'>{league.mode === 'steve' ? 'Steve Mode' : 'Standard Mode'}</p>
-									<p className='text-xs text-muted-foreground'>Scoring mode can’t be changed after creation.</p>
+									<p className='text-sm font-semibold'>{MODE_LABELS[league.mode ?? 'standard'] ?? 'Standard Mode'}</p>
+									<p className='text-xs text-muted-foreground'>The league type can’t be changed after creation.</p>
 								</div>
 								<Pill tone={league.mode === 'steve' ? 'accent' : 'primary'}>Locked</Pill>
 							</div>
+
+							<div className='space-y-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4'>
+								<p className='eyebrow'>Trophy &amp; bragging rights</p>
+								<div className='space-y-2'>
+									<Label htmlFor='trophy-name'>Trophy name</Label>
+									<Input id='trophy-name' value={trophyName} onChange={e => setTrophyName(e.target.value)} placeholder='e.g. The Golden Toilet' maxLength={TROPHY_NAME_MAX} />
+									<p className='text-xs text-muted-foreground'>Shown on the champion’s spot in League History.</p>
+								</div>
+								<div className='space-y-2'>
+									<Label htmlFor='punishment'>Last-place punishment</Label>
+									<textarea
+										id='punishment'
+										value={punishment}
+										onChange={e => setPunishment(e.target.value)}
+										placeholder='e.g. Wears the other team’s jersey to the draft'
+										maxLength={PUNISHMENT_MAX}
+										rows={2}
+										className='flex w-full resize-none rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+									/>
+									<p className='text-xs text-muted-foreground tabular'>Shown next to last place on the standings. {punishment.length}/{PUNISHMENT_MAX}</p>
+								</div>
+							</div>
+
+							{!isSurvivor && (
+								<div className='space-y-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4'>
+									<div>
+										<p className='eyebrow'>Scoring tweaks</p>
+										<p className='mt-1 text-xs text-muted-foreground'>Changes re-score the whole season, past weeks included.</p>
+									</div>
+									<div className='space-y-2'>
+										<Label>Lock of the week</Label>
+										<div className='grid grid-cols-3 gap-2' role='radiogroup' aria-label='Lock of the week multiplier'>
+											{LOCK_MULTIPLIER_OPTIONS.map(option => (
+												<button
+													key={option}
+													type='button'
+													role='radio'
+													aria-checked={lockMultiplier === option}
+													onClick={() => setLockMultiplier(option)}
+													className={cn(
+														'rounded-xl border px-3 py-2 text-sm font-semibold tabular transition-colors',
+														lockMultiplier === option ? 'border-primary bg-primary/[0.12] text-primary' : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.06]'
+													)}
+												>
+													{option === 1 ? 'Off' : `${option}×`}
+												</button>
+											))}
+										</div>
+									</div>
+									{league.mode === 'steve' && (
+										<label className='flex items-center justify-between gap-3'>
+											<span>
+												<span className='block text-sm font-semibold'>Total Final Score tiebreaker</span>
+												<span className='block text-xs text-muted-foreground'>Guess a game’s combined score for up to 5 bonus points.</span>
+											</span>
+											<Switch checked={tfsEnabled} onCheckedChange={setTfsEnabled} aria-label='Total Final Score tiebreaker' />
+										</label>
+									)}
+								</div>
+							)}
 
 							<DialogFooter>
 								<Button variant='ghost' onClick={() => onOpenChange(false)} disabled={saving}>

@@ -77,7 +77,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 				.sort()[0] ?? null;
 
 		const mode = season.mode;
-		const valueOf = (p: ScoredPick) => ScoringService.pointsForPick({ odds: p.odds ?? undefined }, mode, calculatePointsFromOdds, p.isLock);
+		const valueOf = (p: ScoredPick) => ScoringService.pointsForPick({ odds: p.odds ?? undefined }, season.rules, calculatePointsFromOdds, p.isLock);
 
 		/** Resolve a pick against its game: which side, scores and live state. */
 		const resolve = (p: ScoredPick) => {

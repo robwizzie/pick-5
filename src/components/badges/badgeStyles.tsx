@@ -1,8 +1,8 @@
-import { Crosshair, Crown, Flame, Lock, Swords, Trophy, type LucideIcon } from 'lucide-react';
+import { Crosshair, Crown, Flame, Lock, Medal, Shield, Swords, Trophy, Zap, type LucideIcon } from 'lucide-react';
 import type { Badge, BadgeTone } from '@/lib/badges';
 import { cn } from '@/lib/utils';
 
-export const BADGE_ICONS: Record<Badge['icon'], LucideIcon> = { Crosshair, Crown, Flame, Lock, Swords, Trophy };
+export const BADGE_ICONS: Record<Badge['icon'], LucideIcon> = { Crosshair, Crown, Flame, Lock, Medal, Shield, Swords, Trophy, Zap };
 
 /** Literal class strings per tone (Tailwind needs them spelled out). */
 export const BADGE_TONES: Record<BadgeTone, { text: string; chip: string; card: string; wash: string; bar: string }> = {
