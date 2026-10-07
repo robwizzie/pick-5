@@ -5,7 +5,7 @@ import { connectDB } from '@/lib/db';
 import { Pick } from '@/models/Pick';
 import { League } from '@/models/League';
 import { authOptions } from '@/lib/auth';
-import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
+import { countedWeeks, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 import { loadGameResults, rescore, revealStartedOnly, type PickDocLike } from '@/lib/pickScoring';
 
 type PickDoc = PickDocLike & { _id: unknown; leagueId: string; [key: string]: unknown };
@@ -43,7 +43,8 @@ export async function GET(req: Request) {
 
 		const query: Record<string, unknown> = { userId, ...seasonPickFilter(season) };
 		if (leagueId) query.leagueId = leagueId;
-		if (week) query.week = parseInt(week, 10);
+		// A single week is returned as asked; the whole season only includes the weeks that count
+		query.week = week ? parseInt(week, 10) : countedWeeks(season);
 
 		const [docs, leagues] = await Promise.all([
 			Pick.find(query).sort({ week: 1 }).lean<PickDoc[]>(),

@@ -73,13 +73,13 @@ function MatchupCard({ matchup, records, currentUserId, badgesByUser, index }: {
 }
 
 /** All of a week's head-to-head pairings, viewer's first. Fetches and polls its own data. */
-export function MatchupsBoard({ leagueId, week, currentUserId, badgesByUser }: { leagueId: string; week: number; currentUserId?: string; badgesByUser?: Map<string, Badge[]> }) {
+export function MatchupsBoard({ leagueId, week, season, currentUserId, badgesByUser }: { leagueId: string; week: number; season?: number; currentUserId?: string; badgesByUser?: Map<string, Badge[]> }) {
 	const [data, setData] = useState<MatchupsResponse | null>(null);
 	const [error, setError] = useState(false);
 
 	const load = useCallback(async () => {
 		try {
-			const res = await fetch(`/api/league/${leagueId}/matchups?week=${week}`, { cache: 'no-store' });
+			const res = await fetch(`/api/league/${leagueId}/matchups?week=${week}${season ? `&season=${season}` : ''}`, { cache: 'no-store' });
 			if (!res.ok) throw new Error(`Failed to load matchups (${res.status})`);
 			setData(await res.json());
 			setError(false);
@@ -87,7 +87,7 @@ export function MatchupsBoard({ leagueId, week, currentUserId, badgesByUser }: {
 			console.error(err);
 			setError(true);
 		}
-	}, [leagueId, week]);
+	}, [leagueId, week, season]);
 
 	useEffect(() => {
 		setData(null);

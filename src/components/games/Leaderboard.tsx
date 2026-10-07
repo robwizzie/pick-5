@@ -263,7 +263,7 @@ function BoardSkeleton() {
 }
 
 export function Leaderboard() {
-	const { currentWeek } = useWeek();
+	const { currentWeek, season, isPastSeason } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session } = useSession();
 	const currentUserId = session?.user?.id;
@@ -285,7 +285,7 @@ export function Leaderboard() {
 		if (!leagueId) return;
 		let cancelled = false;
 		const loadBadges = () =>
-			fetch(`/api/league/${leagueId}/badges`)
+			fetch(`/api/league/${leagueId}/badges?season=${season}`)
 				.then(res => (res.ok ? (res.json() as Promise<LeagueBadgesResponse>) : null))
 				.then(data => {
 					if (!cancelled && data) setBadgesByUser(new Map(data.members.map(m => [m.userId, m.badges])));
@@ -297,7 +297,7 @@ export function Leaderboard() {
 			cancelled = true;
 			window.removeEventListener('refreshLeaderboard', loadBadges);
 		};
-	}, [leagueId]);
+	}, [leagueId, season]);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -331,7 +331,7 @@ export function Leaderboard() {
 			}
 			setError(null);
 
-			const [response, games] = await Promise.all([fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' }), NFLService.getWeeklyGames(currentWeek)]);
+			const [response, games] = await Promise.all([fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}&season=${season}`, { cache: 'no-store' }), NFLService.getWeeklyGames(currentWeek, season)]);
 			if (!response.ok) throw new Error('Failed to fetch leaderboard data');
 
 			const data: LeaderboardResponse = await response.json();
@@ -360,15 +360,15 @@ export function Leaderboard() {
 		const handleRefresh = () => fetchLeaderboard(true);
 		window.addEventListener('refreshLeaderboard', handleRefresh);
 
-		// Use smart polling interval (2 min during games, 5 min outside)
-		const pollInterval = setInterval(() => fetchLeaderboard(true), NFLService.getPollingInterval());
+		// Use smart polling interval (2 min during games, 5 min outside); past seasons are final
+		const pollInterval = isPastSeason ? undefined : setInterval(() => fetchLeaderboard(true), NFLService.getPollingInterval());
 
 		return () => {
 			window.removeEventListener('refreshLeaderboard', handleRefresh);
 			clearInterval(pollInterval);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentWeek, leagueId]);
+	}, [currentWeek, leagueId, season]);
 
 	// Weekly board: points desc, then players with picks first
 	const weeklySorted = withRanks(
@@ -571,7 +571,7 @@ export function Leaderboard() {
 							Week {currentWeek}
 						</TabsTrigger>
 						<TabsTrigger value='season' className='px-2'>
-							Season
+							{isPastSeason ? season : 'Season'}
 						</TabsTrigger>
 						<TabsTrigger value='matchups' className='px-2'>
 							<Swords aria-hidden />
@@ -585,7 +585,7 @@ export function Leaderboard() {
 						{renderBoard(seasonEntries, 'season')}
 					</TabsContent>
 					<TabsContent value='matchups' className='mt-0'>
-						{leagueId && <MatchupsBoard leagueId={leagueId} week={currentWeek} currentUserId={currentUserId} badgesByUser={badgesByUser} />}
+						{leagueId && <MatchupsBoard leagueId={leagueId} week={currentWeek} season={season} currentUserId={currentUserId} badgesByUser={badgesByUser} />}
 					</TabsContent>
 				</Tabs>
 			)}

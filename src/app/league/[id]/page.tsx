@@ -46,16 +46,17 @@ export default function LeagueDetails() {
 	// Deep link from the dashboard's live banner: /league/{id}?view=live
 	const wantsLive = searchParams?.get('view') === 'live';
 	const { data: session } = useSession();
-	const { currentWeek, liveWeek } = useWeek();
+	const { currentWeek, liveWeek, isPastSeason } = useWeek();
 	// Mount only one layout so data components don't fetch and poll twice
 	const isDesktop = useMediaQuery('(min-width: 1024px)');
 
 	const [league, setLeague] = useState<League | null>(null);
 	const [mobileView, setMobileView] = useState<MobileView>(wantsLive ? 'live' : 'picks');
 	const [desktopTab, setDesktopTab] = useState<DesktopTab>(wantsLive ? 'live' : 'picks');
-	const liveStatus = useWeekLiveStatus(currentWeek);
+	// Nothing is live in a past season
+	const liveStatus = useWeekLiveStatus(isPastSeason ? null : currentWeek);
 	// The Live view exists while the viewed week's slate is underway (or when deep-linked)
-	const showLive = wantsLive || !!liveStatus?.sweatable;
+	const showLive = !isPastSeason && (wantsLive || !!liveStatus?.sweatable);
 	// Open on Live once per page load when games are in progress — unless the user already chose a view
 	const autoView = useRef(wantsLive);
 	const [recapWeek, setRecapWeek] = useState<number | null>(null);
@@ -82,7 +83,7 @@ export default function LeagueDetails() {
 
 	// Offer "Last week's recap" while viewing the live week, once last week is complete
 	useEffect(() => {
-		if (!id || !liveWeek || currentWeek !== liveWeek || currentWeek <= 1) {
+		if (!id || isPastSeason || !liveWeek || currentWeek !== liveWeek || currentWeek <= 1) {
 			setRecapWeek(null);
 			return;
 		}
@@ -99,7 +100,7 @@ export default function LeagueDetails() {
 		check();
 		const interval = setInterval(check, RECAP_POLL_MS);
 		return () => clearInterval(interval);
-	}, [id, currentWeek, liveWeek]);
+	}, [id, currentWeek, liveWeek, isPastSeason]);
 
 	// Don't strand the mobile view on a tab that disappeared
 	useEffect(() => {
@@ -117,10 +118,10 @@ export default function LeagueDetails() {
 
 	// Live went away (slate finished, or the user changed weeks): fall back to Results
 	useEffect(() => {
-		if (!liveStatus || showLive) return;
+		if ((!liveStatus && !isPastSeason) || showLive) return;
 		setMobileView(view => (view === 'live' ? 'results' : view));
 		setDesktopTab(tab => (tab === 'live' ? 'results' : tab));
-	}, [liveStatus, showLive]);
+	}, [liveStatus, showLive, isPastSeason]);
 
 	const chooseMobileView = (view: MobileView) => {
 		autoView.current = true;

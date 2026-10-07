@@ -10,7 +10,7 @@ import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { hasGameStarted } from '@/services/gameUtils';
-import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
+import { ensurePickSeasonMigration, getCurrentSeasonYear, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 import type { Game } from '@/components/games/GameCard';
 import { revealStartedOnly } from '@/lib/pickScoring';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
@@ -262,7 +262,9 @@ export async function GET(req: Request) {
 			}
 		}
 
-		const season = getCurrentSeasonYear();
+		// Optional ?season=YYYY to view a past season; defaults to the current season
+		const season = parseSeasonParam(searchParams.get('season'));
+		const isCurrentSeason = season === getCurrentSeasonYear();
 		const picks = await Pick.findOne({
 			userId: targetUserId,
 			week: parseInt(week, 10),
@@ -312,7 +314,7 @@ export async function GET(req: Request) {
 			await picks.save();
 
 			// Update user's total stats (only update if it's the current user's picks being fetched)
-			if (targetUserId === session.user.id) {
+			if (targetUserId === session.user.id && isCurrentSeason) {
 				await User.findOneAndUpdate(
 					{ _id: targetUserId },
 					{

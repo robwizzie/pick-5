@@ -176,7 +176,7 @@ function WeeklyPicksSkeleton() {
 }
 
 export function WeeklyPicks() {
-	const { currentWeek } = useWeek();
+	const { currentWeek, season, isPastSeason } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const { refreshStats } = useStats();
@@ -260,7 +260,7 @@ export function WeeklyPicks() {
 			cancelled = true;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentWeek, session?.user?.id, sessionStatus, leagueMode]);
+	}, [currentWeek, season, session?.user?.id, sessionStatus, leagueMode]);
 
 	// Auto-refresh live games with smart polling. Refreshes are silent: no loading state, no picks reload
 	// (which would clobber unsaved local edits).
@@ -286,7 +286,7 @@ export function WeeklyPicks() {
 
 		try {
 			if (!silent) setLoading(true);
-			let weeklyGames = await NFLService.getWeeklyGames(currentWeek);
+			let weeklyGames = await NFLService.getWeeklyGames(currentWeek, season);
 
 			// Enrich live games with clock and period data
 			weeklyGames = await NFLService.enrichGamesWithLiveData(weeklyGames);
@@ -295,7 +295,7 @@ export function WeeklyPicks() {
 			if (leagueMode === 'standard') {
 				try {
 					// Fetch odds from centralized snapshot (reduces API calls dramatically)
-					const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}`);
+					const oddsResponse = await fetch(`/api/odds/snapshot?week=${currentWeek}&season=${season}`);
 					let snapshotOdds: SnapshotOdds[] = [];
 					if (oddsResponse.ok) {
 						const data = await oddsResponse.json();
@@ -305,7 +305,7 @@ export function WeeklyPicks() {
 					// If no snapshot odds available, fall back to user's stored odds from picks
 					const storedOddsMap = new Map<string, { homeOdds?: number; awayOdds?: number }>();
 					if (snapshotOdds.length === 0 && leagueId) {
-						const picksResponse = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
+						const picksResponse = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&season=${season}`);
 						if (picksResponse.ok) {
 							const picksData = await picksResponse.json();
 							if (picksData?.picks) {
@@ -362,7 +362,7 @@ export function WeeklyPicks() {
 		}
 
 		try {
-			const response = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}`);
+			const response = await fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&season=${season}`);
 			const data = await response.json();
 
 			if (data) {
@@ -380,8 +380,9 @@ export function WeeklyPicks() {
 				// Update last saved ref to match loaded data
 				lastSavedRef.current = { picks: [...loadedPicks], tfsGame: loadedTfsGame, tfsScore: loadedTfsScore, lockGameId: loadedLock };
 
-				// Only lock the slate once all picked games have started; edits are allowed until then
-				setSubmitted(haveAllPickedGamesStarted(loadedPicks, gamesList));
+				// Only lock the slate once all picked games have started; edits are allowed until then.
+				// A past season is always read-only.
+				setSubmitted(isPastSeason || haveAllPickedGamesStarted(loadedPicks, gamesList));
 			} else {
 				setPicks([]);
 				setLockGameId(null);
@@ -408,7 +409,7 @@ export function WeeklyPicks() {
 		if (!leagueId) return;
 
 		try {
-			const response = await fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' });
+			const response = await fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}&season=${season}`, { cache: 'no-store' });
 			if (response.ok) {
 				const data = await response.json();
 				setLeaguePicks(data);
@@ -468,7 +469,7 @@ export function WeeklyPicks() {
 		// For Steve mode, require TFS. For Standard mode, don't require it
 		const hasRequiredFields = leagueMode === 'steve' ? picks.length === MAX_PICKS && tfsGame && !isNaN(parseInt(tfsScore)) : picks.length === MAX_PICKS;
 
-		if (!session || !leagueId || !hasRequiredFields) return; // Don't save if incomplete
+		if (!session || !leagueId || !hasRequiredFields || isPastSeason) return; // Don't save if incomplete (or a past season)
 
 		// Check if picks have actually changed
 		const currentState = JSON.stringify({ picks, tfsGame, tfsScore, lockGameId: activeLock });
@@ -508,6 +509,7 @@ export function WeeklyPicks() {
 	};
 
 	const handleTeamSelect = (gameId: string, selectedTeam: string, opponent: string, isHome: boolean, odds?: number) => {
+		if (isPastSeason) return;
 		if (!session) {
 			setError('Please sign in to make picks');
 			return;
@@ -580,6 +582,7 @@ export function WeeklyPicks() {
 	const toggleLock = (gameId: string) => setLockGameId(current => (current === gameId ? null : gameId));
 
 	const handleSubmit = async () => {
+		if (isPastSeason) return;
 		if (!session) {
 			setError('Please sign in to submit picks');
 			return;
@@ -814,15 +817,27 @@ export function WeeklyPicks() {
 				</Alert>
 			)}
 
+			{/* Past season: read-only */}
+			{isPastSeason && (
+				<Alert variant='info'>
+					<CalendarX />
+					<AlertDescription>
+						You’re viewing the {season}–{String(season + 1).slice(-2)} season. Picks from past seasons are read-only — switch seasons from the week picker.
+					</AlertDescription>
+				</Alert>
+			)}
+
 			{/* Season Ended Banner */}
-			{seasonStatus && !seasonStatus.canSubmitPicks && (
+			{!isPastSeason && seasonStatus && !seasonStatus.canSubmitPicks && (
 				<Alert variant='warning'>
 					<CalendarX />
 					<AlertDescription>{seasonStatus.message || 'The NFL regular season has ended. Check out the League History to see past season standings!'}</AlertDescription>
 				</Alert>
 			)}
 
-			{submitted ? (
+			{isPastSeason && picks.length === 0 ? (
+				<EmptyState icon={CalendarX} title='No picks this week' description={`You didn’t make picks for week ${currentWeek} of the ${season} season.`} />
+			) : submitted ? (
 				<div className='space-y-3'>
 					{picks.map((pick, index) => {
 						const game = games.find(g => g.id === pick.gameId);
