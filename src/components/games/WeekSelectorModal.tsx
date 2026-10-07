@@ -12,7 +12,8 @@ interface WeekSelectorModalProps {
 	liveWeek?: number | null;
 	onWeekSelect: (week: number) => void;
 	weeksWithPicks: number[];
-	/** Weeks in the viewed season */
+	/** The first and last weeks that count in the viewed season */
+	startWeek: number;
 	finalWeek: number;
 	/** Seasons to choose from, newest first (the row is hidden when there's only one) */
 	seasons?: number[];
@@ -25,9 +26,9 @@ interface WeekSelectorModalProps {
 
 const seasonLabel = (year: number) => `${year}–${String(year + 1).slice(-2)}`;
 
-export function WeekSelectorModal({ open, onOpenChange, currentWeek, liveWeek, onWeekSelect, weeksWithPicks, finalWeek, seasons = [], season, currentSeason, onSeasonSelect, historyHref }: WeekSelectorModalProps) {
+export function WeekSelectorModal({ open, onOpenChange, currentWeek, liveWeek, onWeekSelect, weeksWithPicks, startWeek, finalWeek, seasons = [], season, currentSeason, onSeasonSelect, historyHref }: WeekSelectorModalProps) {
 	const picked = new Set(weeksWithPicks);
-	const weeks = Array.from({ length: finalWeek }, (_, i) => i + 1);
+	const weeks = Array.from({ length: finalWeek - startWeek + 1 }, (_, i) => startWeek + i);
 	const isPastSeason = season !== undefined && season !== currentSeason;
 
 	return (

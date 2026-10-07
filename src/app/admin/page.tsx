@@ -97,6 +97,8 @@ interface SeasonStatus {
 	isActive: boolean;
 	seasonYear: number;
 	currentWeek: number;
+	startWeek?: number;
+	finalWeek?: number;
 	lastCompletedWeek: number;
 	isArchived: boolean;
 	canSubmitPicks: boolean;
@@ -104,7 +106,7 @@ interface SeasonStatus {
 	message?: string;
 }
 
-type SeasonAction = 'migrate_picks' | 'archive' | 'deactivate' | 'start_new';
+type SeasonAction = 'migrate_picks' | 'archive' | 'set_weeks' | 'deactivate' | 'start_new';
 
 interface SeasonActionResponse {
 	success?: boolean;
@@ -115,6 +117,9 @@ interface SeasonActionResponse {
 	backfilled?: number;
 	droppedLegacyIndex?: boolean;
 	alreadyMigrated?: boolean;
+	// set_weeks
+	startWeek?: number;
+	finalWeek?: number;
 	// archive
 	seasonYear?: number;
 	leaguesArchived?: number;
@@ -145,6 +150,7 @@ interface ActionResult {
 const ACTION_LABELS: Record<SeasonAction, string> = {
 	migrate_picks: 'Migrate picks',
 	archive: 'Archive season',
+	set_weeks: 'Season weeks',
 	deactivate: 'Deactivate season',
 	start_new: 'Start new season'
 };
@@ -155,6 +161,12 @@ function buildFacts(action: SeasonAction, data: SeasonActionResponse): ActionRes
 			{ label: 'Picks backfilled', value: String(data.backfilled ?? 0) },
 			{ label: 'Legacy index dropped', value: data.droppedLegacyIndex ? 'Yes' : 'No' },
 			{ label: 'Already migrated', value: data.alreadyMigrated ? 'Yes' : 'No' }
+		];
+	}
+	if (action === 'set_weeks') {
+		return [
+			{ label: 'Season', value: data.seasonYear !== undefined ? String(data.seasonYear) : '—' },
+			{ label: 'Weeks that count', value: data.startWeek && data.finalWeek ? `${data.startWeek}–${data.finalWeek}` : '—' }
 		];
 	}
 	if (action === 'archive') {
@@ -221,6 +233,28 @@ function SeasonManagement() {
 	const [lastResult, setLastResult] = useState<ActionResult | null>(null);
 	const [archiveReplace, setArchiveReplace] = useState(false);
 	const [archivePreviews, setArchivePreviews] = useState<{ seasonYear: number; dryRun: boolean; leagues: ArchivePreview[] } | null>(null);
+	// Weeks that count, per season
+	const [weeksYear, setWeeksYear] = useState<string>(String(getCurrentSeasonYear()));
+	const [startWeek, setStartWeek] = useState('');
+	const [finalWeek, setFinalWeek] = useState('');
+
+	const loadWeeks = useCallback(async (year: string) => {
+		const season = Number(year);
+		if (!Number.isInteger(season) || season < 2000) return;
+		try {
+			const response = await fetch(`/api/season/weeks?season=${season}`, { cache: 'no-store' });
+			if (!response.ok) return;
+			const data: { startWeek: number; finalWeek: number } = await response.json();
+			setStartWeek(String(data.startWeek));
+			setFinalWeek(String(data.finalWeek));
+		} catch (err) {
+			console.error('Error loading season weeks:', err);
+		}
+	}, []);
+
+	useEffect(() => {
+		loadWeeks(weeksYear);
+	}, [loadWeeks, weeksYear]);
 
 	const loadStatus = useCallback(async () => {
 		setStatusLoading(true);
@@ -243,7 +277,21 @@ function SeasonManagement() {
 	}, [loadStatus]);
 
 	const runAction = async (action: SeasonAction, { dryRun = false }: { dryRun?: boolean } = {}) => {
-		const body: { action: SeasonAction; seasonYear?: number; dryRun?: boolean; replace?: boolean } = { action };
+		const body: { action: SeasonAction; seasonYear?: number; dryRun?: boolean; replace?: boolean; startWeek?: number; finalWeek?: number } = { action };
+		if (action === 'set_weeks') {
+			const year = Number(weeksYear);
+			const start = Number(startWeek);
+			const final = Number(finalWeek);
+			if (!Number.isInteger(year) || year < 2000) {
+				toast.error('Enter a valid season year');
+				return;
+			}
+			if (!Number.isInteger(start) || !Number.isInteger(final) || start < 1 || final > 18 || start > final) {
+				toast.error('Weeks must be 1–18 with the start week on or before the final week');
+				return;
+			}
+			Object.assign(body, { seasonYear: year, startWeek: start, finalWeek: final });
+		}
 		if (action === 'archive') {
 			const year = Number(archiveYear);
 			if (!Number.isInteger(year) || year < 2000) {
@@ -282,6 +330,7 @@ function SeasonManagement() {
 		} finally {
 			setRunning(null);
 			loadStatus();
+			if (action === 'set_weeks') loadWeeks(weeksYear);
 		}
 	};
 
@@ -289,7 +338,7 @@ function SeasonManagement() {
 		deactivate: {
 			title: 'Deactivate season?',
 			description:
-				'Stops accepting picks and stops sending notifications for the current season, and marks week 18 as the last completed week. You can turn it back on later with "Start new season".',
+				'Stops accepting picks and stops sending notifications for the current season, and marks its final week as the last completed week. You can turn it back on later with "Start new season".',
 			confirm: 'Deactivate',
 			variant: 'destructive' as const
 		},
@@ -329,7 +378,7 @@ function SeasonManagement() {
 					<>
 						<div className='grid grid-cols-2 gap-3 lg:grid-cols-4'>
 							<StatTile label='Season' value={status.seasonYear} icon={Trophy} tone='primary' sub={status.isArchived ? 'Archived to League History' : 'Not archived'} />
-							<StatTile label='Current week' value={status.currentWeek} icon={Clock} tone='primary' sub='From the NFL schedule' />
+							<StatTile label='Current week' value={status.currentWeek} icon={Clock} tone='primary' sub={status.startWeek && status.finalWeek ? `Season counts weeks ${status.startWeek}–${status.finalWeek}` : 'From the NFL schedule'} />
 							<StatTile label='Last completed' value={status.lastCompletedWeek || '—'} icon={CheckCircle2} tone='accent' sub='Week fully scored' />
 							<StatTile
 								label='Picks'
@@ -358,6 +407,38 @@ function SeasonManagement() {
 
 				<Card>
 					<CardContent className='space-y-3 p-4 sm:p-5'>
+						<ActionRow
+							icon={CalendarRange}
+							title='Season weeks'
+							description='The first and last weeks that count for a season. Picks, standings, stats, badges and reminders only use these weeks. Defaults to weeks 1–17. If you add weeks back to an archived season, re-archive it with "Replace existing".'>
+							{[
+								{ id: 'weeks-year', label: 'Season', value: weeksYear, set: setWeeksYear, min: 2000, max: getCurrentSeasonYear(), width: 'w-24' },
+								{ id: 'weeks-start', label: 'Start wk', value: startWeek, set: setStartWeek, min: 1, max: 18, width: 'w-20' },
+								{ id: 'weeks-final', label: 'Final wk', value: finalWeek, set: setFinalWeek, min: 1, max: 18, width: 'w-20' }
+							].map(field => (
+								<div key={field.id} className={cn('space-y-1.5', field.width)}>
+									<Label htmlFor={field.id} className='eyebrow'>
+										{field.label}
+									</Label>
+									<Input
+										id={field.id}
+										type='number'
+										inputMode='numeric'
+										min={field.min}
+										max={field.max}
+										value={field.value}
+										onChange={e => field.set(e.target.value)}
+										disabled={busy}
+										className='tabular h-10'
+									/>
+								</div>
+							))}
+							<Button variant='outline' onClick={() => runAction('set_weeks')} disabled={busy || !weeksYear || !startWeek || !finalWeek}>
+								{running === 'set_weeks' ? <RefreshCw className='animate-spin' /> : <CalendarRange />}
+								{running === 'set_weeks' ? 'Saving…' : 'Save'}
+							</Button>
+						</ActionRow>
+
 						<ActionRow
 							icon={DatabaseZap}
 							title='Migrate picks to season scope'
@@ -456,7 +537,7 @@ function SeasonManagement() {
 							icon={PauseCircle}
 							tone='hot'
 							title='Deactivate season'
-							description='Stops accepting picks and sending notifications. Use when week 18 is complete.'>
+							description='Stops accepting picks and sending notifications. Use when the season’s final week is complete.'>
 							<Button variant='destructive' onClick={() => setConfirmAction('deactivate')} disabled={busy}>
 								{running === 'deactivate' ? <RefreshCw className='animate-spin' /> : <PauseCircle />}
 								{running === 'deactivate' ? 'Deactivating…' : 'Deactivate'}

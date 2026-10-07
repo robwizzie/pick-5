@@ -86,6 +86,26 @@ export async function POST(req: Request) {
 				});
 			}
 
+			case 'set_weeks': {
+				// Set the first and last weeks that count in a season (default: current season)
+				const currentSeason = getCurrentSeasonYear();
+				const seasonYear = body.seasonYear === undefined || body.seasonYear === null || body.seasonYear === '' ? currentSeason : Number(body.seasonYear);
+				if (!Number.isInteger(seasonYear) || seasonYear < 2000 || seasonYear > currentSeason) {
+					return NextResponse.json({ error: `Invalid seasonYear: must be a year between 2000 and ${currentSeason}` }, { status: 400 });
+				}
+				try {
+					const weeks = await SeasonService.setSeasonWeeks(seasonYear, { startWeek: Number(body.startWeek), finalWeek: Number(body.finalWeek) });
+					return NextResponse.json({
+						success: true,
+						seasonYear,
+						...weeks,
+						message: `${seasonYear} now counts weeks ${weeks.startWeek}–${weeks.finalWeek}`
+					});
+				} catch (error) {
+					return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid weeks' }, { status: 400 });
+				}
+			}
+
 			case 'migrate_picks': {
 				// Backfill `season` on legacy picks and swap the unique index (idempotent)
 				const result = await runPickSeasonMigration();
@@ -109,7 +129,7 @@ export async function POST(req: Request) {
 
 			default:
 				return NextResponse.json(
-					{ error: 'Invalid action. Valid actions: deactivate, archive, start_new, migrate_picks' },
+					{ error: 'Invalid action. Valid actions: deactivate, archive, set_weeks, start_new, migrate_picks' },
 					{ status: 400 }
 				);
 		}

@@ -3,7 +3,7 @@
 // Markers live in GameNotification (notificationType 'weekly_recap', gameId
 // '<season>-week-<N>-recap'); legacy 'week-<N>-recap' markers count only if sent this season.
 import { connectDB } from '@/lib/db';
-import { seasonPickFilter, seasonWindow } from '@/lib/season';
+import { getSeasonWeeks, seasonPickFilter, seasonWindow } from '@/lib/season';
 import { GameNotification } from '@/models/GameNotification';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
@@ -84,7 +84,9 @@ export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Pro
 	const alreadySent = new Set(already.map(n => `${n.userId}|${n.leagueId}`));
 
 	// Season-to-date picks for these leagues, in one query; results per week fetched once.
-	const seasonPicks = (await Pick.find({ leagueId: { $in: leagueIds }, week: { $lte: week }, ...seasonPickFilter(season) })
+	// Season to date: from the season's start week through this week
+	const { startWeek } = await getSeasonWeeks(season);
+	const seasonPicks = (await Pick.find({ leagueId: { $in: leagueIds }, week: { $gte: startWeek, $lte: week }, ...seasonPickFilter(season) })
 		.select('userId leagueId week picks tfsGame tfsScore lockGameId')
 		.lean()) as unknown as LeanPickDoc[];
 	const resultsByWeek = new Map<number, GameResultRow[]>([[week, toGameResults(completed.games)]]);

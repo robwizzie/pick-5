@@ -4,7 +4,8 @@ import { SeasonConfig } from '@/models/SeasonConfig';
 import { SeasonHistory } from '@/models/SeasonHistory';
 import { League } from '@/models/League';
 import { NFLService } from './nflService';
-import { ensurePickSeasonMigration, getCurrentSeasonYear, getSeasonFinalWeek } from '@/lib/season';
+import { clearSeasonWeeksCache, ensurePickSeasonMigration, getCurrentSeasonYear, getSeasonFinalWeek, getSeasonWeeks } from '@/lib/season';
+import { REGULAR_SEASON_WEEKS, resolveSeasonWeeks } from '@/lib/seasonYear';
 import { loadLeagueSeason } from '@/lib/leagueSeason';
 
 export interface ArchivePreview {
@@ -20,10 +21,14 @@ export interface SeasonStatus {
 	isActive: boolean;
 	seasonYear: number;
 	currentWeek: number;
+	/** The first week that counts this season */
+	startWeek: number;
+	/** The last week that counts this season (picks close after it) */
+	finalWeek: number;
 	lastCompletedWeek: number;
 	isArchived: boolean;
 	canSubmitPicks: boolean;
-	canSendNotifications: boolean; // For cron jobs - allows week 18 notifications even if ESPN shows week 19
+	canSendNotifications: boolean; // For cron jobs - allows the final week's notifications even after ESPN moves on a week
 	message?: string;
 }
 
@@ -98,16 +103,17 @@ type HistoryRecord = {
 };
 
 /**
- * Seasons archived before their final week was set can include weeks that don't count (e.g. week 18
- * of 2025). Rebuild those records from the stored weekly breakdown and save the corrected version.
+ * Seasons archived before their start/final weeks were set can include weeks that don't count (e.g.
+ * week 18 of 2025). Rebuild those records from the stored weekly breakdown and save the corrected version.
  */
 async function withoutUncountedWeeks<T extends HistoryRecord>(record: T): Promise<T> {
-	const finalWeek = getSeasonFinalWeek(record.seasonYear);
+	const { startWeek, finalWeek } = await getSeasonWeeks(record.seasonYear);
+	const counts = (week: number) => week >= startWeek && week <= finalWeek;
 	const standings = record.standings ?? [];
-	if (!standings.some(p => (p.weeklyStats ?? []).some(w => w.week > finalWeek))) return record;
+	if (standings.every(p => (p.weeklyStats ?? []).every(w => counts(w.week)))) return record;
 
 	const players = standings
-		.map(p => ({ userId: p.userId, userName: p.userName, userImage: p.userImage ?? null, weeklyStats: (p.weeklyStats ?? []).filter(w => w.week >= 1 && w.week <= finalWeek) }))
+		.map(p => ({ userId: p.userId, userName: p.userName, userImage: p.userImage ?? null, weeklyStats: (p.weeklyStats ?? []).filter(w => counts(w.week)) }))
 		.filter(p => p.weeklyStats.length > 0);
 	const rebuilt = buildStandings(players);
 	const seasonStats: Record<string, unknown> = {
@@ -119,7 +125,7 @@ async function withoutUncountedWeeks<T extends HistoryRecord>(record: T): Promis
 	};
 	// A biggest upset from a week that no longer counts doesn't belong in the record
 	const upset = seasonStats.biggestUpset as { week?: number } | undefined;
-	if (upset?.week && upset.week > finalWeek) delete seasonStats.biggestUpset;
+	if (upset?.week && !counts(upset.week)) delete seasonStats.biggestUpset;
 
 	const update = { standings: rebuilt.standings, champions: rebuilt.champions, seasonStats };
 	try {
@@ -154,7 +160,7 @@ export class SeasonService {
 			config = await SeasonConfig.create({
 				seasonYear,
 				isActive: !isPastSeason,
-				lastCompletedWeek: isPastSeason ? getSeasonFinalWeek(seasonYear) : 0,
+				lastCompletedWeek: isPastSeason ? await getSeasonFinalWeek(seasonYear) : 0,
 				isArchived: false
 			});
 		}
@@ -168,35 +174,35 @@ export class SeasonService {
 	static async getSeasonStatus(): Promise<SeasonStatus> {
 		const config = await this.getOrCreateSeasonConfig();
 		const currentWeek = await NFLService.getCurrentWeek(false);
+		const { startWeek, finalWeek } = resolveSeasonWeeks(config.seasonYear, config);
 
 		// Use the raw (uncapped) week number to detect if we're past the regular season.
 		// calculateCurrentWeek() caps at 18, which makes it impossible to detect the off-season.
 		// The raw week number continues past 18 (e.g., week 30 in April) so we can tell
 		// the regular season is truly over and stop all notifications/scoring.
 		const rawWeek = NFLService.calculateRawWeekNumber();
-		const isPastRegularSeason = rawWeek > 19;
+		const isPastRegularSeason = rawWeek > REGULAR_SEASON_WEEKS + 1;
 
 		// Season is not active if:
 		// 1. isActive is false in config
-		// 2. Current week is > 18 (after the regular season)
-		// 3. We're well past the regular season window (raw week > 19)
-		const isSeasonActive = config.isActive && currentWeek <= 18 && !isPastRegularSeason;
+		// 2. Current week is past this season's final week
+		// 3. We're well past the regular season window
+		const isSeasonActive = config.isActive && currentWeek <= finalWeek && !isPastRegularSeason;
 
 		// Can submit picks if season is active
 		const canSubmitPicks = isSeasonActive;
 
 		// Can send notifications if:
 		// 1. Config isActive is true (admin hasn't manually deactivated)
-		// 2. Current week is <= 19 (allows week 18 scoring emails even if ESPN reports week 19/playoffs)
-		// 3. We're NOT past the regular season window (raw week <= 19)
-		// This handles the case where ESPN shows week 19 before Tuesday cron runs after week 18 MNF,
-		// but prevents notifications from continuing indefinitely in the off-season.
-		const canSendNotifications = config.isActive && currentWeek <= 19 && !isPastRegularSeason;
+		// 2. Current week is at most one past the final week (ESPN can move on before the
+		//    Tuesday cron sends the final week's scoring emails)
+		// 3. We're NOT past the regular season window
+		const canSendNotifications = config.isActive && currentWeek <= finalWeek + 1 && !isPastRegularSeason;
 
 		let message: string | undefined;
 		if (!isSeasonActive) {
-			if (isPastRegularSeason || currentWeek > 18) {
-				message = 'The NFL regular season has ended. Pick 5 will return next season!';
+			if (isPastRegularSeason || currentWeek > finalWeek) {
+				message = `The Pick 5 season ended after week ${finalWeek}. Pick 5 will return next season!`;
 			} else if (!config.isActive) {
 				message = 'Pick 5 is currently on break between seasons.';
 			}
@@ -206,6 +212,8 @@ export class SeasonService {
 			isActive: isSeasonActive,
 			seasonYear: config.seasonYear,
 			currentWeek,
+			startWeek,
+			finalWeek,
 			lastCompletedWeek: config.lastCompletedWeek,
 			isArchived: config.isArchived,
 			canSubmitPicks,
@@ -215,7 +223,25 @@ export class SeasonService {
 	}
 
 	/**
-	 * Deactivate the current season (called when week 18 completes)
+	 * Set the first and last weeks that count in a season (1-18, start <= final). Weeks outside the
+	 * range stop counting toward standings, stats and badges right away; archived history needs a
+	 * re-archive (with "Replace existing") to pick up weeks that were added back.
+	 */
+	static async setSeasonWeeks(seasonYear: number, { startWeek, finalWeek }: { startWeek: number; finalWeek: number }): Promise<{ startWeek: number; finalWeek: number }> {
+		const valid = (week: number) => Number.isInteger(week) && week >= 1 && week <= REGULAR_SEASON_WEEKS;
+		if (!valid(startWeek) || !valid(finalWeek)) throw new Error(`Weeks must be whole numbers from 1 to ${REGULAR_SEASON_WEEKS}`);
+		if (startWeek > finalWeek) throw new Error('The start week must be on or before the final week');
+
+		const config = await this.getOrCreateSeasonConfig(seasonYear);
+		config.startWeek = startWeek;
+		config.finalWeek = finalWeek;
+		await config.save();
+		clearSeasonWeeksCache(seasonYear);
+		return { startWeek, finalWeek };
+	}
+
+	/**
+	 * Deactivate the current season (called when its final week completes)
 	 */
 	static async deactivateSeason(): Promise<void> {
 		await connectDB();
@@ -223,7 +249,7 @@ export class SeasonService {
 		const config = await this.getOrCreateSeasonConfig();
 		config.isActive = false;
 		config.deactivatedAt = new Date();
-		config.lastCompletedWeek = getSeasonFinalWeek(config.seasonYear);
+		config.lastCompletedWeek = resolveSeasonWeeks(config.seasonYear, config).finalWeek;
 		await config.save();
 
 		console.log(`[SeasonService] Deactivated season ${config.seasonYear}`);
@@ -298,9 +324,9 @@ export class SeasonService {
 		const season = await loadLeagueSeason(leagueId, seasonYear);
 		if (!season) throw new Error('League not found');
 
-		// Only the weeks that count this season (e.g. 2025 ended after week 17)
-		const finalWeek = getSeasonFinalWeek(seasonYear);
-		const regularWeeks = Array.from(season.weeks.keys()).filter(w => w >= 1 && w <= finalWeek);
+		// Only the weeks that count this season (its start week through its final week)
+		const { startWeek, finalWeek } = await getSeasonWeeks(seasonYear);
+		const regularWeeks = Array.from(season.weeks.keys()).filter(w => w >= startWeek && w <= finalWeek);
 		if (regularWeeks.length === 0) return { status: 'skipped_empty' };
 
 		// Each player's weekly results

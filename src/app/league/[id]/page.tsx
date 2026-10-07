@@ -46,7 +46,7 @@ export default function LeagueDetails() {
 	// Deep link from the dashboard's live banner: /league/{id}?view=live
 	const wantsLive = searchParams?.get('view') === 'live';
 	const { data: session } = useSession();
-	const { currentWeek, liveWeek, isPastSeason } = useWeek();
+	const { currentWeek, liveWeek, isPastSeason, startWeek } = useWeek();
 	// Mount only one layout so data components don't fetch and poll twice
 	const isDesktop = useMediaQuery('(min-width: 1024px)');
 
@@ -83,7 +83,8 @@ export default function LeagueDetails() {
 
 	// Offer "Last week's recap" while viewing the live week, once last week is complete
 	useEffect(() => {
-		if (!id || isPastSeason || !liveWeek || currentWeek !== liveWeek || currentWeek <= 1) {
+		// No recap before the season's first counted week
+		if (!id || isPastSeason || !liveWeek || currentWeek !== liveWeek || currentWeek <= startWeek) {
 			setRecapWeek(null);
 			return;
 		}
@@ -100,7 +101,7 @@ export default function LeagueDetails() {
 		check();
 		const interval = setInterval(check, RECAP_POLL_MS);
 		return () => clearInterval(interval);
-	}, [id, currentWeek, liveWeek, isPastSeason]);
+	}, [id, currentWeek, liveWeek, isPastSeason, startWeek]);
 
 	// Don't strand the mobile view on a tab that disappeared
 	useEffect(() => {

@@ -100,7 +100,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStatsProps) {
 	const { data: session } = useSession();
-	const { currentWeek, season, setSeason, currentSeason, isPastSeason } = useWeek();
+	const { currentWeek, season, setSeason, currentSeason, isPastSeason, startWeek } = useWeek();
 	const userName = session?.user?.name ?? null;
 	const [seasons, setSeasons] = useState<number[]>([]);
 
@@ -120,7 +120,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 		const fetchStats = async () => {
 			setLoading(true);
 			const trendWeeks: number[] = [];
-			for (let w = Math.max(1, currentWeek - (TREND_WEEKS - 1)); w <= currentWeek; w++) trendWeeks.push(w);
+			for (let w = Math.max(startWeek, currentWeek - (TREND_WEEKS - 1)); w <= currentWeek; w++) trendWeeks.push(w);
 
 			// Everything below is independent — fetch it all at once. The current-week
 			// leaderboard doubles as the season-stats source.
@@ -193,7 +193,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 		return () => {
 			cancelled = true;
 		};
-	}, [leagueId, userId, userName, currentWeek, season]);
+	}, [leagueId, userId, userName, currentWeek, season, startWeek]);
 
 	// Seasons this league can be browsed by
 	useEffect(() => {

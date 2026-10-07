@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 		const leagueMode = (league as any).mode || 'standard';
 
 		// Find picks for the user in the specific league
-		const userPicks = await Pick.find({ userId: session.user.id, leagueId, week: countedWeeks(season), ...seasonFilter }).lean();
+		const userPicks = await Pick.find({ userId: session.user.id, leagueId, week: await countedWeeks(season), ...seasonFilter }).lean();
 
 		// Get unique weeks from picks
 		const weekSet = new Set<number>();

@@ -8,9 +8,10 @@ import { requestScoped } from '@/lib/db';
  *
  * The season is considered "active" when:
  * - isActive is true
- * - currentWeek <= 18
+ * - startWeek <= currentWeek <= finalWeek
  *
- * The season ends after Week 18 of the NFL season.
+ * Only weeks startWeek..finalWeek count (defaults in src/lib/seasonYear.ts: week 1 to week 17;
+ * an admin can change both per season).
  * When a new season starts (September), the admin should:
  * 1. Archive the previous season's data
  * 2. Reset all points/standings
@@ -27,6 +28,10 @@ const SeasonConfigSchema = new mongoose.Schema({
 		type: Boolean,
 		default: true
 	},
+	// The first and last weeks that count this season. Unset means the defaults (resolveSeasonWeeks);
+	// no schema defaults, so saving an older config never pins today's default into it.
+	startWeek: { type: Number, min: 1, max: 18 },
+	finalWeek: { type: Number, min: 1, max: 18 },
 	// The last week that was completed (1-18)
 	lastCompletedWeek: {
 		type: Number,
