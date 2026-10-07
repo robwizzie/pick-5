@@ -111,7 +111,16 @@ export class NFLService {
 
 				if (response.ok) {
 					const data = await response.json();
-					const espnWeek = data.week?.number || this.calculateCurrentWeek();
+					let espnWeek = Number(data.week?.number) || this.calculateCurrentWeek();
+					const calculatedWeek = this.calculateCurrentWeek();
+
+					// ESPN's season-level scoreboard can occasionally return a stale/default week
+					// (we've seen Week 18 during an active October season). Reject values that are
+					// clearly inconsistent with the calendar instead of poisoning picks/admin state.
+					if (Math.abs(espnWeek - calculatedWeek) > 1) {
+						console.warn(`[NFLService] Ignoring implausible ESPN week ${espnWeek}; calendar week is ${calculatedWeek}`);
+						espnWeek = calculatedWeek;
+					}
 
 					// Only auto-advance if requested (for scoring, not for pick reminders)
 					if (autoAdvance && espnWeek < 18) {
@@ -138,7 +147,12 @@ export class NFLService {
 				// On client, use proxy API
 				const url = '/api/nfl/scoreboard';
 				const data = await cachedFetch<{ week: { number: number }, events: EspnEvent[] }>(url, {}, 10 * 60 * 1000);
-				const espnWeek = data.week?.number || this.calculateCurrentWeek();
+				let espnWeek = Number(data.week?.number) || this.calculateCurrentWeek();
+				const calculatedWeek = this.calculateCurrentWeek();
+				if (Math.abs(espnWeek - calculatedWeek) > 1) {
+					console.warn(`[NFLService] Ignoring implausible ESPN week ${espnWeek}; calendar week is ${calculatedWeek}`);
+					espnWeek = calculatedWeek;
+				}
 
 				// Only auto-advance if requested
 				if (autoAdvance && espnWeek < 18) {
