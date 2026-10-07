@@ -52,7 +52,7 @@ export class NFLService {
 
 			// If we're on the server, call ESPN API directly to avoid relative URL issues
 			if (this.isServer()) {
-				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${effectiveSeason}`;
+				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&season=${effectiveSeason}`;
 
 				const response = await fetch(espnUrl, {
 					headers: {
@@ -99,7 +99,7 @@ export class NFLService {
 			// If on server, call ESPN directly
 			if (this.isServer()) {
 				const effectiveSeason = this.getCurrentSeason();
-				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&dates=${effectiveSeason}`;
+				const espnUrl = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&season=${effectiveSeason}`;
 
 				const response = await fetch(espnUrl, {
 					headers: {
