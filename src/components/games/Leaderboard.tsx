@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { UserPicksModal } from './UserPicksModal';
 import { MatchupsBoard } from '@/components/league/MatchupsBoard';
 import { BadgeStrip } from '@/components/badges/BadgeStrip';
+import { NudgeButton, PicksStatus } from '@/components/league/NudgeButton';
 import type { Badge, LeagueBadgesResponse, Streak } from '@/lib/badges';
 
 interface PickedTeam {
@@ -129,13 +130,16 @@ function Podium({
 	sub,
 	currentUserId,
 	onSelect,
-	badgesByUser
+	badgesByUser,
+	extra
 }: {
 	entries: BoardEntry[];
 	sub: (entry: BoardEntry) => React.ReactNode;
 	currentUserId?: string;
 	onSelect: (entry: BoardEntry) => void;
 	badgesByUser?: Map<string, Badge[]>;
+	/** Extra line under the points (this week's picks status) */
+	extra?: (entry: BoardEntry) => React.ReactNode;
 }) {
 	const order = [entries[1], entries[0], entries[2]];
 	const heights = ['h-14', 'h-20', 'h-10'];
@@ -179,6 +183,7 @@ function Podium({
 							<CountUp end={entry.points} duration={0.8} preserveValue />
 						</p>
 						<div className='mt-0.5 h-4 text-[10px] font-medium text-muted-foreground tabular'>{sub(entry)}</div>
+						{extra && <div className='mt-1 flex min-h-5 flex-wrap items-center justify-center gap-1'>{extra(entry)}</div>}
 						{/* Pedestal */}
 						<div className={cn('mt-2 w-full rounded-t-xl border border-b-0 border-white/[0.07] bg-gradient-to-b to-transparent', m.bg, heights[col], isMe && 'border-primary/40')} />
 					</Tag>
@@ -446,6 +451,18 @@ export function Leaderboard() {
 	};
 
 	const selectedWeekly = selectedUserId ? weeklyById.get(selectedUserId) : undefined;
+
+	/** This week's picks status (and a nudge when they're missing), for the season board. */
+	const weekStatus = (entry: BoardEntry) => {
+		if (isPastSeason || !entry.userId) return null;
+		const hasPicks = !!weeklyById.get(entry.userId)?.hasPicks;
+		return (
+			<>
+				<PicksStatus hasPicks={hasPicks} week={currentWeek} />
+				{!hasPicks && <NudgeButton userId={entry.userId} name={entry.player} />}
+			</>
+		);
+	};
 	const isMe = (entry: BoardEntry) => !!currentUserId && entry.userId === currentUserId;
 
 	const weeklySub = (entry: BoardEntry) => {
@@ -476,7 +493,7 @@ export function Leaderboard() {
 
 		return (
 			<div>
-				{showPodium && <Podium entries={entries} sub={sub} currentUserId={currentUserId} onSelect={handleSelect} badgesByUser={badgesByUser} />}
+				{showPodium && <Podium entries={entries} sub={sub} currentUserId={currentUserId} onSelect={handleSelect} badgesByUser={badgesByUser} extra={kind === 'season' ? weekStatus : undefined} />}
 				{rest.length > 0 && (
 					<div className='-mx-1 space-y-1'>
 						{rest.map((entry, i) => {
@@ -510,9 +527,12 @@ export function Leaderboard() {
 										{r?.hasPicks && r.pickedTeams && r.pickedTeams.length > 0 && gamesStarted ? (
 											<PickedTeamStrip teams={r.pickedTeams} />
 										) : (
-											<Pill tone={r?.hasPicks ? 'accent' : 'warning'} className='px-2 py-0 text-[9px]'>
-												{r?.hasPicks ? 'Picks in' : 'Needs pick'}
-											</Pill>
+											<span className='flex flex-wrap items-center gap-1.5'>
+												<Pill tone={r?.hasPicks ? 'accent' : 'warning'} className='px-2 py-0 text-[9px]'>
+													{r?.hasPicks ? 'Picks in' : 'Needs pick'}
+												</Pill>
+												{!r?.hasPicks && <NudgeButton userId={entry.userId} name={entry.player} />}
+											</span>
 										)}
 									</Row>
 								);
@@ -553,6 +573,7 @@ export function Leaderboard() {
 											)}
 										</p>
 									)}
+									{!isPastSeason && <div className='mt-1 flex flex-wrap items-center gap-1.5'>{weekStatus(entry)}</div>}
 								</Row>
 							);
 						})}

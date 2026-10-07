@@ -23,6 +23,8 @@ import { SweatView } from '@/components/league/SweatView';
 import { SurvivorView } from '@/components/league/SurvivorView';
 import { LeagueFeed } from '@/components/league/LeagueFeed';
 import { LeagueRulesProvider } from '@/contexts/LeagueRulesContext';
+import { NudgeProvider } from '@/contexts/NudgeContext';
+import { NudgeBanner } from '@/components/league/NudgeBanner';
 import { isSurvivorMode, rulesFor, type LeagueSettings } from '@/lib/leagueRules';
 import { useWeekLiveStatus } from '@/components/sweat/useSweat';
 import { useWeek } from '@/contexts/WeekContext';
@@ -243,193 +245,205 @@ export default function LeagueDetails() {
 
 	return (
 		<LeagueRulesProvider value={rules}>
-			<div className='mx-auto w-full max-w-7xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-16'>
-				{/* League header */}
-				<header className='glass relative mb-4 overflow-hidden rounded-3xl px-4 py-3.5 sm:mb-6 sm:p-7'>
-					<div className='pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-primary/20 blur-3xl' />
-					<div className='pointer-events-none absolute -bottom-24 right-0 h-56 w-56 rounded-full bg-accent-2/15 blur-3xl' />
-					<div className='pointer-events-none absolute inset-x-0 top-0 h-px bg-brand-gradient opacity-60' />
+			<NudgeProvider leagueId={id}>
+				<div className='mx-auto w-full max-w-7xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-16'>
+					{/* League header */}
+					<header className='glass relative mb-4 overflow-hidden rounded-3xl px-4 py-3.5 sm:mb-6 sm:p-7'>
+						<div className='pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-primary/20 blur-3xl' />
+						<div className='pointer-events-none absolute -bottom-24 right-0 h-56 w-56 rounded-full bg-accent-2/15 blur-3xl' />
+						<div className='pointer-events-none absolute inset-x-0 top-0 h-px bg-brand-gradient opacity-60' />
 
-					<div className='relative flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-5'>
-						<div className='min-w-0'>
-							<div className='flex items-center justify-between gap-2 md:mb-3 md:justify-start'>
-								<div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2'>
-									<Pill tone={league.mode === 'steve' ? 'accent' : isSurvivor ? 'hot' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : isSurvivor ? 'Survivor' : 'Standard'}</Pill>
-									{league.members && (
-										<Pill>
-											<Users className='h-3 w-3' /> {league.members.length}
-											<span className='hidden sm:inline'> members</span>
-										</Pill>
-									)}
-									{isCommissioner && (
-										<Pill tone='warning' className='hidden sm:inline-flex'>
-											Commissioner
-										</Pill>
-									)}
+						<div className='relative flex flex-col gap-2 md:flex-row md:items-end md:justify-between md:gap-5'>
+							<div className='min-w-0'>
+								<div className='flex items-center justify-between gap-2 md:mb-3 md:justify-start'>
+									<div className='flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2'>
+										<Pill tone={league.mode === 'steve' ? 'accent' : isSurvivor ? 'hot' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : isSurvivor ? 'Survivor' : 'Standard'}</Pill>
+										{league.members && (
+											<Pill>
+												<Users className='h-3 w-3' /> {league.members.length}
+												<span className='hidden sm:inline'> members</span>
+											</Pill>
+										)}
+										{isCommissioner && (
+											<Pill tone='warning' className='hidden sm:inline-flex'>
+												Commissioner
+											</Pill>
+										)}
+									</div>
+									{/* Phones: icon actions share the badge row so the header stays short */}
+									<div className='flex shrink-0 gap-1.5 md:hidden'>{headerActions(true)}</div>
 								</div>
-								{/* Phones: icon actions share the badge row so the header stays short */}
-								<div className='flex shrink-0 gap-1.5 md:hidden'>{headerActions(true)}</div>
+								<h1 className='display-heading mt-1 break-words text-[1.9rem] md:mt-0 md:text-6xl'>{league.name}</h1>
 							</div>
-							<h1 className='display-heading mt-1 break-words text-[1.9rem] md:mt-0 md:text-6xl'>{league.name}</h1>
+
+							<div className='hidden gap-2 md:flex'>{headerActions(false)}</div>
 						</div>
+					</header>
 
-						<div className='hidden gap-2 md:flex'>{headerActions(false)}</div>
-					</div>
-				</header>
+					<NudgeBanner
+						survivor={isSurvivor}
+						onMakePicks={() => {
+							autoView.current = true;
+							setMobileView(isSurvivor ? 'survivor' : 'picks');
+							setDesktopTab('picks');
+							window.scrollTo({ top: 0, behavior: 'smooth' });
+						}}
+					/>
 
-				{isSurvivor ? (
-					isDesktop ? (
+					{isSurvivor ? (
+						isDesktop ? (
+							<div className='grid grid-cols-[minmax(0,1fr)_380px] gap-6'>
+								<SurvivorView leagueId={id} />
+								<aside>
+									<LeagueFeed leagueId={id} isCommissioner={isCommissioner} className='sticky top-20' />
+								</aside>
+							</div>
+						) : (
+							<div key={mobileView} className='animate-fade-in'>
+								{mobileView === 'chat' ? <LeagueFeed leagueId={id} isCommissioner={isCommissioner} /> : <SurvivorView leagueId={id} />}
+							</div>
+						)
+					) : isDesktop ? (
 						<div className='grid grid-cols-[minmax(0,1fr)_380px] gap-6'>
-							<SurvivorView leagueId={id} />
-							<aside>
-								<LeagueFeed leagueId={id} isCommissioner={isCommissioner} className='sticky top-20' />
+							<Tabs
+								value={desktopTab}
+								onValueChange={value => {
+									autoView.current = true;
+									setDesktopTab(value as DesktopTab);
+								}}
+								className='min-w-0'
+							>
+								<TabsList className={cn('grid w-full', ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][(showLive ? 1 : 0) + (recapWeek ? 1 : 0)])}>
+									{showLive && (
+										<TabsTrigger value='live' className='data-[state=active]:text-live'>
+											<span className='live-dot' /> Live
+										</TabsTrigger>
+									)}
+									<TabsTrigger value='picks'>
+										<Gamepad2 /> Make picks
+									</TabsTrigger>
+									<TabsTrigger value='results'>
+										<BarChart3 /> Results
+									</TabsTrigger>
+									{recapWeek && (
+										<TabsTrigger value='recap'>
+											<Sparkles /> Week {recapWeek} recap
+										</TabsTrigger>
+									)}
+								</TabsList>
+								{showLive && (
+									<TabsContent value='live'>
+										<SweatView leagueId={id} week={currentWeek} onShowResults={() => setDesktopTab('results')} onMakePicks={() => setDesktopTab('picks')} />
+									</TabsContent>
+								)}
+								<TabsContent value='picks'>
+									<WeeklyPicks />
+								</TabsContent>
+								<TabsContent value='results'>
+									<Results />
+								</TabsContent>
+								{recapWeek && (
+									<TabsContent value='recap'>
+										<Recap weekOverride={recapWeek} />
+									</TabsContent>
+								)}
+							</Tabs>
+							<aside className='space-y-6'>
+								<Leaderboard />
+								<LeagueFeed leagueId={id} isCommissioner={isCommissioner} />
+								<LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />
 							</aside>
 						</div>
 					) : (
-						<div key={mobileView} className='animate-fade-in'>
-							{mobileView === 'chat' ? <LeagueFeed leagueId={id} isCommissioner={isCommissioner} /> : <SurvivorView leagueId={id} />}
-						</div>
-					)
-				) : isDesktop ? (
-					<div className='grid grid-cols-[minmax(0,1fr)_380px] gap-6'>
-						<Tabs
-							value={desktopTab}
-							onValueChange={value => {
-								autoView.current = true;
-								setDesktopTab(value as DesktopTab);
-							}}
-							className='min-w-0'
-						>
-							<TabsList className={cn('grid w-full', ['grid-cols-2', 'grid-cols-3', 'grid-cols-4'][(showLive ? 1 : 0) + (recapWeek ? 1 : 0)])}>
-								{showLive && (
-									<TabsTrigger value='live' className='data-[state=active]:text-live'>
-										<span className='live-dot' /> Live
-									</TabsTrigger>
-								)}
-								<TabsTrigger value='picks'>
-									<Gamepad2 /> Make picks
-								</TabsTrigger>
-								<TabsTrigger value='results'>
-									<BarChart3 /> Results
-								</TabsTrigger>
-								{recapWeek && (
-									<TabsTrigger value='recap'>
-										<Sparkles /> Week {recapWeek} recap
-									</TabsTrigger>
-								)}
-							</TabsList>
-							{showLive && (
-								<TabsContent value='live'>
-									<SweatView leagueId={id} week={currentWeek} onShowResults={() => setDesktopTab('results')} onMakePicks={() => setDesktopTab('picks')} />
-								</TabsContent>
-							)}
-							<TabsContent value='picks'>
-								<WeeklyPicks />
-							</TabsContent>
-							<TabsContent value='results'>
-								<Results />
-							</TabsContent>
-							{recapWeek && (
-								<TabsContent value='recap'>
-									<Recap weekOverride={recapWeek} />
-								</TabsContent>
-							)}
-						</Tabs>
-						<aside className='space-y-6'>
-							<Leaderboard />
-							<LeagueFeed leagueId={id} isCommissioner={isCommissioner} />
-							<LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />
-						</aside>
-					</div>
-				) : (
-					<>
-						<div key={mobileView} className='animate-fade-in'>
-							{mobileView === 'live' && <SweatView leagueId={id} week={currentWeek} onShowResults={() => chooseMobileView('results')} onMakePicks={() => chooseMobileView('picks')} />}
-							{mobileView === 'picks' && <WeeklyPicks />}
-							{mobileView === 'results' && showLive && (
-								<button type='button' onClick={() => chooseMobileView('live')} className='mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-semibold text-primary'>
-									<ArrowLeft className='h-4 w-4' /> Back to Live
-								</button>
-							)}
-							{mobileView === 'results' && <Results />}
-							{mobileView === 'leaderboard' && <Leaderboard />}
-							{mobileView === 'chat' && <LeagueFeed leagueId={id} isCommissioner={isCommissioner} />}
-							{mobileView === 'stats' && <LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />}
-							{mobileView === 'recap' && recapWeek && <Recap weekOverride={recapWeek} />}
-						</div>
-					</>
-				)}
-
-				{!isDesktop && (
-					<nav className='fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40' aria-label='League sections'>
-						<div className='dock mx-auto flex max-w-md items-stretch gap-1 rounded-2xl p-1.5'>
-							{mobileTabs.map(({ id: tabId, label, icon: Icon }) => {
-								// Results is a sub-view of Live while games are live; Survivor is everything but Chat
-								const active = mobileView === tabId || (tabId === 'live' && mobileView === 'results') || (isSurvivor && tabId === 'survivor' && mobileView !== 'chat');
-								return (
-									<button
-										key={tabId}
-										type='button'
-										onClick={() => chooseMobileView(tabId)}
-										aria-current={active ? 'page' : undefined}
-										className={cn(
-											'flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-95',
-											active ? 'bg-primary text-primary-foreground shadow-primary-glow' : 'text-muted-foreground hover:text-foreground'
-										)}
-									>
-										<Icon className='h-5 w-5' />
-										{label}
+						<>
+							<div key={mobileView} className='animate-fade-in'>
+								{mobileView === 'live' && <SweatView leagueId={id} week={currentWeek} onShowResults={() => chooseMobileView('results')} onMakePicks={() => chooseMobileView('picks')} />}
+								{mobileView === 'picks' && <WeeklyPicks />}
+								{mobileView === 'results' && showLive && (
+									<button type='button' onClick={() => chooseMobileView('live')} className='mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-semibold text-primary'>
+										<ArrowLeft className='h-4 w-4' /> Back to Live
 									</button>
-								);
-							})}
-						</div>
-					</nav>
-				)}
+								)}
+								{mobileView === 'results' && <Results />}
+								{mobileView === 'leaderboard' && <Leaderboard />}
+								{mobileView === 'chat' && <LeagueFeed leagueId={id} isCommissioner={isCommissioner} />}
+								{mobileView === 'stats' && <LeagueStats leagueId={id} userId={session?.user?.id} leagueName={league.name} />}
+								{mobileView === 'recap' && recapWeek && <Recap weekOverride={recapWeek} />}
+							</div>
+						</>
+					)}
 
-				{/* Invite */}
-				<Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-					<DialogContent className='sm:max-w-md'>
-						<DialogHeader>
-							<DialogTitle>Invite your crew</DialogTitle>
-							<DialogDescription>Anyone with this link can join {league.name} after signing in — no password needed.</DialogDescription>
-						</DialogHeader>
-						<div className='flex gap-2'>
-							<Input value={inviteUrl} readOnly onFocus={e => e.target.select()} className='font-mono text-xs' />
-							<Button onClick={copyInvite} variant={copied ? 'success' : 'default'} className='shrink-0'>
-								{copied ? <Check /> : <Copy />}
-								{copied ? 'Copied' : 'Copy'}
-							</Button>
-						</div>
-						{typeof navigator !== 'undefined' && 'share' in navigator && (
-							<Button variant='outline' onClick={shareInvite} className='w-full'>
-								<Share2 /> Share…
-							</Button>
-						)}
-					</DialogContent>
-				</Dialog>
+					{!isDesktop && (
+						<nav className='fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40' aria-label='League sections'>
+							<div className='dock mx-auto flex max-w-md items-stretch gap-1 rounded-2xl p-1.5'>
+								{mobileTabs.map(({ id: tabId, label, icon: Icon }) => {
+									// Results is a sub-view of Live while games are live; Survivor is everything but Chat
+									const active = mobileView === tabId || (tabId === 'live' && mobileView === 'results') || (isSurvivor && tabId === 'survivor' && mobileView !== 'chat');
+									return (
+										<button
+											key={tabId}
+											type='button'
+											onClick={() => chooseMobileView(tabId)}
+											aria-current={active ? 'page' : undefined}
+											className={cn(
+												'flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 active:scale-95',
+												active ? 'bg-primary text-primary-foreground shadow-primary-glow' : 'text-muted-foreground hover:text-foreground'
+											)}
+										>
+											<Icon className='h-5 w-5' />
+											{label}
+										</button>
+									);
+								})}
+							</div>
+						</nav>
+					)}
 
-				<LeagueRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} mode={league.mode} />
+					{/* Invite */}
+					<Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+						<DialogContent className='sm:max-w-md'>
+							<DialogHeader>
+								<DialogTitle>Invite your crew</DialogTitle>
+								<DialogDescription>Anyone with this link can join {league.name} after signing in — no password needed.</DialogDescription>
+							</DialogHeader>
+							<div className='flex gap-2'>
+								<Input value={inviteUrl} readOnly onFocus={e => e.target.select()} className='font-mono text-xs' />
+								<Button onClick={copyInvite} variant={copied ? 'success' : 'default'} className='shrink-0'>
+									{copied ? <Check /> : <Copy />}
+									{copied ? 'Copied' : 'Copy'}
+								</Button>
+							</div>
+							{typeof navigator !== 'undefined' && 'share' in navigator && (
+								<Button variant='outline' onClick={shareInvite} className='w-full'>
+									<Share2 /> Share…
+								</Button>
+							)}
+						</DialogContent>
+					</Dialog>
 
-				{isCommissioner && <LeagueSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} leagueId={id} league={league} onSaved={updated => setLeague(prev => (prev ? { ...prev, ...updated } : prev))} />}
+					<LeagueRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} mode={league.mode} />
 
-				{/* Leave */}
-				<Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
-					<DialogContent className='sm:max-w-sm'>
-						<DialogHeader>
-							<DialogTitle>Leave {league.name}?</DialogTitle>
-							<DialogDescription>You’ll drop off the standings and all of your picks in this league will be deleted. You’ll need a new invite to rejoin.</DialogDescription>
-						</DialogHeader>
-						<DialogFooter>
-							<Button variant='ghost' onClick={() => setLeaveOpen(false)} disabled={leaving}>
-								Stay
-							</Button>
-							<Button variant='destructive' onClick={leaveLeague} disabled={leaving}>
-								{leaving ? 'Leaving…' : 'Leave league'}
-							</Button>
-						</DialogFooter>
-					</DialogContent>
-				</Dialog>
-			</div>
+					{isCommissioner && <LeagueSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} leagueId={id} league={league} onSaved={updated => setLeague(prev => (prev ? { ...prev, ...updated } : prev))} />}
+
+					{/* Leave */}
+					<Dialog open={leaveOpen} onOpenChange={setLeaveOpen}>
+						<DialogContent className='sm:max-w-sm'>
+							<DialogHeader>
+								<DialogTitle>Leave {league.name}?</DialogTitle>
+								<DialogDescription>You’ll drop off the standings and all of your picks in this league will be deleted. You’ll need a new invite to rejoin.</DialogDescription>
+							</DialogHeader>
+							<DialogFooter>
+								<Button variant='ghost' onClick={() => setLeaveOpen(false)} disabled={leaving}>
+									Stay
+								</Button>
+								<Button variant='destructive' onClick={leaveLeague} disabled={leaving}>
+									{leaving ? 'Leaving…' : 'Leave league'}
+								</Button>
+							</DialogFooter>
+						</DialogContent>
+					</Dialog>
+				</div>
+			</NudgeProvider>
 		</LeagueRulesProvider>
 	);
 }

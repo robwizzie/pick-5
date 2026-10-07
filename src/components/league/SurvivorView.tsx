@@ -15,6 +15,7 @@ import { hasGameStarted } from '@/services/gameUtils';
 import type { Game } from '@/components/games/GameCard';
 import type { SurvivorMember, SurvivorPickEntry, SurvivorResponse } from '@/lib/survivor';
 import { cn } from '@/lib/utils';
+import { NudgeButton } from './NudgeButton';
 
 const initials = (name: string) =>
 	name
@@ -286,7 +287,10 @@ export function SurvivorView({ leagueId }: { leagueId: string }) {
 												</Avatar>
 												<div className='min-w-0'>
 													<p className={cn('max-w-[9rem] truncate text-sm font-semibold', isMe && 'text-primary', !member.alive && 'line-through decoration-accent-2/60')}>{member.name}</p>
-													<MemberStatus member={member} champion={champions.has(member.userId)} />
+													<span className='flex flex-wrap items-center gap-1'>
+														<MemberStatus member={member} champion={champions.has(member.userId)} />
+														<NudgeButton userId={member.userId} name={member.name} />
+													</span>
 												</div>
 											</div>
 										</td>
