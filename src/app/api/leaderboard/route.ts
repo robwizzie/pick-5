@@ -145,7 +145,7 @@ export async function GET(req: Request) {
 		});
 
 		// Get ALL picks for this league for season stats
-		const allPicksForSeason = await Pick.find({ leagueId, week: countedWeeks(season), ...seasonFilter }).lean();
+		const allPicksForSeason = await Pick.find({ leagueId, week: await countedWeeks(season), ...seasonFilter }).lean();
 
 		// Get unique weeks from all picks
 		const weekSet = new Set<number>();

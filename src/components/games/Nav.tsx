@@ -25,7 +25,7 @@ const NAV_LINKS = [
 const RESERVED_LEAGUE_ROUTES = ['/league/create', '/league/join', '/league/browse'];
 
 export function Nav() {
-	const { currentWeek, setCurrentWeek, liveWeek, season, setSeason, currentSeason, isPastSeason, finalWeek } = useWeek();
+	const { currentWeek, setCurrentWeek, liveWeek, season, setSeason, currentSeason, isPastSeason, startWeek, finalWeek } = useWeek();
 	const { leagueId } = useLeague();
 	const pathname = usePathname() ?? '';
 	const { data: session, status } = useSession();
@@ -97,7 +97,7 @@ export function Nav() {
 						<button
 							type='button'
 							onClick={() => setCurrentWeek(currentWeek - 1)}
-							disabled={currentWeek <= 1}
+							disabled={currentWeek <= startWeek}
 							aria-label='Previous week'
 							className='grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-30'
 						>
@@ -216,6 +216,7 @@ export function Nav() {
 					liveWeek={liveWeek}
 					onWeekSelect={setCurrentWeek}
 					weeksWithPicks={weeksWithPicks}
+					startWeek={startWeek}
 					finalWeek={finalWeek}
 					seasons={seasons}
 					season={season}

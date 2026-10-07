@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import { SeasonHistory } from '@/models/SeasonHistory';
-import { getCurrentSeasonYear, getSeasonFinalWeek, seasonsWithPicks } from '@/lib/season';
+import { getCurrentSeasonYear, getSeasonWeeks, seasonsWithPicks } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +27,7 @@ export async function GET(_req: Request, context: { params: Promise<{ id: string
 			.filter(s => s <= current)
 			.sort((a, b) => b - a);
 
-		return NextResponse.json({ current, seasons: seasons.map(year => ({ year, finalWeek: getSeasonFinalWeek(year) })) });
+		return NextResponse.json({ current, seasons: await Promise.all(seasons.map(async year => ({ year, ...(await getSeasonWeeks(year)) }))) });
 	} catch (error) {
 		console.error('Error fetching league seasons:', error);
 		return NextResponse.json({ error: 'Failed to fetch seasons' }, { status: 500 });

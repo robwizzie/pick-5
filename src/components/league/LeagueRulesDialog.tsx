@@ -4,6 +4,7 @@ import { Lock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { calculatePointsFromOdds, formatOdds, getOddsRiskLabel } from '@/utils/oddsUtils';
 import { cn } from '@/lib/utils';
+import { useWeek } from '@/contexts/WeekContext';
 import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
 
 // Sample lines for the scoring table; points always come from the real scoring function
@@ -107,6 +108,7 @@ function Table({ rows, head }: { head: [string, string, string?]; rows: Array<[R
 
 export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean; onOpenChange: (open: boolean) => void; mode?: string }) {
 	const isSteve = mode === 'steve';
+	const { startWeek, finalWeek } = useWeek();
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -177,7 +179,9 @@ export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean;
 							<li>• Ties count as a loss for both sides.</li>
 							<li>• Scores update live; a pick is graded when its game goes final.</li>
 							<li>• Other members’ picks are revealed once each game kicks off.</li>
-							<li>• Season standings are total points across all 18 weeks.</li>
+							<li>
+								• Season standings are total points from week {startWeek} through week {finalWeek}.
+							</li>
 						</ul>
 					</Section>
 				</div>

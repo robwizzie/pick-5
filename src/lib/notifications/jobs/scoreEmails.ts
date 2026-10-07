@@ -71,7 +71,7 @@ export async function runScoreEmailsJob({ budgetMs }: { budgetMs: number }): Pro
 
 	await connectDB();
 	const seasonStatus = await SeasonService.getSeasonStatus();
-	// canSendNotifications still allows week 18's email after ESPN moves on to the playoffs.
+	// canSendNotifications still allows the final week's email after ESPN moves on a week.
 	if (!seasonStatus.canSendNotifications) return { skipped: 'season not active for notifications' };
 	if (!isEmailConfigured()) return { skipped: 'RESEND_API_KEY not set' };
 

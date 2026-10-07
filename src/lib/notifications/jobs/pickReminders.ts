@@ -59,7 +59,7 @@ export async function runPickRemindersJob(kind: ReminderKind, { budgetMs }: { bu
 	const season = seasonStatus.seasonYear;
 	// The actual current week (no auto-advance): the week users should be picking for.
 	const week = await NFLService.getCurrentWeek(false);
-	if (week > 18) return { kind, skipped: 'beyond regular season', week };
+	if (week < seasonStatus.startWeek || week > seasonStatus.finalWeek) return { kind, skipped: 'outside the season’s weeks', week };
 
 	await ensureMarkerIndexes();
 	if (await isJobDone(jobName, season, week)) return { kind, skipped: 'already sent', week };

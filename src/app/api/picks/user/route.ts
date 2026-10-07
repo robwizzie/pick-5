@@ -44,7 +44,7 @@ export async function GET(req: Request) {
 		const query: Record<string, unknown> = { userId, ...seasonPickFilter(season) };
 		if (leagueId) query.leagueId = leagueId;
 		// A single week is returned as asked; the whole season only includes the weeks that count
-		query.week = week ? parseInt(week, 10) : countedWeeks(season);
+		query.week = week ? parseInt(week, 10) : await countedWeeks(season);
 
 		const [docs, leagues] = await Promise.all([
 			Pick.find(query).sort({ week: 1 }).lean<PickDoc[]>(),

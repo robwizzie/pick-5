@@ -3,7 +3,7 @@
 // game windows; costs one ESPN request (no database) unless a game finished recently.
 import type { AnyBulkWriteOperation } from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { seasonPickFilter } from '@/lib/season';
+import { getCurrentSeasonYear, getSeasonWeeks, seasonPickFilter } from '@/lib/season';
 import { GameNotification } from '@/models/GameNotification';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
@@ -60,7 +60,8 @@ export async function runGameResultsJob({ budgetMs, includeAllFinal = false }: G
 
 	// Cheap pre-check (ESPN only): is there a game that went final recently?
 	const week = await NFLService.getCurrentWeek(false);
-	if (week > 18) return { skipped: 'beyond regular season', week };
+	const { startWeek, finalWeek } = await getSeasonWeeks(getCurrentSeasonYear());
+	if (week < startWeek || week > finalWeek) return { skipped: 'outside the season’s weeks', week };
 	const games = await NFLService.getWeeklyGames(week);
 	const cutoff = Date.now() - RECENT_KICKOFF_MS;
 	const finished: FinishedGame[] = games

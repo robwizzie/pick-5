@@ -44,12 +44,12 @@ export async function POST(req: Request) {
 			);
 		}
 
-		// Prevent picks for weeks beyond 18
-		if (week > 18) {
+		// Only weeks that count this season can be picked
+		if (week < seasonStatus.startWeek || week > seasonStatus.finalWeek) {
 			return NextResponse.json(
 				{
 					error: 'Invalid week',
-					message: 'Picks can only be submitted for weeks 1-18 of the NFL regular season.'
+					message: `Picks can only be submitted for weeks ${seasonStatus.startWeek}-${seasonStatus.finalWeek} this season.`
 				},
 				{ status: 400 }
 			);

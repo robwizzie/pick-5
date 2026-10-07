@@ -63,7 +63,7 @@ export async function loadLeagueSeason(leagueId: string, season: number, opts: {
 	const [users, docs] = await Promise.all([
 		User.find({ _id: { $in: memberIds } }, 'name image').lean<Array<{ _id: unknown; name?: string; image?: string | null }>>(),
 		// Weeks after the season's final week don't count
-		Pick.find({ leagueId, week: countedWeeks(season), ...seasonPickFilter(season) }).lean<PickDoc[]>()
+		Pick.find({ leagueId, week: await countedWeeks(season), ...seasonPickFilter(season) }).lean<PickDoc[]>()
 	]);
 	const mode = league.mode || 'standard';
 	const resultsByWeek = await loadGameResults([...docs.map(d => d.week), ...(opts.extraWeeks ?? [])], season);
