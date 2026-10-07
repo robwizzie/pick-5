@@ -1,80 +1,90 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { NFLService } from '@/services/nflService';
 
+const MIN_WEEK = 1;
+const MAX_WEEK = 18;
+const WEEK_KEY = 'currentWeek';
+const SEASON_KEY = 'currentSeason';
+
 interface WeekContextType {
+	/** The week the user is currently viewing */
 	currentWeek: number;
 	setCurrentWeek: (week: number) => void;
+	/** The live NFL week (null until resolved from ESPN) */
+	liveWeek: number | null;
 	season: number;
+}
+
+function seasonYear(now = new Date()) {
+	// The NFL season starts in September; Jan–Aug belong to the previous season
+	return now.getMonth() < 8 ? now.getFullYear() - 1 : now.getFullYear();
 }
 
 const WeekContext = createContext<WeekContextType>({
 	currentWeek: 1,
 	setCurrentWeek: () => {},
-	season: 2024
+	liveWeek: null,
+	season: seasonYear()
 });
 
 export const useWeek = () => useContext(WeekContext);
 
-export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
-	// Default to current NFL season and week
-	const currentSeason = 2024;
-	const [currentWeek, setCurrentWeek] = useState(1);
-	const [isInitialized, setIsInitialized] = useState(false);
-
-	useEffect(() => {
-		// Initialize with current NFL week or stored value
-		const initializeWeek = async () => {
-			if (typeof window !== 'undefined') {
-				// Always fetch the actual current NFL week from the API
-				const nflWeek = await NFLService.getCurrentWeek();
-
-				const storedWeek = localStorage.getItem('currentWeek');
-				const storedSeason = localStorage.getItem('currentSeason');
-
-				// If user has a stored week from this season, use it (unless it's behind the current week)
-				if (storedSeason && parseInt(storedSeason) === currentSeason && storedWeek) {
-					const stored = parseInt(storedWeek, 10);
-					// Use the greater of stored or actual current week (in case week advanced)
-					const weekToUse = Math.max(stored, nflWeek);
-					setCurrentWeek(weekToUse);
-					localStorage.setItem('currentWeek', weekToUse.toString());
-				} else {
-					setCurrentWeek(nflWeek);
-					localStorage.setItem('currentWeek', nflWeek.toString());
-					localStorage.setItem('currentSeason', currentSeason.toString());
-				}
-				setIsInitialized(true);
-			}
-		};
-
-		initializeWeek();
-	}, [currentSeason]);
-
-	const handleSetCurrentWeek = useCallback((week: number) => {
-		if (week >= 1 && week <= 18) {
-			setCurrentWeek(week);
-			if (typeof window !== 'undefined') {
-				localStorage.setItem('currentWeek', week.toString());
-			}
-		}
-	}, []);
-
-	// Don't render until initialized to prevent hydration mismatch
-	if (!isInitialized) {
+function readStoredWeek(season: number): number | null {
+	try {
+		if (Number(localStorage.getItem(SEASON_KEY)) !== season) return null;
+		const week = Number(localStorage.getItem(WEEK_KEY));
+		return week >= MIN_WEEK && week <= MAX_WEEK ? week : null;
+	} catch {
 		return null;
 	}
+}
 
-	return (
-		<WeekContext.Provider 
-			value={{ 
-				currentWeek, 
-				setCurrentWeek: handleSetCurrentWeek,
-				season: currentSeason
-			}}
-		>
-			{children}
-		</WeekContext.Provider>
+function storeWeek(season: number, week: number) {
+	try {
+		localStorage.setItem(WEEK_KEY, String(week));
+		localStorage.setItem(SEASON_KEY, String(season));
+	} catch {
+		// Storage unavailable (private mode) — the week just won't persist
+	}
+}
+
+export const WeekProvider = ({ children }: { children: React.ReactNode }) => {
+	const season = useMemo(() => seasonYear(), []);
+	// Render immediately with a date-based estimate; refine once ESPN answers
+	const [currentWeek, setWeek] = useState(() => NFLService.calculateCurrentWeek());
+	const [liveWeek, setLiveWeek] = useState<number | null>(null);
+
+	useEffect(() => {
+		const stored = readStoredWeek(season);
+		if (stored) setWeek(stored);
+
+		let cancelled = false;
+		NFLService.getCurrentWeek().then(nflWeek => {
+			if (cancelled) return;
+			const live = Math.min(MAX_WEEK, Math.max(MIN_WEEK, nflWeek));
+			setLiveWeek(live);
+			// Never leave someone parked on a week that's already behind the live one
+			const week = Math.max(stored ?? live, live);
+			setWeek(week);
+			storeWeek(season, week);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [season]);
+
+	const setCurrentWeek = useCallback(
+		(week: number) => {
+			if (week < MIN_WEEK || week > MAX_WEEK) return;
+			setWeek(week);
+			storeWeek(season, week);
+		},
+		[season]
 	);
+
+	const value = useMemo(() => ({ currentWeek, setCurrentWeek, liveWeek, season }), [currentWeek, setCurrentWeek, liveWeek, season]);
+
+	return <WeekContext.Provider value={value}>{children}</WeekContext.Provider>;
 };

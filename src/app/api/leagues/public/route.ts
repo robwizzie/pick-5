@@ -26,7 +26,7 @@ export async function GET(req: Request) {
 		// If search term is provided, use text search on league name
 		if (search.trim()) {
 			query.$or = [
-				{ name: { $regex: search, $options: 'i' } } // Case-insensitive partial match
+				{ name: { $regex: search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } } // Case-insensitive partial match
 			];
 		}
 
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
 
 		// Fetch leagues with pagination
 		const leagues = await League.find(query)
-			.select('_id name members createdAt') // Only return public fields - NO password, NO inviteCode
+			.select('_id name mode members createdAt') // Only return public fields - NO password, NO inviteCode
 			.sort({ createdAt: -1 }) // Newest first
 			.skip(skip)
 			.limit(limit)

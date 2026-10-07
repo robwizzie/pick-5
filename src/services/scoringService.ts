@@ -8,7 +8,24 @@ interface GameResult {
 	status?: string; // Game status: 'pre', 'in', 'post'
 }
 
+/** A correct "lock of the week" pick is worth this many times its normal points. */
+export const LOCK_MULTIPLIER = 2;
+
 export class ScoringService {
+	/**
+	 * Points for a single correct pick: odds-based in Standard mode (2 when no odds were
+	 * stored), 2 in Steve mode, doubled when it's the player's lock of the week.
+	 */
+	static pointsForPick(
+		pick: { odds?: number },
+		leagueMode: string,
+		calculatePointsFromOdds?: (odds: number) => number,
+		isLock = false
+	): number {
+		const base = leagueMode === 'standard' && pick.odds !== undefined && pick.odds !== null && calculatePointsFromOdds ? calculatePointsFromOdds(pick.odds) : 2;
+		return isLock ? base * LOCK_MULTIPLIER : base;
+	}
+
 	static calculatePickResult(
 		pick: {
 			gameId: string;
@@ -58,6 +75,7 @@ export class ScoringService {
 	 * Returns completedGames count for accurate win percentage calculation
 	 * tfsGame and tfsScore can be null for Standard mode leagues
 	 * leagueMode determines scoring: 'steve' = 2 pts per win, 'standard' = odds-based points
+	 * lockGameId (optional) is the player's lock of the week: that pick scores double if correct
 	 */
 	static calculateWeekScore(
 		picks: { gameId: string; team: string; isHome: boolean; odds?: number }[],
@@ -65,7 +83,8 @@ export class ScoringService {
 		tfsGame: string | null,
 		tfsScore: number | null,
 		leagueMode: string = 'steve',
-		calculatePointsFromOdds?: (odds: number) => number
+		calculatePointsFromOdds?: (odds: number) => number,
+		lockGameId?: string | null
 	) {
 		let weeklyPoints = 0;
 		let correctPicks = 0;
@@ -75,32 +94,28 @@ export class ScoringService {
 		// Score regular picks - only score games that have finished
 		const scoredPicks = picks.map(pick => {
 			const gameResult = gameResults.find(g => g.id === pick.gameId);
+			const isLock = !!lockGameId && pick.gameId === lockGameId;
 			if (!gameResult) {
-				return { ...pick, isCorrect: null };
+				return { ...pick, isCorrect: null, isLock, points: 0 };
 			}
 
 			// Only score if game has finished (status='post')
 			const gameFinished = this.isGameFinished(gameResult);
 
 			if (!gameFinished) {
-				return { ...pick, isCorrect: null };
+				return { ...pick, isCorrect: null, isLock, points: 0 };
 			}
 
 			completedGames++; // Count this as a completed game
 
 			const isCorrect = this.calculatePickResult(pick, gameResult);
+			const points = isCorrect ? this.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock) : 0;
 			if (isCorrect) {
-				// For Standard mode, use odds-based points; for Steve mode, use 2 points
-				if (leagueMode === 'standard' && pick.odds !== undefined && calculatePointsFromOdds) {
-					const points = calculatePointsFromOdds(pick.odds);
-					weeklyPoints += points;
-				} else {
-					weeklyPoints += 2; // Steve mode default
-				}
+				weeklyPoints += points;
 				correctPicks++;
 			}
 
-			return { ...pick, isCorrect };
+			return { ...pick, isCorrect, isLock, points };
 		});
 
 		// Score TFS if applicable - only if game has finished and TFS is provided (Steve mode only)

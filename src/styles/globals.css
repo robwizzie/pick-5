@@ -1,156 +1,265 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Oswald:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@layer base {
-	:root {
-		/* Modern NFL-inspired color palette */
-		--background: 0 0% 8%;
-		/* Deep black */
-		--foreground: 0 0% 98%;
-		/* Pure white */
-		--card: 0 0% 12%;
-		/* Dark grey */
-		--card-foreground: 0 0% 98%;
-		--popover: 0 0% 12%;
-		--popover-foreground: 0 0% 98%;
-		/* Primary colors inspired by logo */
-		--primary: 200 100% 70%;
-		/* Bright cyan-blue for better contrast */
-		--primary-foreground: 0 0% 8%;
-		--secondary: 0 0% 20%;
-		/* Dark grey */
-		--secondary-foreground: 0 0% 98%;
-		/* Accent colors from logo */
-		--accent: 120 100% 50%;
-		/* Vibrant green */
-		--accent-foreground: 0 0% 8%;
-		--accent-2: 0 100% 50%;
-		/* Vibrant red */
-		--accent-3: 45 100% 50%;
-		/* Vibrant yellow */
-		/* Muted colors */
-		--muted: 0 0% 18%;
-		--muted-foreground: 0 0% 65%;
-		--border: 0 0% 25%;
-		--input: 0 0% 18%;
-		--ring: 200 100% 70%;
-		/* Status colors */
-		--destructive: 0 100% 50%;
-		--destructive-foreground: 0 0% 98%;
-		--success: 120 100% 50%;
-		--success-foreground: 0 0% 8%;
-		--warning: 45 100% 50%;
-		--warning-foreground: 0 0% 8%;
-		/* Chart colors */
-		--chart-1: 200 100% 70%;
-		--chart-2: 120 100% 50%;
-		--chart-3: 0 100% 50%;
-		--chart-4: 45 100% 50%;
-		--chart-5: 280 100% 50%;
-		--radius: 1rem;
-	}
-}
 
 @layer base {
+	:root {
+		/* Surfaces — blue-black "night game" ink */
+		--background: 228 32% 4%;
+		--foreground: 220 30% 97%;
+		--surface: 228 26% 7%;
+		--surface-raised: 228 22% 10%;
+		--card: 228 24% 8%;
+		--card-foreground: 220 30% 97%;
+		--popover: 228 24% 9%;
+		--popover-foreground: 220 30% 97%;
+
+		/* Brand — electric blue is the interactive color, neon green means "win" */
+		--primary: 193 100% 61%;
+		--primary-foreground: 228 40% 6%;
+		--secondary: 228 18% 14%;
+		--secondary-foreground: 220 30% 97%;
+		--accent: 103 100% 66%;
+		--accent-foreground: 228 40% 6%;
+		--accent-2: 351 100% 62%;
+		--accent-3: 40 100% 58%;
+
+		--muted: 228 18% 13%;
+		--muted-foreground: 222 14% 62%;
+		--border: 226 20% 16%;
+		--input: 226 20% 16%;
+		--ring: 193 100% 61%;
+
+		/* Status */
+		--destructive: 351 100% 62%;
+		--destructive-foreground: 0 0% 100%;
+		--success: 103 100% 66%;
+		--success-foreground: 228 40% 6%;
+		--warning: 40 100% 58%;
+		--warning-foreground: 228 40% 6%;
+		--live: 351 100% 62%;
+
+		--chart-1: 193 100% 61%;
+		--chart-2: 103 100% 66%;
+		--chart-3: 351 100% 62%;
+		--chart-4: 40 100% 58%;
+		--chart-5: 262 100% 72%;
+
+		--radius: 0.875rem;
+		--nav-height: 4rem;
+
+		color-scheme: dark;
+	}
+
 	* {
 		@apply border-border;
 	}
+
 	html {
-		scroll-behavior: smooth;
-		@apply bg-background;
-		/* Ensure iPhone safe areas match background */
 		background-color: hsl(var(--background));
-		min-height: 100vh;
+		-webkit-tap-highlight-color: transparent;
+		text-rendering: optimizeLegibility;
 	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		html {
+			scroll-behavior: smooth;
+		}
+	}
+
 	body {
 		@apply bg-background text-foreground font-sans antialiased;
-		background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(0 0% 10%) 100%);
-		min-height: 100vh;
-		/* Support iPhone safe area insets */
-		padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+		min-height: 100dvh;
+		/* Never scroll sideways on phones; clip (unlike hidden) keeps position: sticky working */
+		overflow-x: clip;
+		font-feature-settings: 'cv11', 'ss01', 'ss03';
 	}
-	/* Custom scrollbar */
+
+	h1,
+	h2,
+	h3,
+	h4 {
+		text-wrap: balance;
+	}
+
+	::selection {
+		background: hsl(var(--primary) / 0.35);
+		color: hsl(var(--foreground));
+	}
+
+	:focus-visible {
+		outline: 2px solid hsl(var(--ring));
+		outline-offset: 2px;
+	}
+
+	/* Scrollbars */
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
+	}
 	::-webkit-scrollbar {
-		width: 8px;
+		width: 10px;
+		height: 10px;
 	}
 	::-webkit-scrollbar-track {
-		@apply bg-muted;
+		background: transparent;
 	}
 	::-webkit-scrollbar-thumb {
-		@apply bg-primary/50 rounded-full;
+		background: hsl(var(--muted-foreground) / 0.25);
+		border-radius: 999px;
+		border: 3px solid transparent;
+		background-clip: content-box;
 	}
 	::-webkit-scrollbar-thumb:hover {
-		@apply bg-primary/70;
+		background: hsl(var(--muted-foreground) / 0.45);
+		background-clip: content-box;
+	}
+
+	/* Native number inputs: no spinners */
+	input[type='number']::-webkit-inner-spin-button,
+	input[type='number']::-webkit-outer-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+	input[type='number'] {
+		-moz-appearance: textfield;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+		}
 	}
 }
 
 @layer components {
-	/* Glass morphism effect */
+	/* Frosted panel — the base surface for cards across the app */
 	.glass {
-		@apply bg-card/80 backdrop-blur-xl border border-white/10;
+		background: linear-gradient(180deg, hsl(var(--surface-raised) / 0.72), hsl(var(--surface) / 0.72));
+		@apply border border-white/[0.07] backdrop-blur-xl;
+		box-shadow:
+			0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+			0 20px 40px -24px rgba(0, 0, 0, 0.8);
 	}
-	/* Gradient text */
+
+	.glass-strong {
+		background: hsl(var(--surface-raised) / 0.97);
+		@apply border border-white/10 backdrop-blur-2xl;
+		box-shadow:
+			0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+			0 30px 80px -20px rgba(0, 0, 0, 0.9);
+	}
+
+	/* Solid floating bar (bottom nav, sticky action bars): never let content show through */
+	.dock {
+		background: hsl(var(--surface-raised));
+		@apply border border-white/10;
+		box-shadow:
+			0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+			0 -10px 40px -12px rgba(0, 0, 0, 0.9);
+	}
+
+	/* Card with a 1px brand-gradient border */
+	.gradient-border {
+		position: relative;
+		isolation: isolate;
+	}
+	.gradient-border::before {
+		content: '';
+		position: absolute;
+		inset: 0;
+		padding: 1px;
+		border-radius: inherit;
+		background: linear-gradient(120deg, rgba(124, 255, 79, 0.7), rgba(56, 214, 255, 0.7) 40%, rgba(255, 61, 90, 0.6) 80%, rgba(255, 122, 48, 0.6));
+		-webkit-mask:
+			linear-gradient(#000 0 0) content-box,
+			linear-gradient(#000 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
+		pointer-events: none;
+		z-index: -1;
+	}
+
 	.gradient-text {
-		background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+		background: linear-gradient(100deg, #ffffff 0%, #bdefff 35%, hsl(var(--primary)) 70%, #7cff4f 100%);
 		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
 		background-clip: text;
+		-webkit-text-fill-color: transparent;
 	}
-	/* Glow effect */
+
+	.brand-text {
+		background: linear-gradient(100deg, #7cff4f 0%, #38d6ff 40%, #ff3d5a 80%, #ff7a30 100%);
+		background-size: 200% auto;
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	.chrome-text {
+		background: linear-gradient(180deg, #ffffff 0%, #e6ebf2 45%, #9aa3b2 55%, #f4f6fa 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
 	.glow {
-		box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+		box-shadow: 0 0 24px hsl(var(--primary) / 0.35);
 	}
-	/* Animated gradient background */
+
+	/* Section eyebrow label */
+	.eyebrow {
+		@apply text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground;
+	}
+
+	/* Big broadcast-style heading */
+	.display-heading {
+		@apply font-display font-extrabold uppercase italic tracking-tight leading-[0.9];
+	}
+
+	.tabular {
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Legacy helpers kept for compatibility */
 	.animated-bg {
-		background: linear-gradient(-45deg, hsl(var(--background)), hsl(0 0% 10%), hsl(var(--card)), hsl(0 0% 8%));
-		background-size: 400% 400%;
-		animation: gradient 15s ease infinite;
+		background: transparent;
 	}
-	@keyframes gradient {
-		0% {
-			background-position: 0% 50%;
-		}
-		50% {
-			background-position: 100% 50%;
-		}
-		100% {
-			background-position: 0% 50%;
-		}
-	}
-	/* Button hover effects */
 	.btn-hover {
-		@apply transition-all duration-300 ease-out;
+		@apply transition-transform duration-200 ease-out-expo active:scale-[0.98];
 	}
-	.btn-hover:hover {
-		@apply transform scale-105 shadow-lg;
-	}
-	/* Card hover effects */
 	.card-hover {
-		@apply transition-all duration-300 ease-out;
-	}
-	.card-hover:hover {
-		@apply transform translate-y-[-4px] shadow-2xl;
-	}
-	/* Loading animation */
-	@keyframes pulse-glow {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.5;
-		}
+		@apply transition-all duration-300 ease-out-expo hover:-translate-y-0.5 hover:border-white/15 hover:shadow-card-hover;
 	}
 	.pulse-glow {
 		animation: pulse-glow 2s ease-in-out infinite;
 	}
-	/* Hide scrollbar while maintaining scroll functionality */
+
 	.scrollbar-hide {
-		-ms-overflow-style: none; /* IE and Edge */
-		scrollbar-width: none; /* Firefox */
+		-ms-overflow-style: none;
+		scrollbar-width: none;
 	}
 	.scrollbar-hide::-webkit-scrollbar {
-		display: none; /* Chrome, Safari and Opera */
+		display: none;
+	}
+
+	/* Live indicator dot */
+	.live-dot {
+		@apply relative inline-flex h-2 w-2 rounded-full bg-live;
+	}
+	.live-dot::after {
+		content: '';
+		@apply absolute inset-0 rounded-full bg-live animate-ping;
+	}
+
+	/* Safe-area helpers for iOS PWA */
+	.pb-safe {
+		padding-bottom: max(env(safe-area-inset-bottom), 0px);
+	}
+	.pt-safe {
+		padding-top: env(safe-area-inset-top);
 	}
 }

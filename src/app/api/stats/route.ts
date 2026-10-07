@@ -5,6 +5,7 @@ import { connectDB } from '@/lib/db';
 import { User } from '@/models/User';
 import { Pick } from '@/models/Pick';
 import { authOptions } from '@/lib/auth';
+import { getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 import { WeeklyStats } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export async function GET() {
 		}
 
 		await connectDB();
-		const userPicks = await Pick.find({ userId: session.user.id });
+		const userPicks = await Pick.find({ userId: session.user.id, ...seasonPickFilter(getCurrentSeasonYear()) });
 
 		const weeklyStats: Record<string, { weeklyPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number }> = {};
 		let totalPoints = 0;
@@ -61,7 +62,7 @@ export async function POST() {
 
 		await connectDB();
 
-		const allPicks = await Pick.find({ userId: session.user.id });
+		const allPicks = await Pick.find({ userId: session.user.id, ...seasonPickFilter(getCurrentSeasonYear()) });
 		const weeklyStatsMap: Record<number, WeeklyStats> = {};
 		allPicks.forEach(pick => {
 			weeklyStatsMap[pick.week] = {

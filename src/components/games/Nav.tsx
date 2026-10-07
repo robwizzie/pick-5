@@ -1,190 +1,194 @@
 'use client';
 
+import Image from 'next/image';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
+import { ChevronLeft, ChevronRight, LayoutDashboard, Settings, LogOut, BarChart3, Shield, Trophy, ChevronDown } from 'lucide-react';
 import { useWeek } from '@/contexts/WeekContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Home, Settings, LogOut, BarChart3, Shield } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { useSession, signOut } from 'next-auth/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ADMIN_USER_ID } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 import { AuthDialog } from './AuthDialog';
 import { WeekSelectorModal } from './WeekSelectorModal';
-import { useState, useEffect } from 'react';
 
-const ADMIN_USER_ID = '67c124e9cce9530ce4c1a655';
+const NAV_LINKS = [
+	{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+	{ href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+	{ href: '/stats', label: 'My Stats', icon: BarChart3 }
+];
+
+const RESERVED_LEAGUE_ROUTES = ['/league/create', '/league/join', '/league/browse'];
 
 export function Nav() {
-	const { currentWeek, setCurrentWeek } = useWeek();
+	const { currentWeek, setCurrentWeek, liveWeek } = useWeek();
 	const { leagueId } = useLeague();
-	const pathname = usePathname();
-	const router = useRouter();
+	const pathname = usePathname() ?? '';
 	const { data: session, status } = useSession();
-	const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
-	const [isWeekSelectorOpen, setIsWeekSelectorOpen] = useState(false);
+	const [authOpen, setAuthOpen] = useState(false);
+	const [weekPickerOpen, setWeekPickerOpen] = useState(false);
 	const [weeksWithPicks, setWeeksWithPicks] = useState<number[]>([]);
-	const isLoading = status === 'loading';
-	const isLeaguePage = pathname?.startsWith('/league/');
-	const isDashboard = pathname === '/dashboard';
-	const isCreateLeague = pathname === '/league/create';
-	const isJoinLeague = pathname === '/league/join';
-	const isBrowseLeague = pathname === '/league/browse';
+	const [scrolled, setScrolled] = useState(false);
+
+	// A league's main page (not create/join/browse, not history)
+	const isLeaguePage = /^\/league\/[^/]+$/.test(pathname) && !RESERVED_LEAGUE_ROUTES.some(r => pathname.startsWith(r));
 	const isAdmin = session?.user?.id === ADMIN_USER_ID;
 
-	// Fetch weeks with picks for the current league
 	useEffect(() => {
-		const fetchWeeksWithPicks = async () => {
-			if (!session || !leagueId) return;
+		const onScroll = () => setScrolled(window.scrollY > 8);
+		onScroll();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		return () => window.removeEventListener('scroll', onScroll);
+	}, []);
 
-			try {
-				const response = await fetch(`/api/picks/user?leagueId=${leagueId}`);
-				if (response.ok) {
-					const data: Array<{ week: number }> = await response.json();
-					console.log('[Nav] Fetched picks data:', data);
-					if (Array.isArray(data)) {
-						const weeks = data.map(pick => pick.week);
-						console.log('[Nav] Weeks with picks:', weeks);
-						setWeeksWithPicks(weeks);
-					}
-				}
-			} catch (error) {
-				console.error('Error fetching weeks with picks:', error);
-			}
+	useEffect(() => {
+		if (!session || !leagueId || !isLeaguePage) return;
+		let cancelled = false;
+		fetch(`/api/picks/user?leagueId=${leagueId}`)
+			.then(res => (res.ok ? res.json() : []))
+			.then((data: Array<{ week: number }>) => {
+				if (!cancelled && Array.isArray(data)) setWeeksWithPicks(data.map(p => p.week));
+			})
+			.catch(error => console.error('Error fetching weeks with picks:', error));
+		return () => {
+			cancelled = true;
 		};
-
-		fetchWeeksWithPicks();
-	}, [session, leagueId]);
-
-	const handleNextWeek = () => {
-		if (currentWeek < 18) {
-			const newWeek = currentWeek + 1;
-			setCurrentWeek(newWeek);
-		}
-	};
-
-	const handlePreviousWeek = () => {
-		if (currentWeek > 1) {
-			const newWeek = currentWeek - 1;
-			setCurrentWeek(newWeek);
-		}
-	};
+	}, [session, leagueId, isLeaguePage]);
 
 	return (
-		<nav className='glass sticky top-0 z-50 border-b border-white/10'>
-			<div className='max-w-7xl mx-auto px-3 sm:px-6 lg:px-8'>
-				<div className='flex justify-between items-center h-16'>
-					{/* Left side - Week navigation for league pages or Dashboard button */}
-					<div className='flex items-center gap-2'>
-						{isLeaguePage && !isCreateLeague && !isJoinLeague && !isBrowseLeague ? (
-							<>
-								{/* Dashboard button for league pages - hidden on mobile, visible on sm+ */}
-								<Button
-									variant='ghost'
-									size='sm'
-									onClick={() => router.push('/dashboard')}
-									className='hidden sm:flex h-8 w-8 p-0 hover:bg-primary/10 transition-colors rounded-full glass items-center justify-center'
-									title='Dashboard'
-								>
-									<Home className='h-4 w-4 text-primary' />
-								</Button>
-								{/* Week selector */}
-								<div className='flex items-center space-x-1.5 glass rounded-full px-2 py-1'>
-									<Button variant='ghost' size='sm' onClick={handlePreviousWeek} disabled={currentWeek <= 1} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full disabled:opacity-30 disabled:cursor-not-allowed'>
-										<ChevronLeft className='h-3.5 w-3.5' />
-									</Button>
-									<button onClick={() => setIsWeekSelectorOpen(true)} className='text-sm font-display uppercase tracking-wide text-primary font-semibold min-w-[60px] text-center hover:bg-primary/10 px-2 py-0.5 rounded transition-colors cursor-pointer'>
-										Week {currentWeek}
-									</button>
-									<Button variant='ghost' size='sm' onClick={handleNextWeek} disabled={currentWeek >= 18} className='h-7 w-7 p-0 hover:bg-primary/20 text-primary rounded-full'>
-										<ChevronRight className='h-3.5 w-3.5' />
-									</Button>
-								</div>
-							</>
-						) : !isDashboard ? (
-							<Button
-								variant='ghost'
-								size='sm'
-								onClick={() => router.push('/dashboard')}
-								className='flex items-center gap-2 text-primary hover:bg-primary/10 transition-colors px-3 py-2 rounded-full glass'
-							>
-								<Home className='h-4 w-4' />
-								<span className='hidden sm:inline text-sm font-medium'>Dashboard</span>
-							</Button>
-						) : null}
-					</div>
+		<nav
+			className={cn(
+				'sticky top-0 z-40 transition-[background-color,border-color,backdrop-filter] duration-300',
+				scrolled ? 'border-b border-white/[0.07] bg-background/95 backdrop-blur-xl' : 'border-b border-transparent'
+			)}
+		>
+			<div className='mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8'>
+				{/* Brand */}
+				<Link href={session ? '/dashboard' : '/'} className='group flex shrink-0 items-center gap-2.5' aria-label='Pick 5 home'>
+					<Image src='/pick-5-logo-sm.webp' alt='' width={36} height={41} priority className='h-9 w-auto drop-shadow-[0_4px_14px_rgba(56,214,255,0.35)] transition-transform duration-300 group-hover:scale-105' />
+					<span className={cn('font-display text-2xl font-extrabold uppercase italic tracking-tight', isLeaguePage && 'hidden sm:inline')}>
+						Pick<span className='brand-text'>5</span>
+					</span>
+				</Link>
 
-					{/* Center - Logo (smaller on mobile, especially when in a league) */}
-					<div className='absolute left-1/2 transform -translate-x-1/2'>
-						<div className='cursor-pointer transition-all duration-300 hover:scale-110 hover:drop-shadow-glow' onClick={() => router.push('/dashboard')}>
-							<Image
-								src='/pick-5-logo.png'
-								alt='Pick 5 Logo'
-								width={40}
-								height={40}
-								className={`drop-shadow-lg ${isLeaguePage ? 'sm:w-12 sm:h-12' : 'sm:w-14 sm:h-14'}`}
-								priority
-							/>
+				{/* Week switcher (league pages) */}
+				{isLeaguePage && (
+					<div className='flex items-center rounded-full border border-white/10 bg-white/[0.04] p-1 backdrop-blur-md'>
+						<button
+							type='button'
+							onClick={() => setCurrentWeek(currentWeek - 1)}
+							disabled={currentWeek <= 1}
+							aria-label='Previous week'
+							className='grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-30'
+						>
+							<ChevronLeft className='h-4 w-4' />
+						</button>
+						<button
+							type='button'
+							onClick={() => setWeekPickerOpen(true)}
+							className='flex items-center gap-1.5 rounded-full px-3 py-1 transition-colors hover:bg-white/10'
+						>
+							<span className='font-display text-lg font-bold uppercase italic leading-none tabular'>Week {currentWeek}</span>
+							{liveWeek === currentWeek && <span className='live-dot' aria-label='Current week' />}
+							<ChevronDown className='h-3.5 w-3.5 text-muted-foreground' />
+						</button>
+						<button
+							type='button'
+							onClick={() => setCurrentWeek(currentWeek + 1)}
+							disabled={currentWeek >= 18}
+							aria-label='Next week'
+							className='grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-30'
+						>
+							<ChevronRight className='h-4 w-4' />
+						</button>
+					</div>
+				)}
+
+				<div className='flex items-center gap-1'>
+					{/* Desktop links */}
+					{session && (
+						<div className='mr-2 hidden items-center gap-1 md:flex'>
+							{NAV_LINKS.map(({ href, label }) => {
+								const active = pathname === href;
+								return (
+									<Link
+										key={href}
+										href={href}
+										className={cn(
+											'rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors',
+											active ? 'bg-white/[0.08] text-foreground' : 'text-muted-foreground hover:bg-white/[0.05] hover:text-foreground'
+										)}
+									>
+										{label}
+									</Link>
+								);
+							})}
 						</div>
-					</div>
+					)}
 
-					{/* Right side - User menu */}
-					<div className='flex items-center space-x-4'>
-						{isLoading ? (
-							<div className='animate-pulse h-10 w-10 rounded-full bg-muted/50' />
-						) : session ? (
-							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<Button variant='ghost' className='relative h-10 w-10 rounded-full ring-2 ring-primary/50 hover:ring-primary transition-all duration-300 hover:scale-105'>
-										<Avatar className='h-10 w-10'>
-											<AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
-											<AvatarFallback className='bg-primary/20 text-primary font-semibold'>{session.user?.name?.charAt(0).toUpperCase()}</AvatarFallback>
-										</Avatar>
-									</Button>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent className='w-56 glass border-white/10 backdrop-blur-xl' align='end' forceMount>
-									<DropdownMenuLabel className='pb-2'>
-										<div className='flex flex-col space-y-1'>
-											<p className='font-semibold text-foreground'>{session.user?.name}</p>
-											<p className='text-xs text-muted-foreground truncate'>{session.user?.email}</p>
-										</div>
-									</DropdownMenuLabel>
-									<DropdownMenuSeparator className='bg-white/10' />
-									<DropdownMenuItem onClick={() => router.push('/dashboard')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
-										<Home className='h-4 w-4' />
-										<span>Dashboard</span>
+					{status === 'loading' ? (
+						<div className='h-9 w-9 animate-pulse rounded-full bg-white/10' />
+					) : session ? (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<button type='button' className='rounded-full ring-2 ring-white/10 transition-all hover:ring-primary/60 focus-visible:ring-primary' aria-label='Account menu'>
+									<Avatar className='h-9 w-9'>
+										<AvatarImage src={session.user?.image || ''} alt={session.user?.name || ''} />
+										<AvatarFallback className='bg-primary/15 font-semibold text-primary'>{session.user?.name?.charAt(0).toUpperCase()}</AvatarFallback>
+									</Avatar>
+								</button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent className='w-60' align='end' sideOffset={10}>
+								<DropdownMenuLabel className='px-2.5 py-2 font-normal'>
+									<p className='truncate font-semibold text-foreground'>{session.user?.name}</p>
+									<p className='truncate text-xs text-muted-foreground'>{session.user?.email}</p>
+								</DropdownMenuLabel>
+								<DropdownMenuSeparator className='bg-white/[0.07]' />
+								{NAV_LINKS.map(({ href, label, icon: Icon }) => (
+									<DropdownMenuItem key={href} asChild>
+										<Link href={href}>
+											<Icon className='text-muted-foreground' />
+											{label}
+										</Link>
 									</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => router.push('/stats')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
-										<BarChart3 className='h-4 w-4' />
-										<span>My Stats</span>
+								))}
+								<DropdownMenuItem asChild>
+									<Link href='/settings'>
+										<Settings className='text-muted-foreground' />
+										Settings
+									</Link>
+								</DropdownMenuItem>
+								{isAdmin && (
+									<DropdownMenuItem asChild>
+										<Link href='/admin' className='text-primary'>
+											<Shield />
+											Admin tools
+										</Link>
 									</DropdownMenuItem>
-									{isAdmin && (
-										<DropdownMenuItem onClick={() => router.push('/admin')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10 text-primary'>
-											<Shield className='h-4 w-4' />
-											<span>Admin Tools</span>
-										</DropdownMenuItem>
-									)}
-									<DropdownMenuSeparator className='bg-white/10' />
-									<DropdownMenuItem onClick={() => router.push('/settings')} className='flex items-center space-x-2 cursor-pointer hover:bg-primary/10'>
-										<Settings className='h-4 w-4' />
-										<span>Settings</span>
-									</DropdownMenuItem>
-									<DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })} className='flex items-center space-x-2 cursor-pointer hover:bg-destructive/10 text-destructive'>
-										<LogOut className='h-4 w-4' />
-										<span>Sign Out</span>
-									</DropdownMenuItem>
-								</DropdownMenuContent>
-							</DropdownMenu>
-						) : (
-							<Button variant='outline' onClick={() => setIsAuthDialogOpen(true)} className='glass border-white/20 hover:border-primary/50 hover:bg-primary/10 transition-all duration-300'>
-								Sign In
-							</Button>
-						)}
-					</div>
+								)}
+								<DropdownMenuSeparator className='bg-white/[0.07]' />
+								<DropdownMenuItem onClick={() => signOut({ callbackUrl: '/' })} className='text-destructive focus:text-destructive'>
+									<LogOut />
+									Sign out
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					) : (
+						<Button size='sm' variant='outline' onClick={() => setAuthOpen(true)} className='rounded-full px-4'>
+							Sign in
+						</Button>
+					)}
 				</div>
 			</div>
-			<AuthDialog open={isAuthDialogOpen} onOpenChange={setIsAuthDialogOpen} />
-			<WeekSelectorModal open={isWeekSelectorOpen} onOpenChange={setIsWeekSelectorOpen} currentWeek={currentWeek} onWeekSelect={setCurrentWeek} weeksWithPicks={weeksWithPicks} />
+
+			<AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
+			{isLeaguePage && (
+				<WeekSelectorModal open={weekPickerOpen} onOpenChange={setWeekPickerOpen} currentWeek={currentWeek} liveWeek={liveWeek} onWeekSelect={setCurrentWeek} weeksWithPicks={weeksWithPicks} />
+			)}
 		</nav>
 	);
 }

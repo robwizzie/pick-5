@@ -4,45 +4,49 @@ import { User } from '@/models/User';
 
 export const dynamic = 'force-dynamic';
 
+/** Turn off every email (reminders and weekly results) for the user owning `token`. */
+async function unsubscribe(token: string | undefined): Promise<'ok' | 'invalid'> {
+	if (!token || !/^[a-f0-9]{16,128}$/i.test(token)) return 'invalid';
+	await connectDB();
+	const res = await User.updateOne(
+		{ unsubscribeToken: token },
+		{
+			$set: {
+				'emailPreferences.pickReminders': false,
+				'emailPreferences.thursdayReminder': false,
+				'emailPreferences.saturdayReminder': false,
+				'emailPreferences.weeklyScoreEmail': false,
+				updatedAt: new Date()
+			}
+		}
+	);
+	return res.matchedCount > 0 ? 'ok' : 'invalid';
+}
+
+/** Link in the email footer: unsubscribe, then show the confirmation page. */
 export async function GET(req: Request, { params }: { params: Promise<{ token: string }> }) {
 	try {
 		const { token } = await params;
-
-		if (!token) {
-			return NextResponse.json({ error: 'Invalid unsubscribe link' }, { status: 400 });
-		}
-
-		await connectDB();
-
-		// Find user by unsubscribe token
-		const user = await User.findOne({ unsubscribeToken: token });
-
-		if (!user) {
+		if ((await unsubscribe(token)) === 'invalid') {
 			return NextResponse.json({ error: 'Invalid unsubscribe link' }, { status: 404 });
 		}
-
-		// Disable all email reminders
-		user.emailPreferences = {
-			pickReminders: false,
-			thursdayReminder: false,
-			saturdayReminder: false,
-			thursdayReminderTime: user.emailPreferences?.thursdayReminderTime || '13:00',
-			saturdayReminderTime: user.emailPreferences?.saturdayReminderTime || '12:00'
-		};
-
-		await user.save();
-
-		// Redirect to a confirmation page
 		return NextResponse.redirect(new URL('/unsubscribed', req.url));
 	} catch (error: unknown) {
 		console.error('Error unsubscribing user:', error);
-		const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-		return NextResponse.json(
-			{
-				error: 'Failed to unsubscribe',
-				details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-			},
-			{ status: 500 }
-		);
+		return NextResponse.json({ error: 'Failed to unsubscribe' }, { status: 500 });
+	}
+}
+
+/** RFC 8058 one-click unsubscribe (the List-Unsubscribe-Post header mail clients use). */
+export async function POST(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+	try {
+		const { token } = await params;
+		if ((await unsubscribe(token)) === 'invalid') {
+			return NextResponse.json({ error: 'Invalid unsubscribe link' }, { status: 404 });
+		}
+		return NextResponse.json({ success: true });
+	} catch (error: unknown) {
+		console.error('Error unsubscribing user:', error);
+		return NextResponse.json({ error: 'Failed to unsubscribe' }, { status: 500 });
 	}
 }

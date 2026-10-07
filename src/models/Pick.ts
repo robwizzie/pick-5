@@ -13,6 +13,9 @@ const PickSchema = new mongoose.Schema({
 		type: Number,
 		required: true
 	},
+	// NFL season year (e.g. 2026 for the 2026-27 season). Legacy docs may lack it;
+	// see seasonPickFilter / ensurePickSeasonMigration in src/lib/season.ts.
+	season: { type: Number, index: true },
 	picks: [
 		{
 			gameId: String,
@@ -26,6 +29,8 @@ const PickSchema = new mongoose.Schema({
 			odds: Number // Store odds at time of pick submission
 		}
 	],
+	// Lock of the week: this game's pick scores double if correct (optional)
+	lockGameId: { type: String, default: null },
 	tfsGame: String,
 	tfsScore: Number,
 	tfsPoints: {
@@ -50,8 +55,8 @@ const PickSchema = new mongoose.Schema({
 	}
 });
 
-// Ensure one pick set per user per week per league
-PickSchema.index({ userId: 1, week: 1, leagueId: 1 }, { unique: true });
+// Ensure one pick set per user per league per season per week
+PickSchema.index({ userId: 1, leagueId: 1, season: 1, week: 1 }, { unique: true });
 
 // Check if model exists before creating new one
 // requestScoped: per-request connection on Cloudflare Workers, unchanged on Node.js (see src/lib/db.ts)

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import { checkAdminAuth } from '@/lib/adminAuth';
 import { connectDB } from '@/lib/db';
+import { getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
 import { Pick } from '@/models/Pick';
 import { League } from '@/models/League';
 import { User } from '@/models/User';
@@ -12,7 +14,16 @@ export const dynamic = 'force-dynamic';
 
 export async function POST() {
 	try {
+		const session = await checkAdminAuth();
+		if (!session) {
+			return NextResponse.json({ error: 'Unauthorized - admin access required' }, { status: 403 });
+		}
+
 		await connectDB();
+
+		// Current season only (odds snapshots are looked up for the current season)
+		const season = getCurrentSeasonYear();
+		const seasonFilter = seasonPickFilter(season);
 
 		const details: string[] = [];
 		let totalPicksProcessed = 0;
@@ -20,10 +31,8 @@ export async function POST() {
 		let picksSkipped = 0;
 		const usersToUpdate = new Set<string>();
 
-		// Find all picks that don't have odds in the picks array
-		const allPicks = await Pick.find({}).lean();
-
-		console.log(`[FixPickOdds] Found ${allPicks.length} total pick documents`);
+		// Find all of this season's pick documents (individual picks without odds are fixed below)
+		const allPicks = await Pick.find(seasonFilter).lean();
 		details.push(`Found ${allPicks.length} total pick documents`);
 
 		for (const pickDoc of allPicks) {
@@ -91,7 +100,7 @@ export async function POST() {
 			// If any picks were updated, recalculate scores
 			if (docUpdated) {
 				// Fetch games for this week to check if they're finished
-				const games = await NFLService.getWeeklyGames(pickDoc.week);
+				const games = await NFLService.getWeeklyGames(pickDoc.week, season);
 
 				let weeklyPoints = 0;
 				let correctPicks = 0;
@@ -139,7 +148,7 @@ export async function POST() {
 
 		// Update user totals
 		for (const userId of Array.from(usersToUpdate)) {
-			const userPicks = await Pick.find({ userId }).lean();
+			const userPicks = await Pick.find({ userId, ...seasonFilter }).lean();
 
 			const totalPoints = userPicks.reduce((sum, p) => sum + (p.weeklyPoints || 0), 0);
 			const totalCorrectPicks = userPicks.reduce((sum, p) => sum + (p.correctPicks || 0), 0);

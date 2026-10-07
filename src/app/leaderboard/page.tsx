@@ -1,13 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, Medal, Award, Crown, TrendingUp, Users } from 'lucide-react';
-import { Spinner } from '@/components/ui/spinner';
+import { Crown, Globe, Hash, Percent, Trophy, Users } from 'lucide-react';
 import CountUp from 'react-countup';
-import Image from 'next/image';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { EmptyState, PageContainer, PageHeader, Pill, SectionHeader, StatTile } from '@/components/ui/page';
+import { LeaderboardSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface LeaderboardEntry {
 	rank: number;
@@ -20,6 +24,42 @@ interface LeaderboardEntry {
 	isCurrentUser: boolean;
 }
 
+interface LeagueSummary {
+	_id: string;
+}
+
+interface SeasonStat {
+	userId?: string;
+	player: string;
+	image: string | null;
+	totalPoints: number;
+	totalPicks: number;
+	correctPicks: number;
+}
+
+interface Aggregate {
+	key: string;
+	userId?: string;
+	name: string;
+	image: string | null;
+	totalPoints: number;
+	totalPicks: number;
+	correctPicks: number;
+}
+
+const RANK_TEXT: Record<number, string> = { 1: 'text-[#FFD66B]', 2: 'text-[#D5DCE6]', 3: 'text-[#E7A16B]' };
+const RANK_RING: Record<number, string> = { 1: 'ring-[#FFD66B]/60', 2: 'ring-[#D5DCE6]/50', 3: 'ring-[#E7A16B]/50' };
+const RANK_GLOW: Record<number, string> = { 1: 'from-[#FFD66B]/25', 2: 'from-[#D5DCE6]/15', 3: 'from-[#E7A16B]/20' };
+
+function initials(name: string) {
+	return name
+		.split(' ')
+		.map(n => n[0])
+		.join('')
+		.toUpperCase()
+		.slice(0, 2);
+}
+
 export default function GlobalLeaderboard() {
 	const router = useRouter();
 	const { data: session, status } = useSession();
@@ -30,76 +70,61 @@ export default function GlobalLeaderboard() {
 	useEffect(() => {
 		if (status === 'unauthenticated') {
 			router.push('/login');
-			return;
 		}
 	}, [status, router]);
 
 	useEffect(() => {
-		const fetchGlobalLeaderboard = async () => {
-			if (!session) return;
+		if (!session) return;
+		const myId = session.user?.id;
+		const myName = session.user?.name;
 
+		const fetchGlobalLeaderboard = async () => {
 			try {
 				setLoading(true);
 
-				// Fetch all leagues the user is in
 				const leaguesRes = await fetch('/api/user/leagues');
 				if (!leaguesRes.ok) return;
+				const leagues: LeagueSummary[] = await leaguesRes.json();
+				if (leagues.length === 0) return;
 
-				const leagues = await leaguesRes.json();
-				if (leagues.length === 0) {
-					setLoading(false);
-					return;
-				}
-
-				// Map to aggregate user points across all leagues
-				const globalUserPoints = new Map<string, {
-					name: string;
-					image: string | null;
-					totalPoints: number;
-					totalPicks: number;
-					correctPicks: number;
-				}>();
-
-				// Fetch leaderboard data from all leagues
-				for (const league of leagues) {
-					try {
-						const leaderboardRes = await fetch(`/api/leaderboard?leagueId=${league._id}`);
-						if (leaderboardRes.ok) {
-							const data = await leaderboardRes.json();
-
-							// Aggregate all users' data
-							if (data.seasonStats && Array.isArray(data.seasonStats)) {
-								data.seasonStats.forEach((stat: {
-									player: string;
-									image: string | null;
-									totalPoints: number;
-									totalPicks: number;
-									correctPicks: number;
-								}) => {
-									const existing = globalUserPoints.get(stat.player);
-									if (existing) {
-										existing.totalPoints += stat.totalPoints || 0;
-										existing.totalPicks += stat.totalPicks || 0;
-										existing.correctPicks += stat.correctPicks || 0;
-									} else {
-										globalUserPoints.set(stat.player, {
-											name: stat.player,
-											image: stat.image || null,
-											totalPoints: stat.totalPoints || 0,
-											totalPicks: stat.totalPicks || 0,
-											correctPicks: stat.correctPicks || 0
-										});
-									}
-								});
-							}
+				// Fetch every league's standings concurrently
+				const perLeague = await Promise.all(
+					leagues.map(async league => {
+						try {
+							const res = await fetch(`/api/leaderboard?leagueId=${league._id}`);
+							if (!res.ok) return [];
+							const data: { seasonStats?: SeasonStat[] } = await res.json();
+							return Array.isArray(data.seasonStats) ? data.seasonStats : [];
+						} catch (error) {
+							console.error('Error fetching league leaderboard:', error);
+							return [];
 						}
-					} catch (error) {
-						console.error('Error fetching league leaderboard:', error);
-					}
-				}
+					})
+				);
 
-				// Convert to array and sort by total points
-				const sortedLeaderboard = Array.from(globalUserPoints.values())
+				// Aggregate across leagues, keyed by user id (names can collide)
+				const totals = new Map<string, Aggregate>();
+				perLeague.flat().forEach(stat => {
+					const key = stat.userId ?? `name:${stat.player}`;
+					const existing = totals.get(key);
+					if (existing) {
+						existing.totalPoints += stat.totalPoints || 0;
+						existing.totalPicks += stat.totalPicks || 0;
+						existing.correctPicks += stat.correctPicks || 0;
+					} else {
+						totals.set(key, {
+							key,
+							userId: stat.userId,
+							name: stat.player,
+							image: stat.image || null,
+							totalPoints: stat.totalPoints || 0,
+							totalPicks: stat.totalPicks || 0,
+							correctPicks: stat.correctPicks || 0
+						});
+					}
+				});
+
+				const sorted: LeaderboardEntry[] = Array.from(totals.values())
 					.sort((a, b) => b.totalPoints - a.totalPoints)
 					.map((user, index) => ({
 						rank: index + 1,
@@ -109,20 +134,14 @@ export default function GlobalLeaderboard() {
 						totalPicks: user.totalPicks,
 						correctPicks: user.correctPicks,
 						winRate: user.totalPicks > 0 ? Math.round((user.correctPicks / user.totalPicks) * 100) : 0,
-						isCurrentUser: user.name === session.user?.name
+						isCurrentUser: myId && user.userId ? user.userId === myId : user.name === myName
 					}));
 
-				setLeaderboard(sortedLeaderboard);
-
-				// Find current user's rank
-				const currentUserEntry = sortedLeaderboard.find(entry => entry.isCurrentUser);
-				if (currentUserEntry) {
-					setUserRank(currentUserEntry.rank);
-				}
-
-				setLoading(false);
+				setLeaderboard(sorted);
+				setUserRank(sorted.find(entry => entry.isCurrentUser)?.rank ?? null);
 			} catch (error) {
 				console.error('Error fetching global leaderboard:', error);
+			} finally {
 				setLoading(false);
 			}
 		};
@@ -130,173 +149,138 @@ export default function GlobalLeaderboard() {
 		fetchGlobalLeaderboard();
 	}, [session]);
 
-	const getRankIcon = (rank: number) => {
-		switch (rank) {
-			case 1:
-				return <Crown className='h-6 w-6 text-yellow-400' fill='currentColor' />;
-			case 2:
-				return <Medal className='h-6 w-6 text-gray-400' />;
-			case 3:
-				return <Award className='h-6 w-6 text-orange-400' />;
-			default:
-				return null;
-		}
-	};
-
-	const getRankStyle = (rank: number) => {
-		switch (rank) {
-			case 1:
-				return 'bg-gradient-to-br from-yellow-500/20 via-yellow-500/5 to-transparent border-yellow-500/30';
-			case 2:
-				return 'bg-gradient-to-br from-gray-400/20 via-gray-400/5 to-transparent border-gray-400/30';
-			case 3:
-				return 'bg-gradient-to-br from-orange-500/20 via-orange-500/5 to-transparent border-orange-500/30';
-			default:
-				return 'border-white/10';
-		}
-	};
-
-	const getRankTextStyle = (rank: number) => {
-		switch (rank) {
-			case 1:
-				return 'text-yellow-400';
-			case 2:
-				return 'text-gray-300';
-			case 3:
-				return 'text-orange-400';
-			default:
-				return 'text-primary';
-		}
-	};
+	const header = <PageHeader eyebrow={<><Globe className='h-3.5 w-3.5' /> All your leagues</>} title='Global Leaderboard' description='Every player across your leagues, ranked by total season points.' actions={userRank ? <Pill tone='primary'>You&apos;re #{userRank}</Pill> : undefined} />;
 
 	if (loading) {
 		return (
-			<div className='min-h-screen flex items-center justify-center'>
-				<Spinner />
-			</div>
+			<PageContainer size='narrow'>
+				{header}
+				<div className='mb-8 grid grid-cols-3 gap-3'>
+					{Array.from({ length: 3 }).map((_, i) => (
+						<Skeleton key={i} className='h-28 rounded-2xl' />
+					))}
+				</div>
+				<Skeleton className='mb-8 h-56 rounded-2xl' />
+				<LeaderboardSkeleton rows={6} />
+			</PageContainer>
 		);
 	}
 
-	return (
-		<div className='min-h-screen p-4 pt-8'>
-			<div className='max-w-5xl mx-auto space-y-6'>
-				{/* Header */}
-				<div className='text-center space-y-4'>
-					<div className='flex items-center justify-center gap-3'>
-						<Trophy className='h-10 w-10 text-primary' />
-						<h1 className='text-4xl lg:text-5xl font-display font-bold gradient-text'>Global Leaderboard</h1>
-						<Trophy className='h-10 w-10 text-primary' />
-					</div>
-					<p className='text-lg text-muted-foreground max-w-2xl mx-auto'>
-						All players ranked by total season points across all leagues
-					</p>
-				</div>
+	if (leaderboard.length === 0) {
+		return (
+			<PageContainer size='narrow'>
+				{header}
+				<EmptyState
+					icon={Trophy}
+					title='No rankings yet'
+					description='Join a league and make picks to appear on the leaderboard.'
+					action={
+						<Button asChild>
+							<Link href='/dashboard'>Go to dashboard</Link>
+						</Button>
+					}
+				/>
+			</PageContainer>
+		);
+	}
 
-				{/* Stats Summary */}
-				<div className='grid grid-cols-1 md:grid-cols-3 gap-4'>
-					<Card className='glass border-white/10'>
-						<CardContent className='p-4 text-center'>
-							<Users className='h-6 w-6 text-primary mx-auto mb-2' />
-							<p className='text-2xl font-bold text-primary'>{leaderboard.length}</p>
-							<p className='text-sm text-muted-foreground'>Total Players</p>
-						</CardContent>
-					</Card>
-					{userRank && (
-						<>
-							<Card className='glass border-white/10'>
-								<CardContent className='p-4 text-center'>
-									<Trophy className='h-6 w-6 text-primary mx-auto mb-2' />
-									<p className='text-2xl font-bold text-primary'>#{userRank}</p>
-									<p className='text-sm text-muted-foreground'>Your Rank</p>
-								</CardContent>
-							</Card>
-							<Card className='glass border-white/10'>
-								<CardContent className='p-4 text-center'>
-									<TrendingUp className='h-6 w-6 text-primary mx-auto mb-2' />
-									<p className='text-2xl font-bold text-primary'>
-										Top {Math.round(((leaderboard.length - userRank + 1) / leaderboard.length) * 100)}%
-									</p>
-									<p className='text-sm text-muted-foreground'>Percentile</p>
-								</CardContent>
-							</Card>
-						</>
+	const podium = leaderboard.slice(0, 3);
+	const rest = leaderboard.slice(3);
+	// Top X% — rank 1 of 10 is the top 10%
+	const percentile = userRank ? Math.max(1, Math.ceil((userRank / leaderboard.length) * 100)) : null;
+
+	return (
+		<PageContainer size='narrow'>
+			{header}
+
+			<div className='mb-8 grid grid-cols-3 gap-3'>
+				<StatTile label='Players' value={leaderboard.length} icon={Users} tone='muted' />
+				<StatTile label='Your rank' value={userRank ? `#${userRank}` : '—'} icon={Hash} tone='primary' />
+				<StatTile label='Top' value={percentile ? `${percentile}%` : '—'} icon={Percent} tone='accent' />
+			</div>
+
+			{/* Podium — 2 / 1 / 3 */}
+			<section aria-label='Top three' className='mb-8'>
+				<div className='grid grid-cols-3 items-end gap-2 sm:gap-4'>
+					{[podium[1], podium[0], podium[2]].map((entry, slot) =>
+						entry ? <PodiumSpot key={entry.rank} entry={entry} delay={[1, 0, 2][slot] * 90} /> : <div key={`empty-${slot}`} />
 					)}
 				</div>
+			</section>
 
-				{/* Leaderboard */}
-				<Card className='glass border-white/10'>
-					<CardHeader>
-						<CardTitle className='text-2xl font-display'>Rankings</CardTitle>
-					</CardHeader>
-					<CardContent className='p-0'>
-						{leaderboard.length > 0 ? (
-							<div className='space-y-2 p-4'>
-								{leaderboard.map((entry) => (
-									<div
-										key={entry.name}
-										className={`p-4 rounded-lg border-2 transition-all duration-300 ${getRankStyle(entry.rank)} ${
-											entry.isCurrentUser ? 'ring-2 ring-primary shadow-lg' : ''
-										}`}
-									>
-										<div className='flex items-center gap-4'>
-											{/* Rank */}
-											<div className='flex items-center justify-center w-12'>
-												{entry.rank <= 3 ? (
-													getRankIcon(entry.rank)
-												) : (
-													<span className={`text-2xl font-bold font-mono ${getRankTextStyle(entry.rank)}`}>
-														#{entry.rank}
-													</span>
-												)}
-											</div>
-
-											{/* Avatar */}
-											<div className='relative w-12 h-12 rounded-full overflow-hidden bg-primary/20 flex-shrink-0'>
-												{entry.image ? (
-													<Image
-														src={entry.image}
-														alt={entry.name}
-														fill
-														className='object-cover'
-													/>
-												) : (
-													<div className='w-full h-full flex items-center justify-center text-primary font-semibold text-lg'>
-														{entry.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-													</div>
-												)}
-											</div>
-
-											{/* Name */}
-											<div className='flex-1 min-w-0'>
-												<p className={`font-semibold text-lg ${entry.isCurrentUser ? 'text-primary' : 'text-foreground'}`}>
-													{entry.name}
-													{entry.isCurrentUser && <span className='ml-2 text-xs text-primary'>(You)</span>}
-												</p>
-												<p className='text-sm text-muted-foreground'>
-													{entry.correctPicks}/{entry.totalPicks} picks • {entry.winRate}% win rate
-												</p>
-											</div>
-
-											{/* Points */}
-											<div className='text-right'>
-												<p className='text-3xl font-bold text-primary tabular-nums font-mono'>
-													<CountUp end={entry.totalPoints} duration={0.5} />
-												</p>
-												<p className='text-xs text-muted-foreground'>points</p>
-											</div>
-										</div>
+			{rest.length > 0 && (
+				<section>
+					<SectionHeader title='Rankings' icon={Trophy} />
+					<Card className='p-2 sm:p-3'>
+						<ol className='space-y-1'>
+							{rest.map((entry, i) => (
+								<li
+									key={`${entry.rank}-${entry.name}`}
+									className={cn('flex animate-slide-up items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.04]', entry.isCurrentUser && 'bg-primary/[0.08] ring-1 ring-primary/30')}
+									style={{ animationDelay: `${Math.min(i, 12) * 30}ms` }}
+									aria-current={entry.isCurrentUser ? 'true' : undefined}
+								>
+									<span className={cn('w-7 shrink-0 text-center font-display text-lg font-extrabold italic tabular', entry.isCurrentUser ? 'text-primary' : 'text-muted-foreground')}>{entry.rank}</span>
+									<PlayerAvatar entry={entry} className='h-9 w-9' />
+									<div className='min-w-0 flex-1'>
+										<p className={cn('truncate text-sm font-semibold', entry.isCurrentUser && 'text-primary')}>
+											{entry.name}
+											{entry.isCurrentUser && <span className='ml-1.5 text-[11px] font-medium uppercase tracking-wider'>You</span>}
+										</p>
+										<p className='text-xs text-muted-foreground tabular'>
+											{entry.correctPicks}/{entry.totalPicks} picks · {entry.winRate}%
+										</p>
 									</div>
-								))}
-							</div>
-						) : (
-							<div className='text-center py-12 text-muted-foreground'>
-								<Trophy className='h-12 w-12 mx-auto mb-4 opacity-50' />
-								<p>No rankings available yet.</p>
-								<p className='text-sm mt-2'>Join a league and make picks to appear on the leaderboard!</p>
-							</div>
-						)}
-					</CardContent>
-				</Card>
+									<div className='text-right'>
+										<p className='font-display text-2xl font-extrabold italic leading-none tabular'>{entry.totalPoints}</p>
+										<p className='eyebrow mt-0.5 text-[9px]'>pts</p>
+									</div>
+								</li>
+							))}
+						</ol>
+					</Card>
+				</section>
+			)}
+		</PageContainer>
+	);
+}
+
+function PlayerAvatar({ entry, className }: { entry: LeaderboardEntry; className?: string }) {
+	return (
+		<Avatar className={cn('ring-1 ring-white/10', className)}>
+			{entry.image && <AvatarImage src={entry.image} alt={entry.name} className='object-cover' />}
+			<AvatarFallback className='bg-primary/15 text-xs font-semibold text-primary'>{initials(entry.name)}</AvatarFallback>
+		</Avatar>
+	);
+}
+
+function PodiumSpot({ entry, delay }: { entry: LeaderboardEntry; delay: number }) {
+	const first = entry.rank === 1;
+	const height = first ? 'h-32 sm:h-36' : entry.rank === 2 ? 'h-24 sm:h-28' : 'h-[4.5rem] sm:h-20';
+	return (
+		<div className='flex min-w-0 animate-slide-up flex-col items-center' style={{ animationDelay: `${delay}ms` }}>
+			<div className='relative mb-2'>
+				{first && <Crown className='absolute -top-5 left-1/2 h-5 w-5 -translate-x-1/2 text-[#FFD66B]' fill='currentColor' aria-hidden />}
+				<PlayerAvatar entry={entry} className={cn('ring-2', RANK_RING[entry.rank], first ? 'h-16 w-16 sm:h-20 sm:w-20' : 'h-12 w-12 sm:h-14 sm:w-14')} />
+			</div>
+			<p className={cn('w-full truncate text-center text-xs font-semibold sm:text-sm', entry.isCurrentUser && 'text-primary')}>
+				{entry.name}
+				{entry.isCurrentUser && ' (You)'}
+			</p>
+			<p className='mb-2 font-display text-2xl font-extrabold italic leading-none tracking-tight tabular sm:text-3xl'>
+				<CountUp end={entry.totalPoints} duration={0.6} />
+				<span className='ml-1 text-[10px] font-semibold not-italic uppercase tracking-wider text-muted-foreground'>pts</span>
+			</p>
+			<div
+				className={cn(
+					'glass relative w-full overflow-hidden rounded-t-2xl rounded-b-md border-b-0 bg-gradient-to-b to-transparent',
+					RANK_GLOW[entry.rank],
+					height,
+					entry.isCurrentUser && 'ring-1 ring-primary/40'
+				)}
+			>
+				<span className={cn('absolute inset-x-0 top-2 text-center font-display text-4xl font-extrabold italic leading-none tabular sm:text-5xl', RANK_TEXT[entry.rank])}>{entry.rank}</span>
+				<span className='absolute inset-x-0 bottom-2 text-center text-[10px] text-muted-foreground tabular'>{entry.winRate}% win</span>
 			</div>
 		</div>
 	);

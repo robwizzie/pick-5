@@ -1,605 +1,253 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus, LogIn, BarChart3, Users, Trophy, TrendingUp, Target, Info } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import ActiveLeagues from '@/components/league/ActiveLeagues';
-import LiveFeed from '@/components/dashboard/LiveFeed';
-import { NFLService } from '@/services/nflService';
-import { ScoringService } from '@/services/scoringService';
+import { ArrowRight, Compass, Flame, LogIn, Percent, Plus, Target, Trophy, Users } from 'lucide-react';
 import CountUp from 'react-countup';
+import ActiveLeagues, { type DashboardLeague, type LeagueSummary, type PickedTeam } from '@/components/league/ActiveLeagues';
+import { Button } from '@/components/ui/button';
+import { LeagueCardSkeleton } from '@/components/ui/skeleton';
+import { EmptyState, PageContainer, SectionHeader, StatTile } from '@/components/ui/page';
+import { useWeek } from '@/contexts/WeekContext';
+import type { MatchupMiniData } from '@/components/league/MatchupMini';
+import type { MatchupsResponse } from '@/lib/matchups';
+import { LiveNowBanner } from '@/components/league/LiveNowBanner';
 
-interface TeamPick {
-	team: string;
-	logo: string;
-	isCorrect: boolean | null;
-	gameStatus: 'scheduled' | 'in_progress' | 'final';
+interface LeaderboardResponse {
+	weeklyResults?: Array<{ userId: string; points: number; hasPicks: boolean; tfsPoints: number; pickedTeams: PickedTeam[] }>;
+	seasonStats?: Array<{ userId?: string; player: string; totalPoints: number; totalPicks: number; correctPicks: number }>;
 }
 
-interface League {
-	_id: string;
-	id: string;
-	name: string;
-	description?: string;
-	sport: string;
-	creatorId?: string;
-	inviteCode?: string;
-	mode?: string;
-	members?: string[];
+function summarize(data: LeaderboardResponse, userId: string, league: DashboardLeague) {
+	const me = data.weeklyResults?.find(r => r.userId === userId);
+	const standings = [...(data.seasonStats ?? [])].sort((a, b) => b.totalPoints - a.totalPoints);
+	const myIndex = standings.findIndex(s => s.userId === userId);
+	const mySeason = standings[myIndex];
+
+	const summary: LeagueSummary = {
+		hasPicks: !!me?.hasPicks,
+		weekPoints: me?.points ?? 0,
+		seasonPoints: mySeason?.totalPoints ?? 0,
+		rank: myIndex >= 0 ? myIndex + 1 : null,
+		totalMembers: standings.length || league.members?.length || 0,
+		pickedTeams: me?.pickedTeams ?? [],
+		tfsPoints: me?.tfsPoints ?? 0
+	};
+	return { summary, correct: mySeason?.correctPicks ?? 0, graded: mySeason?.totalPicks ?? 0 };
 }
 
-interface RecentActivity {
-	type: 'pick' | 'league_join';
-	message: string;
-	timestamp: Date;
-	leagueId?: string;
-	leagueName?: string;
-	teamPicks?: TeamPick[];
-	week?: number;
-}
-
-const Dashboard = () => {
-	const router = useRouter();
+export default function Dashboard() {
 	const { data: session, status } = useSession();
-	const [leagues, setLeagues] = useState<League[]>([]);
-	const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-	const [stats, setStats] = useState({
-		totalSeasonPoints: 0,
-		globalRank: 0,
-		totalUsers: 0,
-		winRate: 0,
-		rankPercentage: 0
-	});
+	const { liveWeek } = useWeek();
+	const userId = session?.user?.id;
+	const [leagues, setLeagues] = useState<DashboardLeague[] | null>(null);
+	const [summaries, setSummaries] = useState<Map<string, LeagueSummary>>(new Map());
+	const [totals, setTotals] = useState<{ correct: number; graded: number } | null>(null);
+	const [matchups, setMatchups] = useState<Map<string, MatchupMiniData>>(new Map());
 
 	useEffect(() => {
-		if (status === 'unauthenticated') {
-			router.push('/login');
-			return;
-		}
-	}, [status, router]);
+		if (status !== 'authenticated') return;
+		fetch('/api/user/leagues')
+			.then(res => (res.ok ? res.json() : Promise.reject(new Error(`Failed to load leagues (${res.status})`))))
+			.then((data: DashboardLeague[]) => setLeagues(data))
+			.catch(error => {
+				console.error(error);
+				setLeagues([]);
+			});
+	}, [status]);
 
+	// One leaderboard + one matchups request per league, all in parallel
 	useEffect(() => {
-		const fetchLeagues = async () => {
-			if (!session) return;
+		if (!leagues?.length || !userId || liveWeek === null) return;
+		let cancelled = false;
 
+		const loadMatchup = async (leagueId: string): Promise<MatchupMiniData | null> => {
 			try {
-				const response = await fetch('/api/user/leagues');
-
-				if (!response.ok) {
-					const errorText = await response.text();
-					console.error(`Failed to fetch leagues: ${response.status} - ${errorText}`);
-					return;
-				}
-
-				const data = await response.json();
-				const normalizedLeagues = data.map((league: { _id: string; name: string; description: string }) => ({
-					...league,
-					id: league._id
-				}));
-
-				setLeagues(normalizedLeagues);
+				const res = await fetch(`/api/league/${leagueId}/matchups?week=${liveWeek}`);
+				if (!res.ok) return null;
+				const data: MatchupsResponse = await res.json();
+				return { matchup: data.matchups.find(m => m.id === data.myMatchupId) ?? null, record: data.records[userId] };
 			} catch (error) {
-				console.error('Network error fetching leagues:', error);
+				console.error(`Error loading matchups for league ${leagueId}:`, error);
+				return null;
 			}
 		};
 
-		fetchLeagues();
-	}, [session]);
-
-	// Fetch stats from all leagues with TRUE global rank
-	useEffect(() => {
-		const fetchStats = async () => {
-			if (!session || leagues.length === 0) return;
-
-			try {
-				let totalPoints = 0;
-				let totalPicks = 0;
-				let correctPicks = 0;
-
-				// Map to store all users and their total points across all leagues
-				const globalUserPoints = new Map<string, { name: string; totalPoints: number }>();
-
-				// Calculate total season points and win rate across all leagues
-				for (const league of leagues) {
-					try {
-						// Fetch leaderboard for this league to get user's points
-						const leaderboardRes = await fetch(`/api/leaderboard?leagueId=${league.id}`);
-						if (leaderboardRes.ok) {
-							const data = await leaderboardRes.json();
-
-							// Find user's season stats in this league
-							const userSeasonStats = data.seasonStats?.find(
-								(entry: { player: string }) => entry.player === session.user?.name
-							);
-
-							if (userSeasonStats) {
-								totalPoints += userSeasonStats.totalPoints || 0;
-								totalPicks += userSeasonStats.totalPicks || 0;
-								correctPicks += userSeasonStats.correctPicks || 0;
-							}
-
-							// Aggregate all users' points across leagues for global ranking
-							if (data.seasonStats && Array.isArray(data.seasonStats)) {
-								data.seasonStats.forEach((stat: { player: string; totalPoints: number }) => {
-									const existing = globalUserPoints.get(stat.player);
-									if (existing) {
-										existing.totalPoints += stat.totalPoints || 0;
-									} else {
-										globalUserPoints.set(stat.player, {
-											name: stat.player,
-											totalPoints: stat.totalPoints || 0
-										});
-									}
-								});
-							}
-						}
-					} catch (error) {
-						console.error('Error fetching stats for league:', error);
-					}
+		Promise.all(
+			leagues.map(async league => {
+				try {
+					const [res, matchup] = await Promise.all([fetch(`/api/leaderboard?week=${liveWeek}&leagueId=${league._id}`), loadMatchup(league._id)]);
+					if (!res.ok) return null;
+					return { id: league._id, matchup, ...summarize(await res.json(), userId, league) };
+				} catch (error) {
+					console.error(`Error loading league ${league._id}:`, error);
+					return null;
 				}
-
-				// Calculate TRUE global rank across all users in all leagues
-				const allUsers = Array.from(globalUserPoints.values());
-				const sortedUsers = allUsers.sort((a, b) => b.totalPoints - a.totalPoints);
-
-				const userGlobalRank = sortedUsers.findIndex(u => u.name === session.user?.name) + 1;
-				const totalGlobalUsers = sortedUsers.length;
-
-				// Calculate win rate
-				const winRate = totalPicks > 0 ? Math.round((correctPicks / totalPicks) * 100) : 0;
-				const rankPercentage = totalGlobalUsers > 0 && userGlobalRank > 0
-					? Math.round(((totalGlobalUsers - userGlobalRank + 1) / totalGlobalUsers) * 100)
-					: 0;
-
-				setStats({
-					totalSeasonPoints: totalPoints,
-					globalRank: userGlobalRank,
-					totalUsers: totalGlobalUsers,
-					winRate,
-					rankPercentage
-				});
-			} catch (error) {
-				console.error('Error calculating stats:', error);
+			})
+		).then(results => {
+			if (cancelled) return;
+			const matchupMap = new Map<string, MatchupMiniData>();
+			const map = new Map<string, LeagueSummary>();
+			let correct = 0;
+			let graded = 0;
+			for (const r of results) {
+				if (!r) continue;
+				map.set(r.id, r.summary);
+				if (r.matchup) matchupMap.set(r.id, r.matchup);
+				correct += r.correct;
+				graded += r.graded;
 			}
+			setSummaries(map);
+			setMatchups(matchupMap);
+			setTotals({ correct, graded });
+		});
+
+		return () => {
+			cancelled = true;
 		};
+	}, [leagues, userId, liveWeek]);
 
-		fetchStats();
-	}, [session, leagues]);
-
-	useEffect(() => {
-		const fetchRecentActivity = async () => {
-			if (!session || leagues.length === 0) return;
-
-			try {
-				const activities: RecentActivity[] = [];
-
-				// Fetch recent picks from all leagues
-				for (const league of leagues) {
-					try {
-						const response = await fetch(`/api/picks/user?leagueId=${league.id}`);
-						if (response.ok) {
-							const picks = await response.json();
-							// Get all picks and add them to activities
-							if (Array.isArray(picks) && picks.length > 0) {
-								// Fetch game data for each week to get logos and statuses
-								for (const pick of picks) {
-									try {
-										const games = await NFLService.getWeeklyGames(pick.week);
-										const teamPicks: TeamPick[] = [];
-
-										// Build game results for scoring
-										const gameResults = games.map(game => ({
-											id: game.id,
-											homeScore: game.home.score || 0,
-											awayScore: game.away.score || 0,
-											homeTeam: game.home.team,
-											awayTeam: game.away.team,
-											status: game.status
-										}));
-
-										// Match picks with games to get logos and status
-										if (pick.picks && Array.isArray(pick.picks)) {
-											pick.picks.forEach((p: { gameId: string; team: string; isHome: boolean; isCorrect?: boolean | null }) => {
-												const game = games.find(g => g.id === p.gameId);
-												if (game) {
-													const teamData = p.team === game.home.team ? game.home : game.away;
-													const status = game.status?.toLowerCase() || 'scheduled';
-													let gameStatus: 'scheduled' | 'in_progress' | 'final' = 'scheduled';
-
-													if (status === 'in' || status === 'in_progress') {
-														gameStatus = 'in_progress';
-													} else if (status === 'post' || status === 'final' || status === 'status_final') {
-														gameStatus = 'final';
-													}
-
-													// Calculate isCorrect for finished games
-													let isCorrect: boolean | null = null;
-													if (gameStatus === 'final') {
-														const gameResult = gameResults.find(gr => gr.id === p.gameId);
-														if (gameResult) {
-															isCorrect = ScoringService.calculatePickResult(p, gameResult);
-														}
-													}
-
-													teamPicks.push({
-														team: p.team,
-														logo: teamData.logo,
-														isCorrect,
-														gameStatus
-													});
-												}
-											});
-										}
-
-										// Use updatedAt, createdAt, or ObjectID timestamp as fallback
-										const timestamp = pick.updatedAt || pick.createdAt || new Date(parseInt(pick._id.toString().substring(0, 8), 16) * 1000);
-										activities.push({
-											type: 'pick',
-											message: `Made picks for Week ${pick.week}`,
-											timestamp: new Date(timestamp),
-											leagueId: league.id,
-											leagueName: league.name,
-											teamPicks,
-											week: pick.week
-										});
-									} catch (error) {
-										console.error('Error fetching game data for pick:', error);
-									}
-								}
-							}
-						}
-					} catch (error) {
-						console.error('Error fetching picks for league:', error);
-					}
-				}
-
-				// Sort by timestamp and take the 10 most recent
-				if (activities.length > 0) {
-					activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-					setRecentActivity(activities.slice(0, 10));
-				}
-			} catch (error) {
-				console.error('Error fetching recent activity:', error);
-			}
+	const overview = useMemo(() => {
+		const all = Array.from(summaries.values());
+		const ranked = all.filter(s => s.rank !== null);
+		return {
+			seasonPoints: all.reduce((sum, s) => sum + s.seasonPoints, 0),
+			weekPoints: all.reduce((sum, s) => sum + s.weekPoints, 0),
+			bestRank: ranked.length ? Math.min(...ranked.map(s => s.rank!)) : null,
+			leagueCount: all.length,
+			needsPicks: leagues?.filter(l => summaries.get(l._id)?.hasPicks === false) ?? []
 		};
+	}, [summaries, leagues]);
 
-		fetchRecentActivity();
-	}, [session, leagues]);
+	const firstName = session?.user?.name?.split(' ')[0];
+	const winRate = totals && totals.graded > 0 ? Math.round((totals.correct / totals.graded) * 100) : null;
+	const statsReady = summaries.size > 0;
 
 	return (
-		<div className='min-h-screen p-4 pt-8'>
-			<div className='max-w-7xl mx-auto space-y-6 lg:space-y-8'>
-				{/* Welcome Header - Compact on Mobile */}
-				<div className='text-center space-y-2 lg:space-y-4 animate-fade-in'>
-					<h1 className='text-3xl lg:text-5xl font-display font-bold gradient-text'>Welcome back, {session?.user?.name?.split(' ')[0]}!</h1>
-					<p className='text-base lg:text-xl text-muted-foreground max-w-2xl mx-auto'>Ready to dominate your leagues? Make your picks and climb the leaderboard.</p>
-				</div>
-
-				{/* Leagues Section - FIRST on Mobile */}
-				<div className='lg:hidden space-y-4'>
-					<div className='flex items-center justify-between'>
-						<h2 className='text-xl font-display font-bold text-foreground'>Your Leagues</h2>
-						<div className='flex gap-2'>
-							<Button variant='outline' size='sm' onClick={() => router.push('/league/create')} className='glass border-white/20 hover:border-primary/50'>
-								<Plus className='h-4 w-4 mr-1.5' />
-								Create
-							</Button>
-							<Button size='sm' onClick={() => router.push('/league/join')} className='bg-primary hover:bg-primary/90'>
-								<LogIn className='h-4 w-4 mr-1.5' />
-								Join
-							</Button>
-						</div>
-					</div>
-
-					{leagues.length > 0 ? (
-						<ActiveLeagues leagues={leagues} userId={session?.user?.id} />
+		<PageContainer size='wide'>
+			{/* Hero */}
+			<section className='mb-8 grid gap-6 sm:mb-10 lg:grid-cols-[1fr_auto] lg:items-end'>
+				<div className='animate-slide-up'>
+					<p className='eyebrow mb-3 flex items-center gap-2'>
+						<span className='live-dot' />
+						{liveWeek ? `Week ${liveWeek} is on` : 'This week'}
+					</p>
+					<h1 className='display-heading text-5xl sm:text-7xl'>
+						<span className='chrome-text'>Let’s go,</span> <span className='brand-text pr-2'>{firstName ?? 'champ'}.</span>
+					</h1>
+					{overview.needsPicks.length > 0 ? (
+						<p className='mt-3 text-base text-muted-foreground sm:text-lg'>
+							You still need picks in <span className='font-semibold text-warning'>{overview.needsPicks.length === 1 ? overview.needsPicks[0].name : `${overview.needsPicks.length} leagues`}</span>. Lock them in before kickoff.
+						</p>
 					) : (
-						<Card className='glass border-white/10'>
-							<CardContent className='p-8 text-center space-y-4'>
-								<div className='w-16 h-16 mx-auto bg-muted/20 rounded-full flex items-center justify-center'>
-									<Users className='h-8 w-8 text-muted-foreground' />
-								</div>
-								<div className='space-y-2'>
-									<h3 className='text-lg font-semibold text-foreground'>No leagues yet</h3>
-									<p className='text-sm text-muted-foreground'>Join your first league to start competing.</p>
-								</div>
-								<div className='flex flex-col gap-2'>
-									<Button onClick={() => router.push('/league/create')} className='bg-primary hover:bg-primary/90'>
-										<Plus className='h-4 w-4 mr-2' />
-										Create League
-									</Button>
-									<Button variant='outline' onClick={() => router.push('/league/join')} className='glass border-white/20 hover:border-primary/50'>
-										<LogIn className='h-4 w-4 mr-2' />
-										Join League
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
+						<p className='mt-3 text-base text-muted-foreground sm:text-lg'>{leagues?.length ? 'Your picks are in. Now sit back and sweat it out.' : 'Join a league to start making picks.'}</p>
 					)}
 				</div>
-
-				{/* Stats Overview - Below Leagues on Mobile, Above on Desktop */}
-				{leagues.length > 0 && (
-					<>
-						{/* Mobile: Horizontal Scroll */}
-						<div className='lg:hidden'>
-							<h3 className='text-lg font-display font-bold text-foreground mb-3'>Your Stats</h3>
-							<div className='flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide'>
-								{/* Season Points */}
-								<Card className='flex-shrink-0 w-[280px] glass border-white/10 snap-start'>
-									<CardContent className='p-5'>
-										<div className='flex items-start justify-between'>
-											<div className='space-y-1.5'>
-												<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Season Points</p>
-												<div className='flex items-baseline gap-2'>
-													<p className='text-3xl font-mono font-bold text-primary'>
-														<CountUp end={stats.totalSeasonPoints} duration={1.5} />
-													</p>
-													{stats.rankPercentage > 0 && (
-														<span className='text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary'>
-															Top {stats.rankPercentage}%
-														</span>
-													)}
-												</div>
-											</div>
-											<div className='p-2.5 rounded-full bg-primary/10'>
-												<Trophy className='h-5 w-5 text-primary' />
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-
-								{/* Global Rank */}
-								<Card className='flex-shrink-0 w-[280px] glass border-white/10 snap-start'>
-									<CardContent className='p-5'>
-										<div className='flex items-start justify-between'>
-											<div className='space-y-1.5'>
-												<div className='flex items-center gap-1.5'>
-													<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
-													<div className='group relative'>
-														<Info className='h-3 w-3 text-muted-foreground cursor-help' />
-														<div className='absolute left-0 top-full mt-2 w-64 p-3 bg-card border border-white/20 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 z-50 text-xs text-foreground'>
-															Your rank among all unique users across all your leagues, based on total points.
-														</div>
-													</div>
-												</div>
-												<div className='flex items-baseline gap-2'>
-													<p className='text-3xl font-mono font-bold text-primary'>
-														#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
-													</p>
-												</div>
-												{stats.totalUsers > 0 && (
-													<p className='text-[10px] text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
-												)}
-												<Button
-													variant='ghost'
-													size='sm'
-													className='text-[10px] h-6 px-2 text-primary hover:text-primary/80 hover:bg-primary/10'
-													onClick={() => router.push('/leaderboard')}
-												>
-													View Global Leaderboard →
-												</Button>
-											</div>
-											<div className='p-2.5 rounded-full bg-primary/10'>
-												<Target className='h-5 w-5 text-primary' />
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-
-								{/* Win Rate */}
-								<Card className='flex-shrink-0 w-[280px] glass border-white/10 snap-start'>
-									<CardContent className='p-5'>
-										<div className='flex items-start justify-between'>
-											<div className='space-y-1.5'>
-												<p className='text-xs font-medium text-muted-foreground uppercase tracking-wide'>Win Rate</p>
-												<div className='flex items-baseline gap-2'>
-													<p className='text-3xl font-mono font-bold text-primary'>
-														<CountUp end={stats.winRate} duration={1.5} />%
-													</p>
-												</div>
-											</div>
-											<div className='p-2.5 rounded-full bg-primary/10'>
-												<TrendingUp className='h-5 w-5 text-primary' />
-											</div>
-										</div>
-									</CardContent>
-								</Card>
-							</div>
-						</div>
-
-						{/* Desktop: Grid */}
-						<div className='hidden lg:grid grid-cols-3 gap-6 animate-slide-up'>
-							{/* Season Points */}
-							<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
-								<CardContent className='p-6'>
-									<div className='flex items-start justify-between'>
-										<div className='space-y-2'>
-											<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Season Points</p>
-											<div className='flex items-baseline gap-2'>
-												<p className='text-4xl font-mono font-bold text-primary'>
-													<CountUp end={stats.totalSeasonPoints} duration={1.5} />
-												</p>
-												{stats.rankPercentage > 0 && (
-													<span className='text-xs font-semibold px-2 py-1 rounded-full bg-primary/20 text-primary'>
-														Top {stats.rankPercentage}%
-													</span>
-												)}
-											</div>
-										</div>
-										<div className='p-3 rounded-full bg-primary/10'>
-											<Trophy className='h-6 w-6 text-primary' />
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-
-							{/* Global Rank */}
-							<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
-								<CardContent className='p-6'>
-									<div className='flex items-start justify-between'>
-										<div className='space-y-2'>
-											<div className='flex items-center gap-2'>
-												<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Global Rank</p>
-												<div className='group relative'>
-													<Info className='h-4 w-4 text-muted-foreground cursor-help' />
-													<div className='absolute left-0 top-full mt-2 w-72 p-4 bg-card border border-white/20 rounded-lg shadow-xl opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-200 z-50 text-sm text-foreground'>
-														<p className='font-semibold mb-1'>How Global Rank Works:</p>
-														<p className='text-xs'>Your rank among all unique users across all your leagues, based on total season points.</p>
-													</div>
-												</div>
-											</div>
-											<div className='flex items-baseline gap-2'>
-												<p className='text-4xl font-mono font-bold text-primary'>
-													#{stats.globalRank > 0 ? <CountUp end={stats.globalRank} duration={1.5} /> : '—'}
-												</p>
-											</div>
-											{stats.totalUsers > 0 && (
-												<p className='text-xs text-muted-foreground'>of {stats.totalUsers.toLocaleString()} users</p>
-											)}
-											<Button
-												variant='ghost'
-												size='sm'
-												className='text-xs h-7 px-3 text-primary hover:text-primary/80 hover:bg-primary/10 mt-1'
-												onClick={() => router.push('/leaderboard')}
-											>
-												View Global Leaderboard →
-											</Button>
-										</div>
-										<div className='p-3 rounded-full bg-primary/10'>
-											<Target className='h-6 w-6 text-primary' />
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-
-							{/* Win Rate */}
-							<Card className='glass border-white/10 hover:border-primary/30 transition-all duration-300'>
-								<CardContent className='p-6'>
-									<div className='flex items-start justify-between'>
-										<div className='space-y-2'>
-											<p className='text-sm font-medium text-muted-foreground uppercase tracking-wide'>Win Rate</p>
-											<div className='flex items-baseline gap-2'>
-												<p className='text-4xl font-mono font-bold text-primary'>
-													<CountUp end={stats.winRate} duration={1.5} />%
-												</p>
-											</div>
-										</div>
-										<div className='p-3 rounded-full bg-primary/10'>
-											<TrendingUp className='h-6 w-6 text-primary' />
-										</div>
-									</div>
-								</CardContent>
-							</Card>
-						</div>
-					</>
+				{overview.needsPicks.length > 0 && (
+					<Button asChild size='lg' className='animate-slide-up self-start lg:self-end' style={{ animationDelay: '120ms' }}>
+						<Link href={`/league/${overview.needsPicks[0]._id}`}>
+							Make your picks <ArrowRight />
+						</Link>
+					</Button>
 				)}
+			</section>
 
-				{/* Mobile: Quick Actions and Live Feed */}
-				<div className='lg:hidden space-y-6'>
-					{/* Quick Actions */}
-					<Card className='glass border-white/10'>
-						<CardHeader>
-							<CardTitle className='text-lg font-display font-semibold'>Quick Actions</CardTitle>
-						</CardHeader>
-						<CardContent className='space-y-3'>
-							<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/create')}>
-								<Plus className='h-4 w-4 mr-3' />
-								Create New League
-							</Button>
-							<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/join')}>
-								<LogIn className='h-4 w-4 mr-3' />
-								Join League
-							</Button>
-							<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/stats')}>
-								<BarChart3 className='h-4 w-4 mr-3' />
-								My Stats
-							</Button>
-						</CardContent>
-					</Card>
+			{/* Live games: secured/projected points per league (renders nothing when no games are live) */}
+			{!!leagues?.length && <LiveNowBanner leagues={leagues} className='mb-8' />}
 
-					{/* Live Feed */}
-					<LiveFeed recentActivity={recentActivity} />
-				</div>
+			{/* KPIs */}
+			{!!leagues?.length && (
+				<section className='mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4'>
+					<StatTile label='Season points' icon={Trophy} value={statsReady ? <CountUp end={overview.seasonPoints} duration={1.2} /> : '—'} sub={`across ${overview.leagueCount || leagues.length} league${leagues.length === 1 ? '' : 's'}`} />
+					<StatTile label='This week' icon={Flame} tone='hot' value={statsReady ? <CountUp end={overview.weekPoints} duration={1.2} prefix='+' /> : '—'} sub={liveWeek ? `Week ${liveWeek}` : undefined} />
+					<StatTile label='Best rank' icon={Target} tone='warning' value={overview.bestRank ? `#${overview.bestRank}` : '—'} sub={<Link href='/leaderboard' className='font-semibold text-primary hover:underline'>Global leaderboard →</Link>} />
+					<StatTile label='Win rate' icon={Percent} tone='accent' value={winRate !== null ? <CountUp end={winRate} duration={1.2} suffix='%' /> : '—'} sub={totals ? `${totals.correct} of ${totals.graded} correct` : undefined} />
+				</section>
+			)}
 
-				{/* Desktop Layout: Leagues + Sidebar */}
-				<div className='hidden lg:grid lg:grid-cols-3 gap-8'>
-					{/* Leagues Section */}
-					<div className='lg:col-span-2 space-y-6'>
-						<div className='flex items-center justify-between'>
-							<h2 className='text-2xl font-display font-bold text-foreground'>Your Leagues</h2>
-							<div className='flex space-x-3'>
-								<Button variant='outline' onClick={() => router.push('/league/create')} className='glass border-white/20 hover:border-primary/50 btn-hover'>
-									<Plus className='h-4 w-4 mr-2' />
-									Create
+			<div className='grid gap-8 lg:grid-cols-[1fr_320px]'>
+				{/* Leagues */}
+				<section>
+					<SectionHeader
+						title='Your leagues'
+						icon={Users}
+						action={
+							<div className='flex gap-2'>
+								<Button asChild size='sm' variant='outline'>
+									<Link href='/league/join'>
+										<LogIn /> Join
+									</Link>
 								</Button>
-								<Button onClick={() => router.push('/league/join')} className='bg-primary hover:bg-primary/90 btn-hover'>
-									<LogIn className='h-4 w-4 mr-2' />
-									Join
+								<Button asChild size='sm'>
+									<Link href='/league/create'>
+										<Plus /> Create
+									</Link>
 								</Button>
 							</div>
+						}
+					/>
+					{leagues === null ? (
+						<div className='grid gap-3'>
+							{[0, 1].map(i => (
+								<LeagueCardSkeleton key={i} />
+							))}
 						</div>
+					) : leagues.length > 0 ? (
+						<ActiveLeagues leagues={leagues} summaries={summaries} userId={userId} matchups={matchups} />
+					) : (
+						<EmptyState
+							icon={Users}
+							title='No leagues yet'
+							description='Start your own league and invite friends, or join one with an invite link or code.'
+							action={
+								<>
+									<Button asChild>
+										<Link href='/league/create'>
+											<Plus /> Create a league
+										</Link>
+									</Button>
+									<Button asChild variant='outline'>
+										<Link href='/league/join'>
+											<LogIn /> Join a league
+										</Link>
+									</Button>
+								</>
+							}
+						/>
+					)}
+				</section>
 
-						{leagues.length > 0 ? (
-							<ActiveLeagues leagues={leagues} userId={session?.user?.id} />
-						) : (
-							<Card className='glass border-white/10'>
-								<CardContent className='p-12 text-center space-y-6'>
-									<div className='w-24 h-24 mx-auto bg-muted/20 rounded-full flex items-center justify-center'>
-										<Users className='h-12 w-12 text-muted-foreground' />
-									</div>
-									<div className='space-y-2'>
-										<h3 className='text-xl font-semibold text-foreground'>No leagues yet</h3>
-										<p className='text-muted-foreground max-w-md mx-auto'>Join your first league to start competing with friends and making picks.</p>
-									</div>
-									<div className='flex flex-col sm:flex-row gap-3 justify-center'>
-										<Button onClick={() => router.push('/league/create')} className='bg-primary hover:bg-primary/90 btn-hover'>
-											<Plus className='h-4 w-4 mr-2' />
-											Create League
-										</Button>
-										<Button variant='outline' onClick={() => router.push('/league/join')} className='glass border-white/20 hover:border-primary/50 btn-hover'>
-											<LogIn className='h-4 w-4 mr-2' />
-											Join League
-										</Button>
-									</div>
-								</CardContent>
-							</Card>
-						)}
+				{/* Sidebar */}
+				<aside className='space-y-4'>
+					<div className='glass rounded-2xl p-2'>
+						{[
+							{ href: '/league/create', icon: Plus, title: 'Create a league', body: 'Be the commissioner', tone: 'text-primary bg-primary/10' },
+							{ href: '/league/join', icon: LogIn, title: 'Join with a code', body: 'Got an invite?', tone: 'text-accent bg-accent/10' },
+							{ href: '/league/browse', icon: Compass, title: 'Browse public leagues', body: 'Find a game to join', tone: 'text-warning bg-warning/10' },
+							{ href: '/stats', icon: Target, title: 'My stats', body: 'Your season in numbers', tone: 'text-accent-2 bg-accent-2/10' }
+						].map(({ href, icon: Icon, title, body, tone }) => (
+							<Link key={href} href={href} className='group flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-white/[0.05]'>
+								<span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${tone}`}>
+									<Icon className='h-5 w-5' />
+								</span>
+								<span className='min-w-0 flex-1'>
+									<span className='block text-sm font-semibold'>{title}</span>
+									<span className='block text-xs text-muted-foreground'>{body}</span>
+								</span>
+								<ArrowRight className='h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground' />
+							</Link>
+						))}
 					</div>
 
-					{/* Sidebar */}
-					<div className='space-y-6'>
-						{/* Quick Actions */}
-						<Card className='glass border-white/10'>
-							<CardHeader>
-								<CardTitle className='text-lg font-display font-semibold'>Quick Actions</CardTitle>
-							</CardHeader>
-							<CardContent className='space-y-3'>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/create')}>
-									<Plus className='h-4 w-4 mr-3' />
-									Create New League
-								</Button>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/league/join')}>
-									<LogIn className='h-4 w-4 mr-3' />
-									Join League
-								</Button>
-								<Button variant='ghost' className='w-full justify-start glass hover:bg-primary/10 transition-all' onClick={() => router.push('/stats')}>
-									<BarChart3 className='h-4 w-4 mr-3' />
-									My Stats
-								</Button>
-							</CardContent>
-						</Card>
-
-						{/* Live Feed */}
-						<LiveFeed recentActivity={recentActivity} />
+					<div className='gradient-border glass relative overflow-hidden rounded-2xl p-5'>
+						<div className='pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-accent-2/25 blur-2xl' />
+						<p className='eyebrow'>Pro tip</p>
+						<p className='mt-2 font-display text-2xl font-bold uppercase italic leading-tight'>One upset beats a week of chalk.</p>
+						<p className='mt-2 text-sm text-muted-foreground'>In Standard leagues a +300 underdog pays 6 points — the same as six heavy favorites.</p>
 					</div>
-				</div>
+				</aside>
 			</div>
-		</div>
+		</PageContainer>
 	);
-};
-
-export default Dashboard;
+}
