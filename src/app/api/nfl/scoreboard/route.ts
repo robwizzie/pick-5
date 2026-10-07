@@ -11,10 +11,10 @@ export async function GET(req: NextRequest) {
 
 	const espnUrl = new URL('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard');
     if (week) espnUrl.searchParams.set('week', week);
-    // ESPN's scoreboard scopes a season with `dates=YYYY`; `year` is ignored/inconsistent
-    // on this endpoint and can yield an empty/default week when a specific week is requested.
-    if (season) espnUrl.searchParams.set('dates', season);
-    if (year && !season) espnUrl.searchParams.set('dates', year);
+    // Use ESPN's explicit season parameter for week-oriented NFL scoreboard requests.
+    // This is more reliable than dates=YYYY for future/current-season weekly schedules.
+    if (season) espnUrl.searchParams.set('season', season);
+    if (year && !season) espnUrl.searchParams.set('season', year);
     if (seasonType) espnUrl.searchParams.set('seasontype', seasonType);
 
 	try {
