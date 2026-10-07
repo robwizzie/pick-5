@@ -150,23 +150,21 @@ export class SeasonService {
 		let leaguesArchived = 0;
 		let skipped = 0;
 
-		// A few leagues at a time: each one fans out to up to 18 ESPN requests
-		for (let i = 0; i < leagues.length; i += 4) {
-			await Promise.all(
-				leagues.slice(i, i + 4).map(async league => {
-					const leagueId = String(league._id);
-					try {
-						const outcome = await this.archiveLeagueSeason(leagueId, seasonYear, { dryRun, replace });
-						if (outcome.preview) previews.push(outcome.preview);
-						if (outcome.status === 'archived') leaguesArchived++;
-						else skipped++;
-					} catch (error) {
-						const message = error instanceof Error ? error.message : 'Unknown error';
-						errors.push(`Failed to archive league ${league.name}: ${message}`);
-						console.error(`[SeasonService] Error archiving league ${league.name}:`, error);
-					}
-				})
-			);
+		// Archive sequentially. Each league can fan out to as many as 18 ESPN requests;
+		// doing several leagues concurrently is unnecessarily bursty on Workers and can make
+		// a historical archive fail part-way through due to subrequest/runtime limits.
+		for (const league of leagues) {
+			const leagueId = String(league._id);
+			try {
+				const outcome = await this.archiveLeagueSeason(leagueId, seasonYear, { dryRun, replace });
+				if (outcome.preview) previews.push(outcome.preview);
+				if (outcome.status === 'archived') leaguesArchived++;
+				else skipped++;
+			} catch (error) {
+				const message = error instanceof Error ? error.message : 'Unknown error';
+				errors.push(`Failed to archive league ${league.name}: ${message}`);
+				console.error(`[SeasonService] Error archiving league ${league.name}:`, error);
+			}
 		}
 		previews.sort((a, b) => a.leagueName.localeCompare(b.leagueName));
 
