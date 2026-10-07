@@ -2,10 +2,10 @@
 // Season scoping for Pick documents (server only: imports the Pick model).
 import { connectDB, isWorkersRuntime } from '@/lib/db';
 import { Pick } from '@/models/Pick';
-import { getCurrentSeasonYear } from '@/lib/seasonYear';
+import { getCurrentSeasonYear, getSeasonFinalWeek } from '@/lib/seasonYear';
 import { NFLService } from '@/services/nflService';
 
-export { getCurrentSeasonYear };
+export { getCurrentSeasonYear, getSeasonFinalWeek };
 
 /**
  * Legacy picks (created before the `season` field existed) are attributed to a
@@ -34,6 +34,14 @@ export function seasonPickFilter(season: number): SeasonPickFilter {
 	return {
 		$or: [{ season }, { season: { $exists: false }, createdAt: { $gte: start, $lt: end } }]
 	};
+}
+
+/**
+ * Mongo condition for the weeks that count in a season (excludes weeks after Pick 5's final week).
+ * Use as the `week` field of a season-wide query: Pick.find({ leagueId, week: countedWeeks(season), ... })
+ */
+export function countedWeeks(season: number): { $lte: number } {
+	return { $lte: getSeasonFinalWeek(season) };
 }
 
 /** Season a date falls in: before Mar 1 (UTC) belongs to the previous year's season. */
@@ -200,4 +208,22 @@ export async function ensurePickSeasonMigration(): Promise<void> {
 export function parseSeasonParam(value: string | null | undefined): number {
 	const parsed = value ? parseInt(value, 10) : NaN;
 	return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100 ? parsed : getCurrentSeasonYear();
+}
+
+/**
+ * Seasons with picks matching `match` (e.g. { leagueId } or { userId }), newest first.
+ * Always includes the current season and never a future one.
+ */
+export async function seasonsWithPicks(match: Record<string, unknown>): Promise<number[]> {
+	await connectDB();
+	const current = getCurrentSeasonYear();
+	const [tagged, legacy] = await Promise.all([
+		Pick.distinct('season', { ...match, season: { $exists: true } }) as Promise<number[]>,
+		Pick.find({ ...match, season: { $exists: false } }, 'createdAt').lean<Array<{ _id: { getTimestamp(): Date }; createdAt?: Date }>>()
+	]);
+	const seasons = new Set<number>([current, ...tagged.filter(Number.isInteger)]);
+	legacy.forEach(doc => seasons.add(seasonFromDate(doc.createdAt ? new Date(doc.createdAt) : doc._id.getTimestamp())));
+	return Array.from(seasons)
+		.filter(s => s <= current)
+		.sort((a, b) => b - a);
 }

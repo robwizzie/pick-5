@@ -7,7 +7,7 @@ import { ArrowRight, Compass, Flame, LogIn, Percent, Plus, Target, Trophy, Users
 import CountUp from 'react-countup';
 import ActiveLeagues, { type DashboardLeague, type LeagueSummary, type PickedTeam } from '@/components/league/ActiveLeagues';
 import { Button } from '@/components/ui/button';
-import { LeagueCardSkeleton } from '@/components/ui/skeleton';
+import { LogoLoader } from '@/components/ui/spinner';
 import { EmptyState, PageContainer, SectionHeader, StatTile } from '@/components/ui/page';
 import { useWeek } from '@/contexts/WeekContext';
 import type { MatchupMiniData } from '@/components/league/MatchupMini';
@@ -123,6 +123,17 @@ export default function Dashboard() {
 	const firstName = session?.user?.name?.split(' ')[0];
 	const winRate = totals && totals.graded > 0 ? Math.round((totals.correct / totals.graded) * 100) : null;
 	const statsReady = summaries.size > 0;
+	// Hold the whole page behind the logo until the greeting, leagues and stats are all known,
+	// so nothing renders with placeholder data first (e.g. "Let's go, champ" before the name).
+	const ready = status === 'authenticated' && leagues !== null && (leagues.length === 0 || (liveWeek !== null && totals !== null));
+
+	if (!ready) {
+		return (
+			<PageContainer size='wide'>
+				<LogoLoader label='Loading your dashboard' />
+			</PageContainer>
+		);
+	}
 
 	return (
 		<PageContainer size='wide'>
@@ -187,13 +198,7 @@ export default function Dashboard() {
 							</div>
 						}
 					/>
-					{leagues === null ? (
-						<div className='grid gap-3'>
-							{[0, 1].map(i => (
-								<LeagueCardSkeleton key={i} />
-							))}
-						</div>
-					) : leagues.length > 0 ? (
+					{leagues.length > 0 ? (
 						<ActiveLeagues leagues={leagues} summaries={summaries} userId={userId} matchups={matchups} />
 					) : (
 						<EmptyState

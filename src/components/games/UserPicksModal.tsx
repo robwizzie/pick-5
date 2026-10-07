@@ -13,6 +13,7 @@ import { hasGameStarted, hasGameFinished } from '@/services/gameUtils';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 import { cn } from '@/lib/utils';
+import { useWeek } from '@/contexts/WeekContext';
 import type { Game } from './GameCard';
 
 interface UserPicksModalProps {
@@ -88,6 +89,7 @@ const getGameTotal = (game: Game) => {
 };
 
 export function UserPicksModal({ userId, playerName, week, leagueId, onClose, playerImage, weekPoints }: UserPicksModalProps) {
+	const { season } = useWeek();
 	const { data: session } = useSession();
 	const [picks, setPicks] = useState<UserPick[]>([]);
 	const [serverHiddenPicks, setServerHiddenPicks] = useState(0);
@@ -112,10 +114,10 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 				// League mode, games, this user's picks, the league's picks and the odds snapshot are independent
 				const [leagueResponse, rawGames, picksResponse, leaguePicksResponse, oddsResponse] = await Promise.all([
 					fetch(`/api/league/${leagueId}`),
-					NFLService.getWeeklyGames(week),
-					fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}`),
-					fetch(`/api/picks/league?week=${week}&leagueId=${leagueId}`, { cache: 'no-store' }),
-					fetch(`/api/odds/snapshot?week=${week}`).catch((err: unknown) => {
+					NFLService.getWeeklyGames(week, season),
+					fetch(`/api/picks/user?week=${week}&leagueId=${leagueId}&userId=${userId}&season=${season}`),
+					fetch(`/api/picks/league?week=${week}&leagueId=${leagueId}&season=${season}`, { cache: 'no-store' }),
+					fetch(`/api/odds/snapshot?week=${week}&season=${season}`).catch((err: unknown) => {
 						console.error('[UserPicksModal] Error fetching odds:', err);
 						return null;
 					})
@@ -189,7 +191,7 @@ export function UserPicksModal({ userId, playerName, week, leagueId, onClose, pl
 		};
 
 		loadData();
-	}, [userId, week, leagueId]);
+	}, [userId, week, leagueId, season]);
 
 	// For other users: only show picks for games that have started. For own picks: show all.
 	const visiblePicks = picks

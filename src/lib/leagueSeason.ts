@@ -4,7 +4,7 @@ import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
-import { seasonPickFilter } from '@/lib/season';
+import { countedWeeks, seasonPickFilter } from '@/lib/season';
 import { loadGameResults, rescore, type GameResult, type PickDocLike } from '@/lib/pickScoring';
 
 export interface LeagueMember {
@@ -62,7 +62,8 @@ export async function loadLeagueSeason(leagueId: string, season: number, opts: {
 	const memberIds = (league.members ?? []).map(String);
 	const [users, docs] = await Promise.all([
 		User.find({ _id: { $in: memberIds } }, 'name image').lean<Array<{ _id: unknown; name?: string; image?: string | null }>>(),
-		Pick.find({ leagueId, ...seasonPickFilter(season) }).lean<PickDoc[]>()
+		// Weeks after the season's final week don't count
+		Pick.find({ leagueId, week: countedWeeks(season), ...seasonPickFilter(season) }).lean<PickDoc[]>()
 	]);
 	const mode = league.mode || 'standard';
 	const resultsByWeek = await loadGameResults([...docs.map(d => d.week), ...(opts.extraWeeks ?? [])], season);

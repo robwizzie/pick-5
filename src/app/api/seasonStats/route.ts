@@ -8,7 +8,7 @@ import { authOptions } from '@/lib/auth';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
-import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
+import { countedWeeks, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +39,7 @@ export async function GET(req: Request) {
 		const leagueMode = (league as any).mode || 'standard';
 
 		// Find picks for the user in the specific league
-		const userPicks = await Pick.find({ userId: session.user.id, leagueId, ...seasonFilter }).lean();
+		const userPicks = await Pick.find({ userId: session.user.id, leagueId, week: countedWeeks(season), ...seasonFilter }).lean();
 
 		// Get unique weeks from picks
 		const weekSet = new Set<number>();

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
-import { Award, BarChart3, Calendar, ChevronRight, Crosshair, Crown, Flame, Medal, Rocket, Shield, Sparkles, Star, Target, TrendingUp, Trophy, Users, Zap } from 'lucide-react';
+import { Award, BarChart3, Calendar, ChevronRight, Crosshair, Crown, Flame, History, Medal, Rocket, Shield, Sparkles, Star, Target, TrendingUp, Trophy, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState, PageContainer, PageHeader, Pill, SectionHeader, StatTile } from '@/components/ui/page';
@@ -13,6 +13,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { BadgeCard } from '@/components/badges/BadgeCard';
 import type { UserBadge, UserBadgesResponse } from '@/lib/badges';
+import { useWeek } from '@/contexts/WeekContext';
+
+const seasonLabel = (year: number) => `${year}–${String(year + 1).slice(-2)}`;
 
 interface LeagueStats {
 	leagueId: string;
@@ -123,11 +126,17 @@ const StatsPage = () => {
 	const [leagueStats, setLeagueStats] = useState<LeagueStats[]>([]);
 	const [weekTotals, setWeekTotals] = useState<WeekTotal[]>([]);
 	const [badges, setBadges] = useState<UserBadge[] | null>(null);
+	const { currentSeason, setSeason: setLeagueSeason } = useWeek();
+	// The season being reported on, and the seasons the user has picks in
+	const [season, setSeason] = useState(currentSeason);
+	const [seasons, setSeasons] = useState<number[]>([]);
+	const isPastSeason = season !== currentSeason;
 
 	// Badges load independently (in parallel with the stats below)
-	const fetchBadges = useCallback(async () => {
+	const fetchBadges = useCallback(async (season: number) => {
 		try {
-			const res = await fetch('/api/user/badges');
+			setBadges(null);
+			const res = await fetch(`/api/user/badges?season=${season}`);
 			if (!res.ok) throw new Error(`Failed to fetch badges (${res.status})`);
 			const data: UserBadgesResponse = await res.json();
 			setBadges(data.badges);
@@ -137,7 +146,7 @@ const StatsPage = () => {
 		}
 	}, []);
 
-	const fetchStats = useCallback(async () => {
+	const fetchStats = useCallback(async (season: number) => {
 		try {
 			setLoading(true);
 
@@ -151,8 +160,8 @@ const StatsPage = () => {
 				leagues.map(async league => {
 					try {
 						const [picksResponse, seasonStats] = await Promise.all([
-							fetch(`/api/picks/user?leagueId=${league._id}`),
-							fetch(`/api/seasonStats?leagueId=${league._id}`)
+							fetch(`/api/picks/user?leagueId=${league._id}&season=${season}`),
+							fetch(`/api/seasonStats?leagueId=${league._id}&season=${season}`)
 								.then(res => (res.ok ? (res.json() as Promise<SeasonStatsResponse>) : null))
 								.catch(error => {
 									console.error('Error fetching weeks won for league:', league._id, error);
@@ -193,6 +202,8 @@ const StatsPage = () => {
 			for (const result of perLeague) {
 				if (!result) continue;
 				const { league, picks, seasonStats } = result;
+				// Past seasons only list the leagues the user actually played in
+				if (season !== currentSeason && picks.length === 0) continue;
 
 				let leagueTotalPoints = 0;
 				let leagueCorrectPicks = 0;
@@ -322,7 +333,7 @@ const StatsPage = () => {
 			setAllTimeStats({
 				...allTimeData,
 				winPercentage: allTimeData.totalPicks > 0 ? (allTimeData.correctPicks / allTimeData.totalPicks) * 100 : 0,
-				totalLeagues: leagues.length,
+				totalLeagues: leagueStatsData.length,
 				avgPointsPerWeek: allTimeData.totalWeeksPlayed > 0 ? allTimeData.totalPoints / allTimeData.totalWeeksPlayed : 0
 			});
 		} catch (error) {
@@ -330,7 +341,16 @@ const StatsPage = () => {
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [currentSeason]);
+
+	// Seasons to choose from
+	useEffect(() => {
+		if (status !== 'authenticated') return;
+		fetch('/api/user/seasons')
+			.then(res => (res.ok ? res.json() : null))
+			.then((data: { seasons?: Array<{ year: number }> } | null) => setSeasons(data?.seasons?.map(s => s.year) ?? []))
+			.catch(error => console.error('Error fetching seasons:', error));
+	}, [status]);
 
 	useEffect(() => {
 		if (status === 'unauthenticated') {
@@ -339,10 +359,10 @@ const StatsPage = () => {
 		}
 
 		if (status === 'authenticated') {
-			fetchStats();
-			fetchBadges();
+			fetchStats(season);
+			fetchBadges(season);
 		}
-	}, [status, router, fetchStats, fetchBadges]);
+	}, [status, router, fetchStats, fetchBadges, season]);
 
 
 	const achievements = useMemo(() => (allTimeStats ? getAchievements(allTimeStats) : []), [allTimeStats]);
@@ -353,7 +373,38 @@ const StatsPage = () => {
 		return facts[Math.floor(Math.random() * facts.length)];
 	}, [allTimeStats]);
 
-	const header = <PageHeader eyebrow={<><BarChart3 className='h-3.5 w-3.5' /> Season report</>} title='My Stats' description='Your picks, wins and streaks across every league.' />;
+	const seasonPicker =
+		seasons.length > 1 ? (
+			<div className='flex flex-wrap gap-2' role='group' aria-label='Season'>
+				{seasons.map(year => (
+					<button
+						key={year}
+						type='button'
+						onClick={() => setSeason(year)}
+						aria-pressed={year === season}
+						className={cn(
+							'rounded-full border px-3.5 py-1.5 text-sm font-semibold tabular transition-colors',
+							year === season ? 'border-primary bg-primary text-primary-foreground' : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.07] hover:text-foreground'
+						)}
+					>
+						{seasonLabel(year)}
+					</button>
+				))}
+			</div>
+		) : undefined;
+
+	const header = (
+		<PageHeader
+			eyebrow={
+				<>
+					<BarChart3 className='h-3.5 w-3.5' /> {isPastSeason ? `${seasonLabel(season)} season report` : 'Season report'}
+				</>
+			}
+			title='My Stats'
+			description={isPastSeason ? `How your ${seasonLabel(season)} season went, across every league you played.` : 'Your picks, wins and streaks across every league.'}
+			actions={seasonPicker}
+		/>
+	);
 
 	if (status === 'loading' || loading) {
 		return (
@@ -504,41 +555,52 @@ const StatsPage = () => {
 				<SectionHeader title='By League' icon={Users} />
 				<div className='space-y-3'>
 					{leagueStats.map((stat, i) => (
-						<Link
-							key={stat.leagueId}
-							href={`/league/${stat.leagueId}`}
-							className='glass group block animate-slide-up rounded-2xl p-4 transition-colors hover:bg-white/[0.06] sm:p-5'
-							style={{ animationDelay: `${i * 50}ms` }}
-						>
-							<div className='flex items-center gap-3'>
-								<div className='min-w-0 flex-1'>
-									<div className='flex items-center gap-2'>
-										<h3 className='truncate font-display text-xl font-bold uppercase italic tracking-tight'>{stat.leagueName}</h3>
-										{stat.leagueMode === 'steve' && <Pill tone='warning'>TFS</Pill>}
+						<div key={stat.leagueId} className='glass animate-slide-up overflow-hidden rounded-2xl' style={{ animationDelay: `${i * 50}ms` }}>
+							<Link
+								href={`/league/${stat.leagueId}`}
+								// Open the league on the season being viewed here
+								onClick={() => setLeagueSeason(season)}
+								className='group block p-4 transition-colors hover:bg-white/[0.06] sm:p-5'
+							>
+								<div className='flex items-center gap-3'>
+									<div className='min-w-0 flex-1'>
+										<div className='flex items-center gap-2'>
+											<h3 className='truncate font-display text-xl font-bold uppercase italic tracking-tight'>{stat.leagueName}</h3>
+											{stat.leagueMode === 'steve' && <Pill tone='warning'>TFS</Pill>}
+										</div>
+										<p className='text-xs text-muted-foreground tabular'>
+											{stat.weeksPlayed} weeks · {stat.totalPicks} picks
+										</p>
 									</div>
-									<p className='text-xs text-muted-foreground tabular'>
-										{stat.weeksPlayed} weeks · {stat.totalPicks} picks
-									</p>
+									<div className='text-right'>
+										<p className='font-display text-3xl font-extrabold italic leading-none tabular'>{stat.totalPoints}</p>
+										<p className='eyebrow mt-0.5 text-[9px]'>pts</p>
+									</div>
+									<ChevronRight className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary' />
 								</div>
-								<div className='text-right'>
-									<p className='font-display text-3xl font-extrabold italic leading-none tabular'>{stat.totalPoints}</p>
-									<p className='eyebrow mt-0.5 text-[9px]'>pts</p>
+	
+								<dl className={cn('mt-4 grid grid-cols-3 gap-2', stat.leagueMode === 'steve' ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
+									<Metric compact label='Win %' value={`${Math.round(stat.winPercentage)}%`} />
+									<Metric compact label='Weeks won' value={stat.weeksWon} />
+									<Metric compact label='Correct' value={stat.correctPicks} />
+									<Metric compact label='Incorrect' value={stat.totalPicks - stat.correctPicks} />
+									{stat.leagueMode === 'steve' && <Metric compact label='TFS' value={stat.totalTFSPoints} />}
+								</dl>
+	
+								<div className='mt-3 h-1 overflow-hidden rounded-full bg-accent/15'>
+									<div className='h-full rounded-full bg-accent' style={{ width: `${Math.min(100, stat.winPercentage)}%` }} />
 								</div>
-								<ChevronRight className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary' />
-							</div>
-
-							<dl className={cn('mt-4 grid grid-cols-3 gap-2', stat.leagueMode === 'steve' ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}>
-								<Metric compact label='Win %' value={`${Math.round(stat.winPercentage)}%`} />
-								<Metric compact label='Weeks won' value={stat.weeksWon} />
-								<Metric compact label='Correct' value={stat.correctPicks} />
-								<Metric compact label='Incorrect' value={stat.totalPicks - stat.correctPicks} />
-								{stat.leagueMode === 'steve' && <Metric compact label='TFS' value={stat.totalTFSPoints} />}
-							</dl>
-
-							<div className='mt-3 h-1 overflow-hidden rounded-full bg-accent/15'>
-								<div className='h-full rounded-full bg-accent' style={{ width: `${Math.min(100, stat.winPercentage)}%` }} />
-							</div>
-						</Link>
+							</Link>
+							<Link
+								href={`/league/${stat.leagueId}/history`}
+								className='flex items-center justify-between gap-2 border-t border-white/[0.07] px-4 py-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground sm:px-5'
+							>
+								<span className='flex items-center gap-2'>
+									<History className='h-3.5 w-3.5' /> League history · champions &amp; final standings
+								</span>
+								<ChevronRight className='h-3.5 w-3.5' />
+							</Link>
+						</div>
 					))}
 				</div>
 			</section>

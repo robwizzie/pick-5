@@ -8,7 +8,7 @@ import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
-import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
+import { countedWeeks, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,7 +145,7 @@ export async function GET(req: Request) {
 		});
 
 		// Get ALL picks for this league for season stats
-		const allPicksForSeason = await Pick.find({ leagueId, ...seasonFilter }).lean();
+		const allPicksForSeason = await Pick.find({ leagueId, week: countedWeeks(season), ...seasonFilter }).lean();
 
 		// Get unique weeks from all picks
 		const weekSet = new Set<number>();

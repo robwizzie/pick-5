@@ -4,7 +4,7 @@ import { SeasonConfig } from '@/models/SeasonConfig';
 import { SeasonHistory } from '@/models/SeasonHistory';
 import { League } from '@/models/League';
 import { NFLService } from './nflService';
-import { ensurePickSeasonMigration, getCurrentSeasonYear } from '@/lib/season';
+import { ensurePickSeasonMigration, getCurrentSeasonYear, getSeasonFinalWeek } from '@/lib/season';
 import { loadLeagueSeason } from '@/lib/leagueSeason';
 
 export interface ArchivePreview {
@@ -25,6 +25,110 @@ export interface SeasonStatus {
 	canSubmitPicks: boolean;
 	canSendNotifications: boolean; // For cron jobs - allows week 18 notifications even if ESPN shows week 19
 	message?: string;
+}
+
+interface WeeklyStat {
+	week: number;
+	points: number;
+	correctPicks: number;
+	totalPicks: number;
+	tfsPoints: number;
+}
+
+interface PlayerWeeks {
+	userId: string;
+	userName: string;
+	userImage: string | null;
+	weeklyStats: WeeklyStat[];
+}
+
+/**
+ * Final standings, champions and season stats from each player's weekly results.
+ * Ranks use competition ranking (ties share a rank: 1, 1, 3); a week is "won" by everyone
+ * tied for that week's top score (when it's above 0).
+ */
+function buildStandings(players: PlayerWeeks[]) {
+	const weeks = Array.from(new Set(players.flatMap(p => p.weeklyStats.map(w => w.week)))).sort((a, b) => a - b);
+	const topByWeek = new Map(weeks.map(week => [week, Math.max(0, ...players.flatMap(p => p.weeklyStats.filter(w => w.week === week).map(w => w.points)))]));
+
+	let highestWeeklyScore: { userId: string; userName: string; week: number; points: number } | null = null;
+	for (const week of weeks) {
+		for (const p of players) {
+			const w = p.weeklyStats.find(s => s.week === week);
+			if (w && (!highestWeeklyScore || w.points > highestWeeklyScore.points)) {
+				highestWeeklyScore = { userId: p.userId, userName: p.userName, week, points: w.points };
+			}
+		}
+	}
+
+	const totals = players.map(p => {
+		const weeklyStats = [...p.weeklyStats].sort((a, b) => a.week - b.week);
+		const sum = (key: keyof Omit<WeeklyStat, 'week'>) => weeklyStats.reduce((acc, w) => acc + (w[key] || 0), 0);
+		const totalPicks = sum('totalPicks');
+		const correctPicks = sum('correctPicks');
+		return {
+			userId: p.userId,
+			userName: p.userName,
+			userImage: p.userImage,
+			totalPoints: sum('points'),
+			correctPicks,
+			totalPicks,
+			tfsPoints: sum('tfsPoints'),
+			weeksWon: weeklyStats.filter(w => (topByWeek.get(w.week) ?? 0) > 0 && w.points === topByWeek.get(w.week)).length,
+			winPercentage: totalPicks > 0 ? Math.round((correctPicks / totalPicks) * 100) : 0,
+			weeklyStats
+		};
+	});
+
+	const sorted = [...totals].sort((a, b) => b.totalPoints - a.totalPoints);
+	const standings = sorted.map(p => ({ ...p, rank: sorted.findIndex(q => q.totalPoints === p.totalPoints) + 1 }));
+	const top = standings[0]?.totalPoints ?? 0;
+	const champions = standings.filter(s => s.totalPoints === top).map(s => ({ userId: s.userId, userName: s.userName, totalPoints: s.totalPoints }));
+	const totalPicksMade = standings.reduce((sum, s) => sum + s.totalPicks, 0);
+
+	return { standings, champions, weeksPlayed: weeks.length, totalPicksMade, highestWeeklyScore };
+}
+
+type HistoryRecord = {
+	leagueId: string;
+	seasonYear: number;
+	standings?: Array<PlayerWeeks & Record<string, unknown>>;
+	champions?: unknown[];
+	seasonStats?: Record<string, unknown>;
+};
+
+/**
+ * Seasons archived before their final week was set can include weeks that don't count (e.g. week 18
+ * of 2025). Rebuild those records from the stored weekly breakdown and save the corrected version.
+ */
+async function withoutUncountedWeeks<T extends HistoryRecord>(record: T): Promise<T> {
+	const finalWeek = getSeasonFinalWeek(record.seasonYear);
+	const standings = record.standings ?? [];
+	if (!standings.some(p => (p.weeklyStats ?? []).some(w => w.week > finalWeek))) return record;
+
+	const players = standings
+		.map(p => ({ userId: p.userId, userName: p.userName, userImage: p.userImage ?? null, weeklyStats: (p.weeklyStats ?? []).filter(w => w.week >= 1 && w.week <= finalWeek) }))
+		.filter(p => p.weeklyStats.length > 0);
+	const rebuilt = buildStandings(players);
+	const seasonStats: Record<string, unknown> = {
+		...(record.seasonStats ?? {}),
+		totalWeeksPlayed: rebuilt.weeksPlayed,
+		totalGamesPlayed: rebuilt.totalPicksMade,
+		totalPicksMade: rebuilt.totalPicksMade,
+		highestWeeklyScore: rebuilt.highestWeeklyScore ?? undefined
+	};
+	// A biggest upset from a week that no longer counts doesn't belong in the record
+	const upset = seasonStats.biggestUpset as { week?: number } | undefined;
+	if (upset?.week && upset.week > finalWeek) delete seasonStats.biggestUpset;
+
+	const update = { standings: rebuilt.standings, champions: rebuilt.champions, seasonStats };
+	try {
+		await SeasonHistory.updateOne({ leagueId: record.leagueId, seasonYear: record.seasonYear }, { $set: update });
+	} catch (error) {
+		// Still serve the corrected standings; the next read retries the save
+		console.error(`[SeasonService] Failed to save corrected ${record.seasonYear} history for league ${record.leagueId}:`, error);
+	}
+	return { ...record, ...update };
 }
 
 export class SeasonService {
@@ -50,7 +154,7 @@ export class SeasonService {
 			config = await SeasonConfig.create({
 				seasonYear,
 				isActive: !isPastSeason,
-				lastCompletedWeek: isPastSeason ? 18 : 0,
+				lastCompletedWeek: isPastSeason ? getSeasonFinalWeek(seasonYear) : 0,
 				isArchived: false
 			});
 		}
@@ -119,7 +223,7 @@ export class SeasonService {
 		const config = await this.getOrCreateSeasonConfig();
 		config.isActive = false;
 		config.deactivatedAt = new Date();
-		config.lastCompletedWeek = 18;
+		config.lastCompletedWeek = getSeasonFinalWeek(config.seasonYear);
 		await config.save();
 
 		console.log(`[SeasonService] Deactivated season ${config.seasonYear}`);
@@ -194,55 +298,22 @@ export class SeasonService {
 		const season = await loadLeagueSeason(leagueId, seasonYear);
 		if (!season) throw new Error('League not found');
 
-		const regularWeeks = Array.from(season.weeks.keys()).filter(w => w >= 1 && w <= 18).sort((a, b) => a - b);
+		// Only the weeks that count this season (e.g. 2025 ended after week 17)
+		const finalWeek = getSeasonFinalWeek(seasonYear);
+		const regularWeeks = Array.from(season.weeks.keys()).filter(w => w >= 1 && w <= finalWeek);
 		if (regularWeeks.length === 0) return { status: 'skipped_empty' };
 
-		// Per-player totals
-		const players = new Map<string, { totalPoints: number; correctPicks: number; totalPicks: number; tfsPoints: number; weeksWon: number; weeklyStats: Array<{ week: number; points: number; correctPicks: number; totalPicks: number; tfsPoints: number }> }>();
-		let highestWeeklyScore: { userId: string; userName: string; week: number; points: number } | null = null;
-		const nameOf = (id: string) => season.members.find(m => m.userId === id)?.name || 'Unknown';
-
-		for (const week of regularWeeks) {
-			const byUser = season.weeks.get(week)!;
-			let max = 0;
-			byUser.forEach(w => (max = Math.max(max, w.weeklyPoints)));
-			byUser.forEach((w, userId) => {
-				const p = players.get(userId) ?? { totalPoints: 0, correctPicks: 0, totalPicks: 0, tfsPoints: 0, weeksWon: 0, weeklyStats: [] };
-				p.totalPoints += w.weeklyPoints;
-				p.correctPicks += w.correctPicks;
-				p.totalPicks += w.completedGames;
-				p.tfsPoints += w.tfsPoints;
-				if (max > 0 && w.weeklyPoints === max) p.weeksWon++;
-				p.weeklyStats.push({ week, points: w.weeklyPoints, correctPicks: w.correctPicks, totalPicks: w.completedGames, tfsPoints: w.tfsPoints });
-				players.set(userId, p);
-				if (!highestWeeklyScore || w.weeklyPoints > highestWeeklyScore.points) {
-					highestWeeklyScore = { userId, userName: nameOf(userId), week, points: w.weeklyPoints };
-				}
+		// Each player's weekly results
+		const byPlayer = new Map<string, PlayerWeeks>();
+		for (const week of regularWeeks.sort((a, b) => a - b)) {
+			season.weeks.get(week)!.forEach((w, userId) => {
+				const member = season.members.find(m => m.userId === userId);
+				const player = byPlayer.get(userId) ?? { userId, userName: member?.name || 'Unknown', userImage: member?.image ?? null, weeklyStats: [] };
+				player.weeklyStats.push({ week, points: w.weeklyPoints, correctPicks: w.correctPicks, totalPicks: w.completedGames, tfsPoints: w.tfsPoints });
+				byPlayer.set(userId, player);
 			});
 		}
-
-		// Competition ranking: ties share a rank (1, 1, 3)
-		const sorted = Array.from(players.entries()).sort((a, b) => b[1].totalPoints - a[1].totalPoints);
-		const standings = sorted.map(([userId, p], i) => {
-			const member = season.members.find(m => m.userId === userId);
-			const rank = sorted.findIndex(([, q]) => q.totalPoints === p.totalPoints) + 1;
-			return {
-				userId,
-				userName: member?.name || 'Unknown',
-				userImage: member?.image ?? null,
-				rank: rank || i + 1,
-				totalPoints: p.totalPoints,
-				correctPicks: p.correctPicks,
-				totalPicks: p.totalPicks,
-				tfsPoints: p.tfsPoints,
-				weeksWon: p.weeksWon,
-				winPercentage: p.totalPicks > 0 ? Math.round((p.correctPicks / p.totalPicks) * 100) : 0,
-				weeklyStats: p.weeklyStats
-			};
-		});
-		const top = standings[0]?.totalPoints ?? 0;
-		const champions = standings.filter(s => s.totalPoints === top).map(s => ({ userId: s.userId, userName: s.userName, totalPoints: s.totalPoints }));
-		const totalPicksMade = standings.reduce((sum, s) => sum + s.totalPicks, 0);
+		const { standings, champions, totalPicksMade, highestWeeklyScore } = buildStandings(Array.from(byPlayer.values()));
 
 		const preview: ArchivePreview = {
 			leagueId,
@@ -321,9 +392,9 @@ export class SeasonService {
 
 		const history = await SeasonHistory.find({ leagueId })
 			.sort({ seasonYear: -1 })
-			.lean();
+			.lean<HistoryRecord[]>();
 
-		return history;
+		return Promise.all(history.map(withoutUncountedWeeks));
 	}
 
 	/**
@@ -332,7 +403,7 @@ export class SeasonService {
 	static async getLeagueSeasonHistory(leagueId: string, seasonYear: number): Promise<typeof SeasonHistory.prototype | null> {
 		await connectDB();
 
-		const history = await SeasonHistory.findOne({ leagueId, seasonYear }).lean();
-		return history;
+		const history = await SeasonHistory.findOne({ leagueId, seasonYear }).lean<HistoryRecord>();
+		return history ? withoutUncountedWeeks(history) : null;
 	}
 }
