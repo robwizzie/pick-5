@@ -52,6 +52,9 @@ export default function LeagueDetails() {
 	const searchParams = useSearchParams();
 	// Deep link from the dashboard's live banner: /league/{id}?view=live
 	const wantsLive = searchParams?.get('view') === 'live';
+	// Arrived from a nudge's push or email: /league/{id}?ref=nudge-push|nudge-email
+	const ref = searchParams?.get('ref');
+	const nudgeRef = ref === 'nudge-push' ? 'push' : ref === 'nudge-email' ? 'email' : null;
 	const { data: session } = useSession();
 	const { currentWeek, liveWeek, isPastSeason, startWeek } = useWeek();
 	// Mount only one layout so data components don't fetch and poll twice
@@ -245,7 +248,7 @@ export default function LeagueDetails() {
 
 	return (
 		<LeagueRulesProvider value={rules}>
-			<NudgeProvider leagueId={id}>
+			<NudgeProvider leagueId={id} openedVia={nudgeRef}>
 				<div className='mx-auto w-full max-w-7xl px-4 pb-32 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-16'>
 					{/* League header */}
 					<header className='glass relative mb-4 overflow-hidden rounded-3xl px-4 py-3.5 sm:mb-6 sm:p-7'>

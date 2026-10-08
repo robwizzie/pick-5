@@ -16,3 +16,7 @@ export interface NudgeStatus {
 	/** The viewer's own nudge this week, while their picks are still missing */
 	mine: { fromName: string; at: string } | null;
 }
+
+/** How a nudged player opened the league from their nudge: its push, its email, or the banner's button */
+export type NudgeOpenVia = 'push' | 'email' | 'banner';
+export const NUDGE_OPEN_VIAS: readonly NudgeOpenVia[] = ['push', 'email', 'banner'];

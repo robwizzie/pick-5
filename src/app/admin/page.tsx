@@ -7,6 +7,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
 	Archive,
 	BarChart3,
+	BellRing,
 	CalendarRange,
 	CheckCircle2,
 	ChevronRight,
@@ -80,6 +81,13 @@ const adminTools: AdminTool[] = [
 		description: 'Enter picks for any user in any league, even after games have started',
 		href: '/admin/manual-picks',
 		icon: PenLine,
+		category: 'picks'
+	},
+	{
+		title: 'Nudge Report',
+		description: 'See whether nudged players made their picks, by channel, against players who weren’t nudged',
+		href: '/admin/nudges',
+		icon: BellRing,
 		category: 'picks'
 	}
 ];
