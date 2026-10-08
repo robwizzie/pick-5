@@ -45,7 +45,7 @@ export const NudgeEmail = ({ userName = 'Player', fromName = 'A league-mate', le
 				</KickoffCard>
 			)}
 
-			<PrimaryButton href={`${baseUrl}/league/${leagueId}`}>Make my picks</PrimaryButton>
+			<PrimaryButton href={`${baseUrl}/league/${leagueId}?ref=nudge-email`}>Make my picks</PrimaryButton>
 		</EmailLayout>
 	);
 };

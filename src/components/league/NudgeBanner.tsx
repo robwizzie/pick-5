@@ -7,7 +7,7 @@ import { useWeek } from '@/contexts/WeekContext';
 
 /** "Sam nudged you" — shown on the league page while the viewer's picks for this week are missing. */
 export function NudgeBanner({ onMakePicks, survivor = false }: { onMakePicks: () => void; survivor?: boolean }) {
-	const { status } = useNudges();
+	const { status, opened } = useNudges();
 	const { currentWeek, setCurrentWeek, isPastSeason, setSeason, currentSeason } = useWeek();
 	if (!status?.mine || !status.open) return null;
 	const from = status.mine.fromName.split(' ')[0];
@@ -26,6 +26,7 @@ export function NudgeBanner({ onMakePicks, survivor = false }: { onMakePicks: ()
 			<Button
 				size='sm'
 				onClick={() => {
+					opened('banner');
 					if (isPastSeason) setSeason(currentSeason);
 					if (currentWeek !== status.week) setCurrentWeek(status.week);
 					onMakePicks();

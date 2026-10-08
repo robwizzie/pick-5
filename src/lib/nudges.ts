@@ -19,7 +19,7 @@ import { sendPushMessages } from '@/lib/notifications/push';
 import { isEmailConfigured, sendEmail } from '@/lib/notifications/email';
 import { formatKickoffEt } from '@/lib/notifications/games';
 import NudgeEmail from '@/emails/NudgeEmail';
-import type { NudgeStatus } from '@/lib/nudgeTypes';
+import type { NudgeOpenVia, NudgeStatus } from '@/lib/nudgeTypes';
 import type { Game } from '@/components/games/GameCard';
 
 /** A pick 'em slate needs 5 unstarted games to still be makeable. */
@@ -108,12 +108,18 @@ export async function sendNudge(leagueId: string, fromUserId: string, toUserId: 
 	if (!ctx.open) return { ok: false, status: 400, error: 'Picks are closed for this week' };
 	if (!ctx.nudgeable.has(toUserId)) return { ok: false, status: 400, error: 'Their picks are already in' };
 
+	let nudgeId: unknown;
 	try {
-		await Nudge.create({ leagueId, season: ctx.season, week: ctx.week, toUserId, fromUserId });
+		nudgeId = (await Nudge.create({ leagueId, season: ctx.season, week: ctx.week, toUserId, fromUserId }))._id;
 	} catch (error) {
 		if ((error as { code?: number })?.code === 11000) return { ok: false, status: 409, error: 'Someone already nudged them this week' };
 		throw error;
 	}
+	// Remember where it reached them, for the nudge report
+	const delivered = async (channel: 'push' | 'email' | 'in-app'): Promise<NudgeResult> => {
+		await Nudge.updateOne({ _id: nudgeId }, { $set: { channel, deliveredAt: new Date() } }).catch(error => console.error('[nudge] Tracking failed:', error));
+		return { ok: true, delivered: channel };
+	};
 
 	const [from, to] = await Promise.all([
 		User.findById(fromUserId, 'name').lean<{ name?: string }>(),
@@ -156,7 +162,7 @@ export async function sendNudge(leagueId: string, fromUserId: string, toUserId: 
 			payload: {
 				title: `👉 ${fromFirst} nudged you`,
 				body: `${missing} in ${ctx.league.name}.${nextKickoff ? ` Next kickoff ${nextKickoff}.` : ''} Tap to pick.`,
-				url: `/league/${leagueId}`,
+				url: `/league/${leagueId}?ref=nudge-push`,
 				tag: `nudge-${leagueId}-${ctx.week}`,
 				requireInteraction: true,
 				leagueId
@@ -166,7 +172,7 @@ export async function sendNudge(leagueId: string, fromUserId: string, toUserId: 
 		console.error('[nudge] Push failed:', error);
 		return null;
 	});
-	if (push?.outcomes[0] === 'delivered') return { ok: true, delivered: 'push' };
+	if (push?.outcomes[0] === 'delivered') return delivered('push');
 
 	// No push: email them, unless they've turned pick reminders off
 	if (to?.email && to.emailPreferences?.pickReminders !== false && isEmailConfigured()) {
@@ -180,8 +186,32 @@ export async function sendNudge(leagueId: string, fromUserId: string, toUserId: 
 			idempotencyKey: `nudge-${leagueId}-${ctx.season}-${ctx.week}-${toUserId}`,
 			unsubscribeToken: to.unsubscribeToken
 		}).catch(() => null);
-		if (sent?.ok) return { ok: true, delivered: 'email' };
+		if (sent?.ok) return delivered('email');
 	}
 	// They'll still see the banner next time they open the league
-	return { ok: true, delivered: 'in-app' };
+	return delivered('in-app');
+}
+
+/**
+ * Picks for this week just went in for the first time: stamp that on their nudge, if they had one.
+ * Never throws; tracking mustn't break saving picks.
+ */
+export async function markNudgePicked(leagueId: string, season: number, week: number, userId: string): Promise<void> {
+	await connectDB();
+	await Nudge.updateOne({ leagueId, season, week, toUserId: userId, pickedAt: null }, { $set: { pickedAt: new Date() } }).catch(error =>
+		console.error('[nudge] Marking picked failed:', error)
+	);
+}
+
+/** They opened the league from their nudge (its push, email, or the banner's button): stamp the first time. */
+export async function markNudgeOpened(leagueId: string, userId: string, via: NudgeOpenVia): Promise<boolean> {
+	await connectDB();
+	// Their latest nudge: at most one per week, so the past week's is this week's
+	const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+	const latest = await Nudge.findOne({ leagueId, toUserId: userId, createdAt: { $gte: since } }, '_id')
+		.sort({ createdAt: -1 })
+		.lean<{ _id: unknown }>();
+	if (!latest) return false;
+	const res = await Nudge.updateOne({ _id: latest._id, openedAt: null }, { $set: { openedAt: new Date(), openedVia: via } });
+	return res.modifiedCount > 0;
 }

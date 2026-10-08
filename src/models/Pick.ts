@@ -52,7 +52,10 @@ const PickSchema = new mongoose.Schema({
 	createdAt: {
 		type: Date,
 		default: Date.now
-	}
+	},
+	// When this week's picks were first submitted. Editing picks deletes and recreates the doc, so
+	// createdAt is the last edit; this carries over. No default: older docs lack it (fall back to createdAt).
+	firstSubmittedAt: Date
 });
 
 // Ensure one pick set per user per league per season per week
