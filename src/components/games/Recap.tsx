@@ -4,7 +4,12 @@ import { useEffect, useState } from 'react';
 import CountUp from 'react-countup';
 import { useSession } from 'next-auth/react';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowDown, ArrowUp, Award, BarChart3, Crown, Flame, Minus, Rocket, Moon, Sparkles, Target, ThumbsDown, ThumbsUp, TrendingDown, TrendingUp, Trophy, Users, Zap, CalendarX } from 'lucide-react';
+import { ArrowDown, ArrowUp, Award, BarChart3, Crown, Flame, Loader2, Medal, Minus, Rocket, Moon, Share2, Sparkles, Target, ThumbsDown, ThumbsUp, TrendingDown, TrendingUp, Trophy, Users, Zap, CalendarX } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import type { RecapAwards } from '@/lib/recapAwards';
+import { formatOdds } from '@/utils/oddsUtils';
+import { shareRecapCard, type RecapCardData } from '@/lib/recapCard';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -130,6 +135,8 @@ interface RecapData {
 	highlights: Highlight[];
 	// Full week standings with movement
 	standings: StandingRow[];
+	// Weekly awards (null when they couldn't be computed)
+	awards: RecapAwards | null;
 }
 
 interface RecapAnalytics {
@@ -138,6 +145,7 @@ interface RecapAnalytics {
 	upsets: RecapData['upsets'];
 	mostPickedCorrect: RecapData['mostPickedCorrect'];
 	mostPickedIncorrect: RecapData['mostPickedIncorrect'];
+	awards?: RecapAwards | null;
 }
 
 const MEDAL_TEXT = ['text-[#FFD66B]', 'text-[#D5DCE6]', 'text-[#E7A16B]'];
@@ -165,7 +173,7 @@ function rankMap(results: Array<{ userId: string; points: number }>) {
 // Helper function to check if recap is available for a week
 export async function isRecapAvailable(week: number, leagueId: string): Promise<boolean> {
 	try {
-		const response = await fetch(`/api/recap?week=${week}&leagueId=${leagueId}`, { cache: 'no-store' });
+		const response = await fetch(`/api/recap?week=${week}&leagueId=${leagueId}&check=1`, { cache: 'no-store' });
 		if (!response.ok) return false;
 		const data = await response.json();
 		return data.hasPicks && data.weekCompleted;
@@ -282,7 +290,8 @@ function calculateRecapData(weeklyResults: WeeklyResult[], previousWeekResults: 
 		bestTFS,
 		leagueStats,
 		highlights,
-		standings
+		standings,
+		awards: recapAnalytics.awards ?? null
 	};
 }
 
@@ -358,6 +367,51 @@ function GameStory({ title, caption, aside, game, leaguePicks, leagueMode, tone,
 	);
 }
 
+/** One line per weekly award, shared by the page and the share card. */
+function awardRows(awards: RecapAwards | null, mode: string): Array<{ emoji: string; label: string; text: string; image?: string | null; name?: string }> {
+	if (!awards) return [];
+	const names = (list: Array<{ name: string }>) => (list.length <= 2 ? list.map(p => p.name).join(' & ') : `${list[0].name} +${list.length - 1}`);
+	const rows: Array<{ emoji: string; label: string; text: string; image?: string | null; name?: string }> = [];
+	if (awards.boldCall)
+		rows.push({ emoji: '🎯', label: 'Bold call', text: `${awards.boldCall.name} hit ${awards.boldCall.team} at ${formatOdds(awards.boldCall.odds)} (+${awards.boldCall.points})`, image: awards.boldCall.image, name: awards.boldCall.name });
+	if (awards.heater) rows.push({ emoji: '🔥', label: 'On a heater', text: `${awards.heater.name}: ${awards.heater.length} straight correct picks`, image: awards.heater.image, name: awards.heater.name });
+	if (awards.worstBeat)
+		rows.push({
+			emoji: '😖',
+			label: 'Worst beat',
+			text: `${awards.worstBeat.name}’s ${awards.worstBeat.team}${awards.worstBeat.odds !== null && mode === 'standard' ? ` (${formatOdds(awards.worstBeat.odds)})` : ''} fell to ${awards.worstBeat.opponent}, ${awards.worstBeat.score}`,
+			image: awards.worstBeat.image,
+			name: awards.worstBeat.name
+		});
+	if (awards.lockBusts.length) rows.push({ emoji: '💀', label: 'Lock bust', text: `${names(awards.lockBusts)}: ${awards.lockBusts.map(l => l.team).join(', ')} lock went down`, image: awards.lockBusts[0].image, name: awards.lockBusts[0].name });
+	if (awards.chalkEaters.length) rows.push({ emoji: '🍽️', label: 'Chalk eater', text: `${names(awards.chalkEaters)} took nothing but favorites`, image: awards.chalkEaters[0].image, name: awards.chalkEaters[0].name });
+	if (awards.woodenSpoon.length) rows.push({ emoji: '🥄', label: 'Wooden spoon', text: `${names(awards.woodenSpoon)} with ${awards.woodenSpoon[0].points} pts`, image: awards.woodenSpoon[0].image, name: awards.woodenSpoon[0].name });
+	return rows;
+}
+
+function AwardsSection({ rows }: { rows: ReturnType<typeof awardRows> }) {
+	if (rows.length === 0) return null;
+	return (
+		<section>
+			<SectionHeader title='Weekly Awards' icon={Medal} />
+			<div className='grid gap-2 sm:grid-cols-2'>
+				{rows.map((row, idx) => (
+					<div key={row.label} className='flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3.5 animate-slide-up' style={{ animationDelay: `${idx * 60}ms` }}>
+						<span className='grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-xl' aria-hidden>
+							{row.emoji}
+						</span>
+						<div className='min-w-0 flex-1'>
+							<p className='eyebrow text-[10px]'>{row.label}</p>
+							<p className='mt-0.5 text-sm leading-snug text-foreground'>{row.text}</p>
+						</div>
+						{row.name && <PlayerAvatar name={row.name} image={row.image ?? null} className='h-8 w-8' />}
+					</div>
+				))}
+			</div>
+		</section>
+	);
+}
+
 function RecapSkeleton() {
 	return (
 		<div className='space-y-6'>
@@ -387,6 +441,8 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 	const [recapData, setRecapData] = useState<RecapData | null>(null);
 	const [availableWeeks, setAvailableWeeks] = useState<number[]>([]);
 	const [leagueMode, setLeagueMode] = useState<string>('standard');
+	const [leagueName, setLeagueName] = useState('');
+	const [sharing, setSharing] = useState(false);
 	const [leagueModeLoaded, setLeagueModeLoaded] = useState(false);
 
 	// Fetch league mode
@@ -398,6 +454,7 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 				if (response.ok) {
 					const data = await response.json();
 					setLeagueMode(data.mode || 'standard');
+					setLeagueName(data.name || '');
 				}
 			} catch (error) {
 				console.error('[Recap] Error fetching league details:', error);
@@ -536,6 +593,28 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 	}
 
 	const { userStats, topPerformers, leagueStats } = recapData;
+	const rows = awardRows(recapData.awards, leagueMode);
+
+	const share = async () => {
+		setSharing(true);
+		try {
+			const top = topPerformers[0];
+			const card: RecapCardData = {
+				leagueName: leagueName || 'Pick 5',
+				week: selectedWeek,
+				winner: top ? { name: topPerformers.filter(p => p.points === top.points).map(p => p.player).join(' & '), points: top.points, correct: top.correct } : null,
+				rows: rows.map(({ emoji, label, text }) => ({ emoji, label, text })),
+				site: window.location.host
+			};
+			const result = await shareRecapCard(card);
+			if (result === 'downloaded') toast.success('Recap image saved — drop it in the group chat');
+		} catch (err) {
+			console.error('[Recap] Share failed:', err);
+			toast.error('Couldn’t create the recap image');
+		} finally {
+			setSharing(false);
+		}
+	};
 	const winner = topPerformers[0];
 	const coWinners = topPerformers.filter(p => winner && p.points === winner.points).length;
 	const runnersUp = topPerformers.slice(1);
@@ -555,7 +634,12 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 							<Trophy className='h-3.5 w-3.5 text-[#FFD66B]' />
 							Week {selectedWeek} recap
 						</p>
-						{coWinners > 1 && <Pill tone='warning'>{coWinners}-way tie</Pill>}
+						<div className='flex items-center gap-2'>
+							{coWinners > 1 && <Pill tone='warning'>{coWinners}-way tie</Pill>}
+							<Button size='sm' variant='outline' onClick={share} disabled={sharing}>
+								{sharing ? <Loader2 className='animate-spin' /> : <Share2 />} Share
+							</Button>
+						</div>
 					</div>
 
 					<div className='relative mt-5 flex flex-wrap items-center gap-x-4 gap-y-4 sm:flex-nowrap sm:gap-6'>
@@ -611,6 +695,9 @@ export function Recap({ weekOverride }: { weekOverride?: number }) {
 					</div>
 				</section>
 			)}
+
+			{/* Weekly awards */}
+			<AwardsSection rows={rows} />
 
 			{/* Your week */}
 			<section>

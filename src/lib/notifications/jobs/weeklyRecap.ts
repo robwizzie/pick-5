@@ -3,7 +3,8 @@
 // Markers live in GameNotification (notificationType 'weekly_recap', gameId
 // '<season>-week-<N>-recap'); legacy 'week-<N>-recap' markers count only if sent this season.
 import { connectDB } from '@/lib/db';
-import { seasonPickFilter, seasonWindow } from '@/lib/season';
+import { getSeasonWeeks, seasonPickFilter, seasonWindow } from '@/lib/season';
+import { rulesFor } from '@/lib/leagueRules';
 import { GameNotification } from '@/models/GameNotification';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
@@ -68,7 +69,7 @@ export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Pro
 	}
 
 	const leagues = (await League.find({ members: { $in: Array.from(recipients) } })
-		.select('name mode members')
+		.select('name mode settings members')
 		.lean()) as unknown as Array<{ _id: unknown; name: string; mode?: string; members: string[] }>;
 	const leagueIds = leagues.map(l => String(l._id));
 
@@ -84,7 +85,9 @@ export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Pro
 	const alreadySent = new Set(already.map(n => `${n.userId}|${n.leagueId}`));
 
 	// Season-to-date picks for these leagues, in one query; results per week fetched once.
-	const seasonPicks = (await Pick.find({ leagueId: { $in: leagueIds }, week: { $lte: week }, ...seasonPickFilter(season) })
+	// Season to date: from the season's start week through this week
+	const { startWeek } = await getSeasonWeeks(season);
+	const seasonPicks = (await Pick.find({ leagueId: { $in: leagueIds }, week: { $gte: startWeek, $lte: week }, ...seasonPickFilter(season) })
 		.select('userId leagueId week picks tfsGame tfsScore lockGameId')
 		.lean()) as unknown as LeanPickDoc[];
 	const resultsByWeek = new Map<number, GameResultRow[]>([[week, toGameResults(completed.games)]]);
@@ -106,14 +109,14 @@ export async function runWeeklyRecapJob({ budgetMs }: { budgetMs: number }): Pro
 			break;
 		}
 		const leagueId = String(league._id);
-		const mode = league.mode || 'standard';
+		const rules = rulesFor(league as { mode?: string; settings?: object });
 		const leaguePicks = picksByLeague.get(leagueId) ?? [];
 
 		// Weekly and season points for everyone who picked this week.
 		const totals = new Map<string, { weekly: number; season: number; pickedThisWeek: boolean }>();
 		for (const doc of leaguePicks) {
 			const userId = String(doc.userId);
-			const { weeklyPoints } = ScoringService.calculateWeekScore(doc.picks, resultsByWeek.get(doc.week) ?? [], doc.tfsGame ?? null, doc.tfsScore ?? null, mode, calculatePointsFromOdds, doc.lockGameId);
+			const { weeklyPoints } = ScoringService.calculateWeekScore(doc.picks, resultsByWeek.get(doc.week) ?? [], doc.tfsGame ?? null, doc.tfsScore ?? null, rules, calculatePointsFromOdds, doc.lockGameId);
 			const row = totals.get(userId) ?? { weekly: 0, season: 0, pickedThisWeek: false };
 			row.season += weeklyPoints;
 			if (doc.week === week) {

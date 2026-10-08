@@ -1,12 +1,14 @@
 import { Schema, model, models, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { requestScoped } from '@/lib/db';
+import type { LeagueSettings } from '@/lib/leagueRules';
 
 // Define interface for League document with comparePassword method
 interface ILeague extends Document {
 	name: string;
 	sport: string;
 	mode: string;
+	settings?: LeagueSettings;
 	password: string;
 	creatorId: string;
 	members: string[];
@@ -25,7 +27,15 @@ const LeagueSchema = new Schema<ILeague>(
 	{
 		name: { type: String, required: true },
 		sport: { type: String, required: true },
+		// 'standard' | 'steve' (pick 'em scoring) | 'survivor' (see src/lib/leagueRules.ts)
 		mode: { type: String, required: true },
+		// Commissioner settings (LeagueSettings); missing keys use the defaults in rulesFor()
+		settings: {
+			trophyName: { type: String },
+			lastPlacePunishment: { type: String },
+			lockMultiplier: { type: Number },
+			tfsEnabled: { type: Boolean }
+		},
 		// Never loaded by default: the bcrypt hash would otherwise ride along on every
 		// League document a route returns, and a hash in a client's hands can be
 		// brute-forced offline. Only the join flow asks for it (`.select('+password')`).

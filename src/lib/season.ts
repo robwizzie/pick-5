@@ -2,7 +2,8 @@
 // Season scoping for Pick documents (server only: imports the Pick model).
 import { connectDB, isWorkersRuntime } from '@/lib/db';
 import { Pick } from '@/models/Pick';
-import { getCurrentSeasonYear } from '@/lib/seasonYear';
+import { getCurrentSeasonYear, resolveSeasonWeeks, type SeasonWeeks } from '@/lib/seasonYear';
+import { SeasonConfig } from '@/models/SeasonConfig';
 import { NFLService } from '@/services/nflService';
 
 export { getCurrentSeasonYear };
@@ -34,6 +35,46 @@ export function seasonPickFilter(season: number): SeasonPickFilter {
 	return {
 		$or: [{ season }, { season: { $exists: false }, createdAt: { $gte: start, $lt: end } }]
 	};
+}
+
+// Season weeks rarely change: remember them briefly instead of reading the config on every query.
+const SEASON_WEEKS_TTL_MS = 60_000;
+const seasonWeeksCache = new Map<number, { weeks: SeasonWeeks; at: number }>();
+
+/** The weeks that count in a season: its SeasonConfig start/final weeks, or the defaults. */
+export async function getSeasonWeeks(season: number): Promise<SeasonWeeks> {
+	const cached = seasonWeeksCache.get(season);
+	if (cached && Date.now() - cached.at < SEASON_WEEKS_TTL_MS) return cached.weeks;
+	try {
+		await connectDB();
+		const config = await SeasonConfig.findOne({ seasonYear: season }, 'startWeek finalWeek').lean<{ startWeek?: number; finalWeek?: number }>();
+		const weeks = resolveSeasonWeeks(season, config);
+		seasonWeeksCache.set(season, { weeks, at: Date.now() });
+		return weeks;
+	} catch (error) {
+		console.error(`[season] Failed to read the weeks for ${season}:`, error);
+		return resolveSeasonWeeks(season);
+	}
+}
+
+/** The last week that counts in a season. */
+export async function getSeasonFinalWeek(season: number): Promise<number> {
+	return (await getSeasonWeeks(season)).finalWeek;
+}
+
+/** Forget cached season weeks (after an admin changes them). */
+export function clearSeasonWeeksCache(season?: number): void {
+	if (season === undefined) seasonWeeksCache.clear();
+	else seasonWeeksCache.delete(season);
+}
+
+/**
+ * Mongo condition for the weeks that count in a season (its start week through its final week).
+ * Use as the `week` field of a season-wide query: Pick.find({ leagueId, week: await countedWeeks(season), ... })
+ */
+export async function countedWeeks(season: number): Promise<{ $gte: number; $lte: number }> {
+	const { startWeek, finalWeek } = await getSeasonWeeks(season);
+	return { $gte: startWeek, $lte: finalWeek };
 }
 
 /** Season a date falls in: before Mar 1 (UTC) belongs to the previous year's season. */
@@ -200,4 +241,22 @@ export async function ensurePickSeasonMigration(): Promise<void> {
 export function parseSeasonParam(value: string | null | undefined): number {
 	const parsed = value ? parseInt(value, 10) : NaN;
 	return Number.isInteger(parsed) && parsed >= 2000 && parsed <= 2100 ? parsed : getCurrentSeasonYear();
+}
+
+/**
+ * Seasons with picks matching `match` (e.g. { leagueId } or { userId }), newest first.
+ * Always includes the current season and never a future one.
+ */
+export async function seasonsWithPicks(match: Record<string, unknown>): Promise<number[]> {
+	await connectDB();
+	const current = getCurrentSeasonYear();
+	const [tagged, legacy] = await Promise.all([
+		Pick.distinct('season', { ...match, season: { $exists: true } }) as Promise<number[]>,
+		Pick.find({ ...match, season: { $exists: false } }, 'createdAt').lean<Array<{ _id: { getTimestamp(): Date }; createdAt?: Date }>>()
+	]);
+	const seasons = new Set<number>([current, ...tagged.filter(Number.isInteger)]);
+	legacy.forEach(doc => seasons.add(seasonFromDate(doc.createdAt ? new Date(doc.createdAt) : doc._id.getTimestamp())));
+	return Array.from(seasons)
+		.filter(s => s <= current)
+		.sort((a, b) => b - a);
 }

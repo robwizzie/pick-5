@@ -8,6 +8,9 @@ import { connectDB } from '@/lib/db';
 import { seasonPickFilter } from '@/lib/season';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
+import { SurvivorPick } from '@/models/SurvivorPick';
+import { isSurvivorMode } from '@/lib/leagueRules';
+import { loadSurvivor } from '@/lib/survivorServer';
 import { User } from '@/models/User';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
@@ -59,7 +62,7 @@ export async function runPickRemindersJob(kind: ReminderKind, { budgetMs }: { bu
 	const season = seasonStatus.seasonYear;
 	// The actual current week (no auto-advance): the week users should be picking for.
 	const week = await NFLService.getCurrentWeek(false);
-	if (week > 18) return { kind, skipped: 'beyond regular season', week };
+	if (week < seasonStatus.startWeek || week > seasonStatus.finalWeek) return { kind, skipped: 'outside the season’s weeks', week };
 
 	await ensureMarkerIndexes();
 	if (await isJobDone(jobName, season, week)) return { kind, skipped: 'already sent', week };
@@ -93,12 +96,27 @@ export async function runPickRemindersJob(kind: ReminderKind, { budgetMs }: { bu
 		.select('userId leagueId')
 		.lean()) as unknown as Array<{ userId: string; leagueId: string }>;
 	const pickedSet = new Set(picked.map(p => `${p.userId}|${p.leagueId}`));
+	// Survivor leagues: a survivor pick counts, and players who are out (or a finished pool) need nothing
+	const survivorLeagues = leagues.filter(l => isSurvivorMode(l.mode));
+	const survivorPicked = survivorLeagues.length
+		? ((await SurvivorPick.find({ season, week, leagueId: { $in: survivorLeagues.map(l => String(l._id)) } })
+				.select('userId leagueId')
+				.lean()) as unknown as Array<{ userId: string; leagueId: string }>)
+		: [];
+	survivorPicked.forEach(p => pickedSet.add(`${p.userId}|${p.leagueId}`));
+	const survivorAlive = new Map<string, Set<string>>();
+	for (const league of survivorLeagues) {
+		const leagueId = String(league._id);
+		const standings = await loadSurvivor(leagueId, season, '').catch(() => null);
+		survivorAlive.set(leagueId, new Set(standings && !standings.data.complete ? standings.data.members.filter(m => m.alive).map(m => m.userId) : []));
+	}
 	const userSet = new Set(userIds);
 	const needs = new Map<string, Array<{ id: string; name: string; mode: string }>>();
 	for (const league of leagues) {
 		const leagueId = String(league._id);
 		for (const member of league.members) {
 			if (!userSet.has(member) || pickedSet.has(`${member}|${leagueId}`)) continue;
+			if (survivorAlive.has(leagueId) && !survivorAlive.get(leagueId)!.has(member)) continue;
 			needs.set(member, [...(needs.get(member) ?? []), { id: leagueId, name: league.name, mode: league.mode }]);
 		}
 	}

@@ -25,13 +25,14 @@ const NAV_LINKS = [
 const RESERVED_LEAGUE_ROUTES = ['/league/create', '/league/join', '/league/browse'];
 
 export function Nav() {
-	const { currentWeek, setCurrentWeek, liveWeek } = useWeek();
+	const { currentWeek, setCurrentWeek, liveWeek, season, setSeason, currentSeason, isPastSeason, startWeek, finalWeek } = useWeek();
 	const { leagueId } = useLeague();
 	const pathname = usePathname() ?? '';
 	const { data: session, status } = useSession();
 	const [authOpen, setAuthOpen] = useState(false);
 	const [weekPickerOpen, setWeekPickerOpen] = useState(false);
 	const [weeksWithPicks, setWeeksWithPicks] = useState<number[]>([]);
+	const [seasons, setSeasons] = useState<number[]>([]);
 	const [scrolled, setScrolled] = useState(false);
 
 	// A league's main page (not create/join/browse, not history)
@@ -48,12 +49,27 @@ export function Nav() {
 	useEffect(() => {
 		if (!session || !leagueId || !isLeaguePage) return;
 		let cancelled = false;
-		fetch(`/api/picks/user?leagueId=${leagueId}`)
+		fetch(`/api/picks/user?leagueId=${leagueId}&season=${season}`)
 			.then(res => (res.ok ? res.json() : []))
 			.then((data: Array<{ week: number }>) => {
 				if (!cancelled && Array.isArray(data)) setWeeksWithPicks(data.map(p => p.week));
 			})
 			.catch(error => console.error('Error fetching weeks with picks:', error));
+		return () => {
+			cancelled = true;
+		};
+	}, [session, leagueId, isLeaguePage, season]);
+
+	// Past seasons this league can be browsed by
+	useEffect(() => {
+		if (!session || !leagueId || !isLeaguePage) return;
+		let cancelled = false;
+		fetch(`/api/league/${leagueId}/seasons`)
+			.then(res => (res.ok ? res.json() : null))
+			.then((data: { seasons?: Array<{ year: number }> } | null) => {
+				if (!cancelled) setSeasons(data?.seasons?.map(s => s.year) ?? []);
+			})
+			.catch(error => console.error('Error fetching league seasons:', error));
 		return () => {
 			cancelled = true;
 		};
@@ -81,7 +97,7 @@ export function Nav() {
 						<button
 							type='button'
 							onClick={() => setCurrentWeek(currentWeek - 1)}
-							disabled={currentWeek <= 1}
+							disabled={currentWeek <= startWeek}
 							aria-label='Previous week'
 							className='grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-30'
 						>
@@ -92,14 +108,20 @@ export function Nav() {
 							onClick={() => setWeekPickerOpen(true)}
 							className='flex items-center gap-1.5 rounded-full px-3 py-1 transition-colors hover:bg-white/10'
 						>
-							<span className='font-display text-lg font-bold uppercase italic leading-none tabular'>Week {currentWeek}</span>
-							{liveWeek === currentWeek && <span className='live-dot' aria-label='Current week' />}
+							{isPastSeason && <span className='rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold tabular text-warning'>{season}</span>}
+							<span className='font-display text-lg font-bold uppercase italic leading-none tabular'>
+								{/* Phones: "Wk" leaves room for the season tag */}
+								<span className={cn(isPastSeason && 'hidden sm:inline')}>Week </span>
+								{isPastSeason && <span className='sm:hidden'>Wk </span>}
+								{currentWeek}
+							</span>
+							{!isPastSeason && liveWeek === currentWeek && <span className='live-dot' aria-label='Current week' />}
 							<ChevronDown className='h-3.5 w-3.5 text-muted-foreground' />
 						</button>
 						<button
 							type='button'
 							onClick={() => setCurrentWeek(currentWeek + 1)}
-							disabled={currentWeek >= 18}
+							disabled={currentWeek >= finalWeek}
 							aria-label='Next week'
 							className='grid h-8 w-8 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground disabled:opacity-30'
 						>
@@ -187,7 +209,21 @@ export function Nav() {
 
 			<AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
 			{isLeaguePage && (
-				<WeekSelectorModal open={weekPickerOpen} onOpenChange={setWeekPickerOpen} currentWeek={currentWeek} liveWeek={liveWeek} onWeekSelect={setCurrentWeek} weeksWithPicks={weeksWithPicks} />
+				<WeekSelectorModal
+					open={weekPickerOpen}
+					onOpenChange={setWeekPickerOpen}
+					currentWeek={currentWeek}
+					liveWeek={liveWeek}
+					onWeekSelect={setCurrentWeek}
+					weeksWithPicks={weeksWithPicks}
+					startWeek={startWeek}
+					finalWeek={finalWeek}
+					seasons={seasons}
+					season={season}
+					currentSeason={currentSeason}
+					onSeasonSelect={setSeason}
+					historyHref={leagueId ? `/league/${leagueId}/history` : undefined}
+				/>
 			)}
 		</nav>
 	);

@@ -54,6 +54,17 @@ export interface Matchup {
 	noContest: boolean;
 }
 
+/** All-time record between two members; `a` and `b` are their ids in sorted order. */
+export interface PairRecord {
+	a: string;
+	b: string;
+	aWins: number;
+	bWins: number;
+	ties: number;
+}
+
+export const pairKey = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);
+
 export interface H2HRecord {
 	wins: number;
 	losses: number;
@@ -69,6 +80,8 @@ export interface MatchupsResponse {
 	/** Season W-L-T per member over final matchups through `week` */
 	records: Record<string, H2HRecord>;
 	myMatchupId: string | null;
+	/** All-time head-to-head per pair (pairKey) across every season in this league */
+	rivalries?: Record<string, PairRecord>;
 }
 
 /* --------------------------------- pairing -------------------------------- */

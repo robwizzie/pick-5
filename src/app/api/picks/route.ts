@@ -10,10 +10,11 @@ import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { hasGameStarted } from '@/services/gameUtils';
-import { ensurePickSeasonMigration, getCurrentSeasonYear, seasonPickFilter } from '@/lib/season';
+import { ensurePickSeasonMigration, getCurrentSeasonYear, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 import type { Game } from '@/components/games/GameCard';
 import { revealStartedOnly } from '@/lib/pickScoring';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
+import { rulesFor } from '@/lib/leagueRules';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,12 +45,12 @@ export async function POST(req: Request) {
 			);
 		}
 
-		// Prevent picks for weeks beyond 18
-		if (week > 18) {
+		// Only weeks that count this season can be picked
+		if (week < seasonStatus.startWeek || week > seasonStatus.finalWeek) {
 			return NextResponse.json(
 				{
 					error: 'Invalid week',
-					message: 'Picks can only be submitted for weeks 1-18 of the NFL regular season.'
+					message: `Picks can only be submitted for weeks ${seasonStatus.startWeek}-${seasonStatus.finalWeek} this season.`
 				},
 				{ status: 400 }
 			);
@@ -66,8 +67,9 @@ export async function POST(req: Request) {
 			return NextResponse.json({ error: 'League not found' }, { status: 404 });
 		}
 
-		// TFS is only required for Steve mode
-		const isSteveMode = league.mode === 'steve';
+		// TFS is only required for Steve mode leagues that play it
+		const rules = rulesFor(league);
+		const isSteveMode = rules.tfsEnabled;
 		if (isSteveMode && (!tfsGame || typeof tfsScore !== 'number')) {
 			return NextResponse.json({ error: 'TFS game and score required for Steve mode' }, { status: 400 });
 		}
@@ -169,7 +171,7 @@ export async function POST(req: Request) {
 			gameResults,
 			isSteveMode ? tfsGame : null,
 			isSteveMode ? tfsScore : null,
-			league.mode || 'standard',
+			rules,
 			calculatePointsFromOdds,
 			lockGameId
 		);
@@ -262,7 +264,9 @@ export async function GET(req: Request) {
 			}
 		}
 
-		const season = getCurrentSeasonYear();
+		// Optional ?season=YYYY to view a past season; defaults to the current season
+		const season = parseSeasonParam(searchParams.get('season'));
+		const isCurrentSeason = season === getCurrentSeasonYear();
 		const picks = await Pick.findOne({
 			userId: targetUserId,
 			week: parseInt(week, 10),
@@ -276,7 +280,7 @@ export async function GET(req: Request) {
 
 		// Get league for mode
 		const league = await League.findById(leagueId);
-		const leagueMode = league?.mode || 'standard';
+		const leagueMode = rulesFor(league);
 
 		// Get current game results for re-scoring if needed
 		const games = await NFLService.getWeeklyGames(parseInt(week, 10), season);
@@ -312,7 +316,7 @@ export async function GET(req: Request) {
 			await picks.save();
 
 			// Update user's total stats (only update if it's the current user's picks being fetched)
-			if (targetUserId === session.user.id) {
+			if (targetUserId === session.user.id && isCurrentSeason) {
 				await User.findOneAndUpdate(
 					{ _id: targetUserId },
 					{

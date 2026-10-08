@@ -1,6 +1,7 @@
 'use client';
 
-import { Check } from 'lucide-react';
+import Link from 'next/link';
+import { Check, History } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
@@ -11,34 +12,76 @@ interface WeekSelectorModalProps {
 	liveWeek?: number | null;
 	onWeekSelect: (week: number) => void;
 	weeksWithPicks: number[];
+	/** The first and last weeks that count in the viewed season */
+	startWeek: number;
+	finalWeek: number;
+	/** Seasons to choose from, newest first (the row is hidden when there's only one) */
+	seasons?: number[];
+	season?: number;
+	currentSeason?: number;
+	onSeasonSelect?: (season: number) => void;
+	/** Link to the league's archived season history */
+	historyHref?: string;
 }
 
-const WEEKS = Array.from({ length: 18 }, (_, i) => i + 1);
+const seasonLabel = (year: number) => `${year}–${String(year + 1).slice(-2)}`;
 
-export function WeekSelectorModal({ open, onOpenChange, currentWeek, liveWeek, onWeekSelect, weeksWithPicks }: WeekSelectorModalProps) {
+export function WeekSelectorModal({ open, onOpenChange, currentWeek, liveWeek, onWeekSelect, weeksWithPicks, startWeek, finalWeek, seasons = [], season, currentSeason, onSeasonSelect, historyHref }: WeekSelectorModalProps) {
 	const picked = new Set(weeksWithPicks);
+	const weeks = Array.from({ length: finalWeek - startWeek + 1 }, (_, i) => startWeek + i);
+	const isPastSeason = season !== undefined && season !== currentSeason;
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className='sm:max-w-md'>
 				<DialogHeader>
-					<DialogTitle>Jump to week</DialogTitle>
+					<DialogTitle>{isPastSeason ? `${seasonLabel(season!)} season` : 'Jump to week'}</DialogTitle>
 					<DialogDescription>
 						<span className='inline-flex items-center gap-1.5'>
 							<span className='h-2 w-2 rounded-full bg-accent' /> picks in
 						</span>
-						<span className='mx-2 text-white/20'>·</span>
-						<span className='inline-flex items-center gap-1.5'>
-							<span className='live-dot' /> this week
-						</span>
+						{!isPastSeason && (
+							<>
+								<span className='mx-2 text-white/20'>·</span>
+								<span className='inline-flex items-center gap-1.5'>
+									<span className='live-dot' /> this week
+								</span>
+							</>
+						)}
 					</DialogDescription>
 				</DialogHeader>
 
+				{seasons.length > 1 && onSeasonSelect && (
+					<div>
+						<p className='eyebrow mb-2'>Season</p>
+						<div className='-mx-1 flex gap-2 overflow-x-auto px-1 pb-1'>
+							{seasons.map(year => {
+								const selected = year === season;
+								return (
+									<button
+										key={year}
+										type='button'
+										onClick={() => onSeasonSelect(year)}
+										aria-pressed={selected}
+										className={cn(
+											'shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-semibold tabular transition-colors',
+											selected ? 'border-primary bg-primary text-primary-foreground' : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.07] hover:text-foreground'
+										)}
+									>
+										{seasonLabel(year)}
+										{year === currentSeason && <span className={cn('ml-1.5 text-[10px] uppercase tracking-wider', selected ? 'text-primary-foreground/70' : 'text-primary')}>Now</span>}
+									</button>
+								);
+							})}
+						</div>
+					</div>
+				)}
+
 				<div className='grid grid-cols-4 gap-2 sm:grid-cols-6'>
-					{WEEKS.map(week => {
+					{weeks.map(week => {
 						const selected = week === currentWeek;
-						const isLive = week === liveWeek;
-						const isPast = liveWeek != null && week < liveWeek;
+						const isLive = !isPastSeason && week === liveWeek;
+						const isPast = isPastSeason || (liveWeek != null && week < liveWeek);
 						return (
 							<button
 								key={week}
@@ -67,6 +110,12 @@ export function WeekSelectorModal({ open, onOpenChange, currentWeek, liveWeek, o
 						);
 					})}
 				</div>
+
+				{historyHref && (
+					<Link href={historyHref} onClick={() => onOpenChange(false)} className='flex items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-white/[0.07] hover:text-foreground'>
+						<History className='h-4 w-4' /> Champions &amp; final standings
+					</Link>
+				)}
 			</DialogContent>
 		</Dialog>
 	);

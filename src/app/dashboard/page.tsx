@@ -7,12 +7,13 @@ import { ArrowRight, Compass, Flame, LogIn, Percent, Plus, Target, Trophy, Users
 import CountUp from 'react-countup';
 import ActiveLeagues, { type DashboardLeague, type LeagueSummary, type PickedTeam } from '@/components/league/ActiveLeagues';
 import { Button } from '@/components/ui/button';
-import { LeagueCardSkeleton } from '@/components/ui/skeleton';
+import { LogoLoader } from '@/components/ui/spinner';
 import { EmptyState, PageContainer, SectionHeader, StatTile } from '@/components/ui/page';
 import { useWeek } from '@/contexts/WeekContext';
 import type { MatchupMiniData } from '@/components/league/MatchupMini';
 import type { MatchupsResponse } from '@/lib/matchups';
 import { LiveNowBanner } from '@/components/league/LiveNowBanner';
+import type { SurvivorResponse } from '@/lib/survivor';
 
 interface LeaderboardResponse {
 	weeklyResults?: Array<{ userId: string; points: number; hasPicks: boolean; tfsPoints: number; pickedTeams: PickedTeam[] }>;
@@ -74,9 +75,31 @@ export default function Dashboard() {
 			}
 		};
 
+		/** Survivor leagues report the viewer's standing instead of points. */
+		const loadSurvivor = async (league: DashboardLeague) => {
+			const res = await fetch(`/api/league/${league._id}/survivor`);
+			if (!res.ok) return null;
+			const data: SurvivorResponse = await res.json();
+			const me = data.members.find(m => m.userId === userId);
+			const alive = !!me?.alive;
+			const summary: LeagueSummary = {
+				// Nothing to do once you're out or the pool is over
+				hasPicks: !alive || data.complete || !!me?.picks[liveWeek],
+				weekPoints: 0,
+				seasonPoints: 0,
+				rank: null,
+				totalMembers: data.members.length,
+				pickedTeams: [],
+				tfsPoints: 0,
+				survivor: { alive, eliminatedWeek: me?.eliminatedWeek ?? null, aliveCount: data.members.filter(m => m.alive).length, champion: data.champions.includes(userId), complete: data.complete }
+			};
+			return { id: league._id, matchup: null, summary, correct: 0, graded: 0 };
+		};
+
 		Promise.all(
 			leagues.map(async league => {
 				try {
+					if (league.mode === 'survivor') return await loadSurvivor(league);
 					const [res, matchup] = await Promise.all([fetch(`/api/leaderboard?week=${liveWeek}&leagueId=${league._id}`), loadMatchup(league._id)]);
 					if (!res.ok) return null;
 					return { id: league._id, matchup, ...summarize(await res.json(), userId, league) };
@@ -123,6 +146,17 @@ export default function Dashboard() {
 	const firstName = session?.user?.name?.split(' ')[0];
 	const winRate = totals && totals.graded > 0 ? Math.round((totals.correct / totals.graded) * 100) : null;
 	const statsReady = summaries.size > 0;
+	// Hold the whole page behind the logo until the greeting, leagues and stats are all known,
+	// so nothing renders with placeholder data first (e.g. "Let's go, champ" before the name).
+	const ready = status === 'authenticated' && leagues !== null && (leagues.length === 0 || (liveWeek !== null && totals !== null));
+
+	if (!ready) {
+		return (
+			<PageContainer size='wide'>
+				<LogoLoader label='Loading your dashboard' />
+			</PageContainer>
+		);
+	}
 
 	return (
 		<PageContainer size='wide'>
@@ -154,7 +188,7 @@ export default function Dashboard() {
 			</section>
 
 			{/* Live games: secured/projected points per league (renders nothing when no games are live) */}
-			{!!leagues?.length && <LiveNowBanner leagues={leagues} className='mb-8' />}
+			{leagues.some(l => l.mode !== 'survivor') && <LiveNowBanner leagues={leagues.filter(l => l.mode !== 'survivor')} className='mb-8' />}
 
 			{/* KPIs */}
 			{!!leagues?.length && (
@@ -187,13 +221,7 @@ export default function Dashboard() {
 							</div>
 						}
 					/>
-					{leagues === null ? (
-						<div className='grid gap-3'>
-							{[0, 1].map(i => (
-								<LeagueCardSkeleton key={i} />
-							))}
-						</div>
-					) : leagues.length > 0 ? (
+					{leagues.length > 0 ? (
 						<ActiveLeagues leagues={leagues} summaries={summaries} userId={userId} matchups={matchups} />
 					) : (
 						<EmptyState

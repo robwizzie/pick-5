@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
+import { cleanSettings } from '@/lib/leagueRules';
 
 export const dynamic = 'force-dynamic'; // Ensure dynamic behavior
 
@@ -71,7 +72,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
 		// Get update data from request body
 		const body = await req.json();
-		const { name, password } = body;
+		const { name, password, settings } = body;
 
 		// Validate and update fields
 		if (name !== undefined) {
@@ -96,6 +97,15 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 			}
 			// Password will be automatically hashed by the pre-save hook
 			league.password = password.trim();
+		}
+
+		// Commissioner settings: trophy, punishment, lock multiplier, TFS on/off (merged into the current ones)
+		if (settings !== undefined) {
+			const cleaned = cleanSettings(settings);
+			if ('error' in cleaned) {
+				return NextResponse.json({ error: cleaned.error }, { status: 400 });
+			}
+			for (const [key, value] of Object.entries(cleaned.settings)) league.set(`settings.${key}`, value);
 		}
 
 		// Save the updated league

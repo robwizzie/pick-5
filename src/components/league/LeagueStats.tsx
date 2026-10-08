@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { BarChart3, LineChart, Target, TrendingUp, Trophy, User, Users } from 'lucide-react';
+import { BarChart3, ChevronRight, History, LineChart, Target, TrendingUp, Trophy, User, Users } from 'lucide-react';
 import CountUp from 'react-countup';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -99,8 +100,9 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 
 export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStatsProps) {
 	const { data: session } = useSession();
-	const { currentWeek } = useWeek();
+	const { currentWeek, season, setSeason, currentSeason, isPastSeason, startWeek } = useWeek();
 	const userName = session?.user?.name ?? null;
+	const [seasons, setSeasons] = useState<number[]>([]);
 
 	const [loading, setLoading] = useState(true);
 	const [summary, setSummary] = useState<SeasonSummary>(EMPTY_SUMMARY);
@@ -118,11 +120,11 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 		const fetchStats = async () => {
 			setLoading(true);
 			const trendWeeks: number[] = [];
-			for (let w = Math.max(1, currentWeek - (TREND_WEEKS - 1)); w <= currentWeek; w++) trendWeeks.push(w);
+			for (let w = Math.max(startWeek, currentWeek - (TREND_WEEKS - 1)); w <= currentWeek; w++) trendWeeks.push(w);
 
 			// Everything below is independent — fetch it all at once. The current-week
 			// leaderboard doubles as the season-stats source.
-			const weekly = await Promise.all(trendWeeks.map(week => fetchJson<LeaderboardResponse>(`/api/leaderboard?leagueId=${leagueId}&week=${week}`)));
+			const weekly = await Promise.all(trendWeeks.map(week => fetchJson<LeaderboardResponse>(`/api/leaderboard?leagueId=${leagueId}&week=${week}&season=${season}`)));
 			if (cancelled) return;
 
 			const current = weekly[weekly.length - 1];
@@ -136,21 +138,23 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 			const isMe = (e: { userId?: string; player: string }) => (userId && e.userId ? e.userId === userId : e.player === userName);
 
 			// Season summary
-			const season = [...(current.seasonStats ?? [])].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
-			const meIndex = season.findIndex(isMe);
-			const me = meIndex !== -1 ? season[meIndex] : null;
-			if (me) {
-				setSummary({
-					rank: meIndex + 1,
-					fieldSize: season.length,
-					totalPoints: me.totalPoints || 0,
-					winRate: me.totalPicks > 0 ? Math.round((me.correctPicks / me.totalPicks) * 100) : 0,
-					correctPicks: me.correctPicks || 0,
-					totalPicks: me.totalPicks || 0,
-					tfsPoints: me.totalTFSPoints || 0,
-					weeksWon: me.weeksWon || 0
-				});
-			}
+			const standings = [...(current.seasonStats ?? [])].sort((a, b) => (b.totalPoints || 0) - (a.totalPoints || 0));
+			const meIndex = standings.findIndex(isMe);
+			const me = meIndex !== -1 ? standings[meIndex] : null;
+			setSummary(
+				me
+					? {
+							rank: meIndex + 1,
+							fieldSize: standings.length,
+							totalPoints: me.totalPoints || 0,
+							winRate: me.totalPicks > 0 ? Math.round((me.correctPicks / me.totalPicks) * 100) : 0,
+							correctPicks: me.correctPicks || 0,
+							totalPicks: me.totalPicks || 0,
+							tfsPoints: me.totalTFSPoints || 0,
+							weeksWon: me.weeksWon || 0
+						}
+					: EMPTY_SUMMARY
+			);
 
 			// Field trend: me + the top of the standings. Colors are assigned in a fixed,
 			// deterministic order so they never depend on fetch timing.
@@ -163,7 +167,7 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 					byPlayer.set(key, entry);
 				});
 			});
-			const ordered = season.map(keyOf).filter(k => byPlayer.has(k));
+			const ordered = standings.map(keyOf).filter(k => byPlayer.has(k));
 			byPlayer.forEach((_, k) => {
 				if (!ordered.includes(k)) ordered.push(k);
 			});
@@ -189,7 +193,19 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 		return () => {
 			cancelled = true;
 		};
-	}, [leagueId, userId, userName, currentWeek]);
+	}, [leagueId, userId, userName, currentWeek, season, startWeek]);
+
+	// Seasons this league can be browsed by
+	useEffect(() => {
+		if (!leagueId) return;
+		let cancelled = false;
+		fetchJson<{ seasons?: Array<{ year: number }> }>(`/api/league/${leagueId}/seasons`).then(data => {
+			if (!cancelled) setSeasons(data?.seasons?.map(s => s.year) ?? []);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [leagueId]);
 
 	const togglePlayer = (id: string) => {
 		setHiddenPlayers(prev => {
@@ -226,7 +242,9 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 				<div aria-hidden className='pointer-events-none absolute -right-10 -top-16 h-44 w-44 rounded-full bg-primary/20 blur-3xl' />
 				<div className='relative flex items-start justify-between gap-3'>
 					<div className='min-w-0'>
-						<p className='eyebrow truncate'>{leagueName} · Season</p>
+						<p className='eyebrow truncate'>
+							{leagueName} · {isPastSeason ? `${season}–${String(season + 1).slice(-2)} season` : 'Season'}
+						</p>
 						<p className='mt-1 font-display text-lg font-bold uppercase italic tracking-tight'>My Rank</p>
 					</div>
 					<span className='grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary'>
@@ -351,6 +369,48 @@ export default function LeagueStats({ leagueId, userId, leagueName }: LeagueStat
 						</div>
 					)}
 				</div>
+			</Card>
+
+			{/* Past seasons */}
+			<Card className='p-4 sm:p-5'>
+				<h3 className='flex items-center gap-2 font-display text-lg font-bold uppercase italic tracking-tight'>
+					<span className='grid h-7 w-7 place-items-center rounded-lg bg-warning/10 text-warning'>
+						<History className='h-3.5 w-3.5' />
+					</span>
+					League History
+				</h3>
+				{seasons.length > 1 && (
+					<div className='mt-3'>
+						<p className='eyebrow mb-2'>View season</p>
+						<div className='flex flex-wrap gap-2'>
+							{seasons.map(year => (
+								<button
+									key={year}
+									type='button'
+									onClick={() => setSeason(year)}
+									aria-pressed={year === season}
+									className={cn(
+										'rounded-full border px-3 py-1 text-xs font-semibold tabular transition-colors',
+										year === season ? 'border-primary bg-primary text-primary-foreground' : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:bg-white/[0.07] hover:text-foreground'
+									)}
+								>
+									{year}–{String(year + 1).slice(-2)}
+									{year === currentSeason && ' · Now'}
+								</button>
+							))}
+						</div>
+					</div>
+				)}
+				<Link
+					href={`/league/${leagueId}/history`}
+					className='group mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 transition-colors hover:bg-white/[0.07]'
+				>
+					<span className='min-w-0'>
+						<span className='block text-sm font-semibold'>Champions &amp; final standings</span>
+						<span className='block text-xs text-muted-foreground'>Every completed season in {leagueName}</span>
+					</span>
+					<ChevronRight className='h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground' />
+				</Link>
 			</Card>
 		</div>
 	);

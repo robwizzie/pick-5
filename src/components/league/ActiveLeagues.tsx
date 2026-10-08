@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { toast } from 'sonner';
-import { ArrowUpRight, CheckCircle2, Clock, Crown, Link as LinkIcon, MoreHorizontal, Users } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, Clock, Crown, HeartPulse, Link as LinkIcon, MoreHorizontal, Skull, Users } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Pill } from '@/components/ui/page';
@@ -36,6 +36,8 @@ export interface LeagueSummary {
 	totalMembers: number;
 	pickedTeams: PickedTeam[];
 	tfsPoints: number;
+	/** Survivor leagues: the viewer's standing instead of points */
+	survivor?: { alive: boolean; eliminatedWeek: number | null; aliveCount: number; champion: boolean; complete: boolean };
 }
 
 const RANK_STYLES: Record<number, { text: string; glow: string; label: string }> = {
@@ -99,7 +101,15 @@ function LeagueCard({
 
 				{/* Rank */}
 				<div className='relative flex items-center gap-4 sm:w-24 sm:shrink-0 sm:flex-col sm:items-start sm:gap-0'>
-					{summary ? (
+					{summary?.survivor ? (
+						<>
+							<span className='eyebrow hidden sm:block'>Survivor</span>
+							<span className={cn('grid h-14 w-14 place-items-center rounded-2xl sm:h-16 sm:w-16', summary.survivor.alive ? 'bg-accent/15 text-accent' : 'bg-accent-2/15 text-accent-2')}>
+								{summary.survivor.champion ? <Crown className='h-8 w-8 text-[#FFD66B]' /> : summary.survivor.alive ? <HeartPulse className='h-8 w-8' /> : <Skull className='h-8 w-8' />}
+							</span>
+							<span className='text-xs text-muted-foreground sm:mt-1'>{summary.survivor.aliveCount} of {summary.totalMembers} left</span>
+						</>
+					) : summary ? (
 						<>
 							<span className='eyebrow hidden sm:block'>Rank</span>
 							<span className={cn('font-display text-5xl font-extrabold italic leading-none tabular sm:text-6xl', rankStyle?.text ?? 'text-foreground')}>
@@ -119,8 +129,9 @@ function LeagueCard({
 						{rank === 1 && <Crown className='h-4 w-4 shrink-0 text-[#FFD66B]' />}
 					</div>
 					<div className='mt-2 flex flex-wrap items-center gap-2'>
-						<Pill tone={league.mode === 'steve' ? 'accent' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : 'Standard'}</Pill>
+						<Pill tone={league.mode === 'steve' ? 'accent' : league.mode === 'survivor' ? 'hot' : 'primary'}>{league.mode === 'steve' ? 'Steve mode' : league.mode === 'survivor' ? 'Survivor' : 'Standard'}</Pill>
 						{summary &&
+							(!summary.survivor || (summary.survivor.alive && !summary.survivor.complete)) &&
 							(summary.hasPicks ? (
 								<Pill tone='accent'>
 									<CheckCircle2 className='h-3 w-3' /> Picks in
@@ -150,7 +161,14 @@ function LeagueCard({
 
 				{/* Points */}
 				<div className='relative flex items-end justify-between gap-4 border-t border-white/[0.06] pt-3 sm:block sm:border-0 sm:pt-0 sm:text-right'>
-					{summary ? (
+					{summary?.survivor ? (
+						<div>
+							<p className='eyebrow'>Status</p>
+							<p className={cn('font-display text-3xl font-extrabold italic leading-none', summary.survivor.alive ? 'text-accent' : 'text-accent-2')}>
+								{summary.survivor.champion ? 'Champion' : summary.survivor.alive ? (summary.survivor.complete ? 'Survived' : 'Alive') : `Out wk ${summary.survivor.eliminatedWeek}`}
+							</p>
+						</div>
+					) : summary ? (
 						<>
 							<div>
 								<p className='eyebrow'>Season</p>

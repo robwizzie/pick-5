@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { UserPicksModal } from './UserPicksModal';
 import { MatchupsBoard } from '@/components/league/MatchupsBoard';
 import { BadgeStrip } from '@/components/badges/BadgeStrip';
-import type { Badge, LeagueBadgesResponse } from '@/lib/badges';
+import type { Badge, LeagueBadgesResponse, Streak } from '@/lib/badges';
 
 interface PickedTeam {
 	team: string;
@@ -64,6 +64,20 @@ interface BoardEntry {
 	points: number;
 	rank: number;
 	clickable: boolean;
+	streak?: Streak;
+}
+
+/** 🔥 / 🧊 with the run length, next to a name. */
+function StreakMark({ streak }: { streak?: Streak }) {
+	if (!streak) return null;
+	const hot = streak.kind === 'hot';
+	const label = hot ? `On fire: ${streak.length} correct picks in a row` : `Ice cold: ${streak.length} misses in a row`;
+	return (
+		<span className={cn('inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold tabular', hot ? 'text-accent-2' : 'text-primary')} title={label} aria-label={label}>
+			<span aria-hidden>{hot ? '🔥' : '🧊'}</span>
+			{streak.length}
+		</span>
+	);
 }
 
 const MEDALS = {
@@ -152,7 +166,10 @@ function Podium({
 							/>
 							<span className={cn('absolute -bottom-1.5 left-1/2 grid h-5 min-w-5 -translate-x-1/2 place-items-center rounded-full bg-background px-1 font-display text-[11px] font-extrabold italic tabular ring-1 ring-white/10', m.text)}>{entry.rank}</span>
 						</div>
-						<p className={cn('mt-3 w-full truncate text-center text-xs font-semibold sm:text-sm', isMe ? 'text-primary' : 'text-foreground')}>{entry.player}</p>
+						<p className={cn('mt-3 flex w-full items-center justify-center gap-1 text-center text-xs font-semibold sm:text-sm', isMe ? 'text-primary' : 'text-foreground')}>
+							<span className='truncate'>{entry.player}</span>
+							<StreakMark streak={entry.streak} />
+						</p>
 						{entry.userId && badgesByUser?.get(entry.userId)?.some(b => b.earned) && (
 							<span className='mb-0.5 mt-0.5'>
 								<BadgeStrip badges={badgesByUser.get(entry.userId)} />
@@ -209,6 +226,7 @@ function Row({
 			<div className='min-w-0 flex-1'>
 				<p className='flex items-center gap-1.5 truncate text-sm font-semibold'>
 					<span className='truncate'>{entry.player}</span>
+					<StreakMark streak={entry.streak} />
 					{isMe && <span className='shrink-0 text-[10px] font-bold uppercase tracking-wider text-primary'>You</span>}
 					<BadgeStrip badges={badges} />
 				</p>
@@ -263,7 +281,7 @@ function BoardSkeleton() {
 }
 
 export function Leaderboard() {
-	const { currentWeek } = useWeek();
+	const { currentWeek, season, isPastSeason } = useWeek();
 	const { leagueId } = useLeague();
 	const { data: session } = useSession();
 	const currentUserId = session?.user?.id;
@@ -279,16 +297,21 @@ export function Leaderboard() {
 	const [leagueMode, setLeagueMode] = useState<string>('');
 	const [gamesStarted, setGamesStarted] = useState<boolean>(false);
 	const [badgesByUser, setBadgesByUser] = useState<Map<string, Badge[]>>(new Map());
+	const [streaks, setStreaks] = useState<Record<string, Streak>>({});
+	const [punishment, setPunishment] = useState('');
 
 	// Season badges for the row icons (only finished games count, so no polling needed)
 	useEffect(() => {
 		if (!leagueId) return;
 		let cancelled = false;
 		const loadBadges = () =>
-			fetch(`/api/league/${leagueId}/badges`)
+			fetch(`/api/league/${leagueId}/badges?season=${season}`)
 				.then(res => (res.ok ? (res.json() as Promise<LeagueBadgesResponse>) : null))
 				.then(data => {
-					if (!cancelled && data) setBadgesByUser(new Map(data.members.map(m => [m.userId, m.badges])));
+					if (!cancelled && data) {
+						setBadgesByUser(new Map(data.members.map(m => [m.userId, m.badges])));
+						setStreaks(data.streaks ?? {});
+					}
 				})
 				.catch(err => console.error('[Leaderboard] Error fetching badges:', err));
 		loadBadges();
@@ -297,7 +320,7 @@ export function Leaderboard() {
 			cancelled = true;
 			window.removeEventListener('refreshLeaderboard', loadBadges);
 		};
-	}, [leagueId]);
+	}, [leagueId, season]);
 
 	// Fetch league details to get the mode
 	useEffect(() => {
@@ -308,6 +331,7 @@ export function Leaderboard() {
 				if (response.ok) {
 					const data = await response.json();
 					setLeagueMode(data.mode || 'standard');
+					setPunishment(data.settings?.lastPlacePunishment ?? '');
 				}
 			} catch (error) {
 				console.error('[Leaderboard] Error fetching league details:', error);
@@ -331,7 +355,7 @@ export function Leaderboard() {
 			}
 			setError(null);
 
-			const [response, games] = await Promise.all([fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' }), NFLService.getWeeklyGames(currentWeek)]);
+			const [response, games] = await Promise.all([fetch(`/api/leaderboard?week=${currentWeek}&leagueId=${leagueId}&season=${season}`, { cache: 'no-store' }), NFLService.getWeeklyGames(currentWeek, season)]);
 			if (!response.ok) throw new Error('Failed to fetch leaderboard data');
 
 			const data: LeaderboardResponse = await response.json();
@@ -360,15 +384,15 @@ export function Leaderboard() {
 		const handleRefresh = () => fetchLeaderboard(true);
 		window.addEventListener('refreshLeaderboard', handleRefresh);
 
-		// Use smart polling interval (2 min during games, 5 min outside)
-		const pollInterval = setInterval(() => fetchLeaderboard(true), NFLService.getPollingInterval());
+		// Use smart polling interval (2 min during games, 5 min outside); past seasons are final
+		const pollInterval = isPastSeason ? undefined : setInterval(() => fetchLeaderboard(true), NFLService.getPollingInterval());
 
 		return () => {
 			window.removeEventListener('refreshLeaderboard', handleRefresh);
 			clearInterval(pollInterval);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentWeek, leagueId]);
+	}, [currentWeek, leagueId, season]);
 
 	// Weekly board: points desc, then players with picks first
 	const weeklySorted = withRanks(
@@ -386,7 +410,8 @@ export function Leaderboard() {
 		image: r.image,
 		points: r.points,
 		rank: r.rank,
-		clickable: r.hasPicks
+		clickable: r.hasPicks,
+		streak: streaks[r.userId]
 	}));
 
 	// Season board. Season stats carry a userId (used for the "you" highlight and the picks modal);
@@ -412,7 +437,8 @@ export function Leaderboard() {
 		image: s.image,
 		points: s.totalPoints,
 		rank: s.rank,
-		clickable: !!s.userId && !!weeklyById.get(s.userId)?.hasPicks
+		clickable: !!s.userId && !!weeklyById.get(s.userId)?.hasPicks,
+		streak: s.userId ? streaks[s.userId] : undefined
 	}));
 
 	const handleSelect = (entry: BoardEntry) => {
@@ -571,7 +597,7 @@ export function Leaderboard() {
 							Week {currentWeek}
 						</TabsTrigger>
 						<TabsTrigger value='season' className='px-2'>
-							Season
+							{isPastSeason ? season : 'Season'}
 						</TabsTrigger>
 						<TabsTrigger value='matchups' className='px-2'>
 							<Swords aria-hidden />
@@ -583,9 +609,20 @@ export function Leaderboard() {
 					</TabsContent>
 					<TabsContent value='season' className='mt-0'>
 						{renderBoard(seasonEntries, 'season')}
+						{punishment && seasonEntries.length > 1 && (
+							<div className='mt-3 flex items-start gap-2.5 rounded-xl border border-accent-2/25 bg-accent-2/[0.07] px-3 py-2.5'>
+								<span className='text-lg leading-none' aria-hidden>
+									🥄
+								</span>
+								<p className='min-w-0 text-xs text-muted-foreground'>
+									<span className='font-semibold text-foreground'>Last place punishment</span>
+									{seasonEntries.at(-1)!.points < seasonEntries[0].points && <> (currently {seasonEntries.at(-1)!.player})</>}: <span className='text-foreground/90'>{punishment}</span>
+								</p>
+							</div>
+						)}
 					</TabsContent>
 					<TabsContent value='matchups' className='mt-0'>
-						{leagueId && <MatchupsBoard leagueId={leagueId} week={currentWeek} currentUserId={currentUserId} badgesByUser={badgesByUser} />}
+						{leagueId && <MatchupsBoard leagueId={leagueId} week={currentWeek} season={season} currentUserId={currentUserId} badgesByUser={badgesByUser} />}
 					</TabsContent>
 				</Tabs>
 			)}

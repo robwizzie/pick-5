@@ -8,7 +8,8 @@ import { League } from '@/models/League';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
-import { parseSeasonParam, seasonPickFilter } from '@/lib/season';
+import { rulesFor } from '@/lib/leagueRules';
+import { countedWeeks, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,8 @@ export async function GET(req: Request) {
 		if (!league.members.map(String).includes(viewerId)) {
 			return NextResponse.json({ error: 'Not a member of this league' }, { status: 403 });
 		}
-		const leagueMode = (league as any).mode || 'standard';
+		// The league's scoring rules (mode, lock multiplier, TFS on/off)
+		const leagueMode = rulesFor(league);
 
 		// Fetch only users who are members of this league
 		const allUsers = await User.find({ _id: { $in: league.members } }, 'name image');
@@ -145,7 +147,7 @@ export async function GET(req: Request) {
 		});
 
 		// Get ALL picks for this league for season stats
-		const allPicksForSeason = await Pick.find({ leagueId, ...seasonFilter }).lean();
+		const allPicksForSeason = await Pick.find({ leagueId, week: await countedWeeks(season), ...seasonFilter }).lean();
 
 		// Get unique weeks from all picks
 		const weekSet = new Set<number>();

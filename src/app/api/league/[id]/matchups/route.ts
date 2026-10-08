@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { isMember, loadLeagueSeason } from '@/lib/leagueSeason';
 import { parseSeasonParam } from '@/lib/season';
 import { seasonRecords, weekMatchups, type MatchupsResponse } from '@/lib/matchups';
+import { allTimePairRecords } from '@/lib/rivalries';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,9 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 			week,
 			matchups,
 			records: seasonRecords(data, week),
-			myMatchupId: matchups.find(m => m.sides.some(s => s.userId === viewerId))?.id ?? null
+			myMatchupId: matchups.find(m => m.sides.some(s => s.userId === viewerId))?.id ?? null,
+			// The dashboard only needs this week's matchup; the board asks for rivalries
+			rivalries: searchParams.get('rivalries') === '1' ? await allTimePairRecords(id, data, week).catch(() => undefined) : undefined
 		};
 		return NextResponse.json(body);
 	} catch (error) {

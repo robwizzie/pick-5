@@ -4,8 +4,9 @@ import { connectDB } from '@/lib/db';
 import { League } from '@/models/League';
 import { Pick } from '@/models/Pick';
 import { User } from '@/models/User';
-import { seasonPickFilter } from '@/lib/season';
+import { countedWeeks, seasonPickFilter } from '@/lib/season';
 import { loadGameResults, rescore, type GameResult, type PickDocLike } from '@/lib/pickScoring';
+import { rulesFor, type LeagueSettings, type ScoringRules } from '@/lib/leagueRules';
 
 export interface LeagueMember {
 	userId: string;
@@ -42,6 +43,9 @@ export interface LeagueSeason {
 	leagueId: string;
 	leagueName: string;
 	mode: string;
+	/** Scoring rules (mode plus the commissioner's lock/TFS settings) */
+	rules: ScoringRules;
+	settings: LeagueSettings;
 	creatorId?: string;
 	members: LeagueMember[];
 	season: number;
@@ -56,22 +60,24 @@ type PickDoc = PickDocLike & { userId: string; leagueId: string; lockGameId?: st
 /** Load and live-score a league's season. Returns null if the league doesn't exist. */
 export async function loadLeagueSeason(leagueId: string, season: number, opts: { extraWeeks?: number[] } = {}): Promise<LeagueSeason | null> {
 	await connectDB();
-	const league = await League.findById(leagueId, 'name mode members creatorId').lean<{ name: string; mode?: string; members?: string[]; creatorId?: string }>();
+	const league = await League.findById(leagueId, 'name mode settings members creatorId').lean<{ name: string; mode?: string; settings?: LeagueSettings; members?: string[]; creatorId?: string }>();
 	if (!league) return null;
 
 	const memberIds = (league.members ?? []).map(String);
 	const [users, docs] = await Promise.all([
 		User.find({ _id: { $in: memberIds } }, 'name image').lean<Array<{ _id: unknown; name?: string; image?: string | null }>>(),
-		Pick.find({ leagueId, ...seasonPickFilter(season) }).lean<PickDoc[]>()
+		// Weeks after the season's final week don't count
+		Pick.find({ leagueId, week: await countedWeeks(season), ...seasonPickFilter(season) }).lean<PickDoc[]>()
 	]);
 	const mode = league.mode || 'standard';
+	const rules = rulesFor(league);
 	const resultsByWeek = await loadGameResults([...docs.map(d => d.week), ...(opts.extraWeeks ?? [])], season);
 
 	const weeks = new Map<number, Map<string, MemberWeek>>();
 	for (const doc of docs) {
 		const userId = String(doc.userId);
 		if (!memberIds.includes(userId)) continue;
-		const scored = rescore(doc, resultsByWeek.get(doc.week) ?? [], mode);
+		const scored = rescore(doc, resultsByWeek.get(doc.week) ?? [], rules);
 		const byUser = weeks.get(doc.week) ?? new Map<string, MemberWeek>();
 		byUser.set(userId, {
 			userId,
@@ -93,6 +99,8 @@ export async function loadLeagueSeason(leagueId: string, season: number, opts: {
 		leagueId,
 		leagueName: league.name,
 		mode,
+		rules,
+		settings: league.settings ?? {},
 		creatorId: league.creatorId,
 		season,
 		members: memberIds.map(id => ({ userId: id, name: nameById.get(id)?.name || 'Unknown Player', image: nameById.get(id)?.image ?? null })),

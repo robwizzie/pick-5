@@ -4,7 +4,10 @@ import { Lock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { calculatePointsFromOdds, formatOdds, getOddsRiskLabel } from '@/utils/oddsUtils';
 import { cn } from '@/lib/utils';
-import { LOCK_MULTIPLIER, ScoringService } from '@/services/scoringService';
+import { useWeek } from '@/contexts/WeekContext';
+import { ScoringService } from '@/services/scoringService';
+import { useLeagueRules } from '@/contexts/LeagueRulesContext';
+import type { ScoringRules } from '@/lib/leagueRules';
 
 // Sample lines for the scoring table; points always come from the real scoring function
 const SAMPLE_ODDS = [-300, -175, -110, 100, 150, 200, 300, 400, 500, 700, 1000, 1400];
@@ -12,7 +15,6 @@ const SAMPLE_ODDS = [-300, -175, -110, 100, 150, 200, 300, 400, 500, 700, 1000, 
 // Example underdog for the lock explainer (Standard mode)
 const LOCK_EXAMPLE_ODDS = 200;
 const STEVE_WIN = ScoringService.pointsForPick({}, 'steve');
-const STEVE_LOCK_WIN = ScoringService.pointsForPick({}, 'steve', undefined, true);
 
 const TFS_TABLE = [
 	{ diff: 'Exact', pts: 5 },
@@ -32,9 +34,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 	);
 }
 
-function LockSection({ isSteve }: { isSteve: boolean }) {
+function LockSection({ isSteve, rules }: { isSteve: boolean; rules: ScoringRules }) {
 	const base = isSteve ? STEVE_WIN : calculatePointsFromOdds(LOCK_EXAMPLE_ODDS);
-	const locked = isSteve ? STEVE_LOCK_WIN : ScoringService.pointsForPick({ odds: LOCK_EXAMPLE_ODDS }, 'standard', calculatePointsFromOdds, true);
+	const locked = ScoringService.pointsForPick({ odds: isSteve ? undefined : LOCK_EXAMPLE_ODDS }, { ...rules, mode: isSteve ? 'steve' : 'standard' }, calculatePointsFromOdds, true);
 	return (
 		<Section title='Lock of the week'>
 			<div className='rounded-xl border border-warning/25 bg-warning/[0.06] p-3.5'>
@@ -44,7 +46,7 @@ function LockSection({ isSteve }: { isSteve: boolean }) {
 					</span>
 					<p className='text-sm text-foreground/90'>
 						Mark one of your five picks as your <span className='font-semibold text-warning'>Lock</span>. If it wins it scores{' '}
-						<span className='font-semibold text-foreground'>{LOCK_MULTIPLIER}× points</span>; if it loses it scores 0, like any miss. It’s optional, and you can move it until your first game kicks off.
+						<span className='font-semibold text-foreground'>{rules.lockMultiplier}× points</span>; if it loses it scores 0, like any miss. It’s optional, and you can move it until your first game kicks off.
 					</p>
 				</div>
 				<div className='mt-3 grid grid-cols-2 gap-2 text-center'>
@@ -107,13 +109,53 @@ function Table({ rows, head }: { head: [string, string, string?]; rows: Array<[R
 
 export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean; onOpenChange: (open: boolean) => void; mode?: string }) {
 	const isSteve = mode === 'steve';
+	const isSurvivor = mode === 'survivor';
+	const { startWeek, finalWeek } = useWeek();
+	const rules = useLeagueRules();
+	const locksOn = rules.lockMultiplier > 1;
+	const playsTfs = isSteve && rules.tfsEnabled;
+	const steveLockWin = STEVE_WIN * rules.lockMultiplier;
+	const lockLine = locksOn ? [`Optionally make one pick your Lock of the Week for ${rules.lockMultiplier}× points.`] : [];
+
+	if (isSurvivor) {
+		return (
+			<Dialog open={open} onOpenChange={onOpenChange}>
+				<DialogContent className='sm:max-w-xl sm:max-h-[85vh] sm:overflow-y-auto'>
+					<DialogHeader>
+						<DialogTitle>How Survivor works</DialogTitle>
+						<DialogDescription>One team a week. Lose and you’re out. Last one standing wins.</DialogDescription>
+					</DialogHeader>
+					<div className='space-y-6'>
+						<Section title='How to play'>
+							<Steps
+								items={[
+									'Each week, pick one team to win its game.',
+									'If it wins, you survive to next week. If it loses or ties, you’re out.',
+									'You can’t use the same team twice in a season, so save the good ones.',
+									'Change your pick any time before it kicks off. No pick by the end of the week knocks you out.'
+								]}
+							/>
+						</Section>
+						<Section title='Good to know'>
+							<ul className='space-y-1.5 text-sm text-muted-foreground'>
+								<li>• If everyone still alive loses in the same week, they all survive it.</li>
+								<li>• The last player standing wins. If more than one survives week {finalWeek}, they share the title.</li>
+								<li>• The pool runs from week {startWeek} through week {finalWeek}.</li>
+								<li>• Other members’ picks are revealed once each game kicks off.</li>
+							</ul>
+						</Section>
+					</div>
+				</DialogContent>
+			</Dialog>
+		);
+	}
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className='sm:max-w-xl sm:max-h-[85vh] sm:overflow-y-auto'>
 				<DialogHeader>
 					<DialogTitle>How scoring works</DialogTitle>
-					<DialogDescription>{isSteve ? 'Steve Mode — 2 points per win plus a Total Final Score bonus.' : 'Standard Mode — points scale with the moneyline. Underdogs pay more.'}</DialogDescription>
+					<DialogDescription>{isSteve ? (playsTfs ? 'Steve Mode — 2 points per win plus a Total Final Score bonus.' : 'Steve Mode — 2 points per win.') : 'Standard Mode — points scale with the moneyline. Underdogs pay more.'}</DialogDescription>
 				</DialogHeader>
 
 				<div className='space-y-6'>
@@ -123,14 +165,14 @@ export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean;
 								isSteve
 									? [
 											'Pick the winners of any 5 games this week.',
-											'For one of those games, predict the Total Final Score (both teams combined).',
-											'Optionally make one pick your Lock of the Week for double points.',
+											...(playsTfs ? ['For one of those games, predict the Total Final Score (both teams combined).'] : []),
+											...lockLine,
 											'Edit your picks any time before each game kicks off.'
 										]
 									: [
 											'Pick the winners of any 5 games this week.',
 											'Each pick is worth points based on its moneyline odds, locked in when you pick.',
-											'Optionally make one pick your Lock of the Week for double points.',
+											...lockLine,
 											'Edit your picks any time before each game kicks off.'
 										]
 							}
@@ -144,7 +186,7 @@ export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean;
 									{[
 										{ label: 'Correct', value: String(STEVE_WIN) },
 										{ label: 'Wrong', value: '0' },
-										{ label: 'Lock win', value: String(STEVE_LOCK_WIN) }
+										...(locksOn ? [{ label: 'Lock win', value: String(steveLockWin) }] : [])
 									].map(s => (
 										<div key={s.label} className='rounded-xl border border-white/[0.07] bg-white/[0.03] p-3'>
 											<p className='font-display text-3xl font-extrabold italic tabular'>{s.value}</p>
@@ -153,12 +195,14 @@ export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean;
 									))}
 								</div>
 							</Section>
+							{playsTfs && (
 							<Section title='Total Final Score bonus'>
 								<Table head={['How close', 'Points']} rows={TFS_TABLE.map(r => [r.diff, r.pts])} />
 								<p className='text-sm text-muted-foreground'>
-									Best possible week: <span className='font-semibold text-foreground'>{4 * STEVE_WIN + STEVE_LOCK_WIN + 5} points</span> ({4 * STEVE_WIN + STEVE_LOCK_WIN} from picks with a winning lock + 5 TFS).
+									Best possible week: <span className='font-semibold text-foreground'>{4 * STEVE_WIN + steveLockWin + 5} points</span> ({4 * STEVE_WIN + steveLockWin} from picks{locksOn ? ' with a winning lock' : ''} + 5 TFS).
 								</p>
 							</Section>
+							)}
 						</>
 					) : (
 						<Section title='Points by odds'>
@@ -170,14 +214,16 @@ export function LeagueRulesDialog({ open, onOpenChange, mode }: { open: boolean;
 						</Section>
 					)}
 
-					<LockSection isSteve={isSteve} />
+					{locksOn && <LockSection isSteve={isSteve} rules={rules} />}
 
 					<Section title='Good to know'>
 						<ul className='space-y-1.5 text-sm text-muted-foreground'>
 							<li>• Ties count as a loss for both sides.</li>
 							<li>• Scores update live; a pick is graded when its game goes final.</li>
 							<li>• Other members’ picks are revealed once each game kicks off.</li>
-							<li>• Season standings are total points across all 18 weeks.</li>
+							<li>
+								• Season standings are total points from week {startWeek} through week {finalWeek}.
+							</li>
 						</ul>
 					</Section>
 				</div>

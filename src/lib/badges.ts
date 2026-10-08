@@ -11,10 +11,21 @@
 //   older "weeks at 60%+" streak metric.
 // - Lock Legend: 3 correct locks of the week.
 // - Weekly Winner: top score (ties included, > 0 points) of a finished week with 2+ players.
+// - Upset Run: 3+ correct plus-money underdogs in a single week.
+// - Iron Man: picks in every finished week of the season (4+ weeks); a missed week loses it.
+// - Back-to-Back: league champion two seasons in a row (needs the league's history).
+//
+// Streaks (leaderboard 🔥/🧊): the current run of final picks, by kickoff — HOT_STREAK correct in
+// a row is hot, COLD_STREAK misses in a row is cold.
 import type { LeagueSeason, ScoredPick } from '@/lib/leagueSeason';
 import { NFLService } from '@/services/nflService';
 
-export type BadgeId = 'upset-hunter' | 'giant-killer' | 'perfect-week' | 'hot-streak' | 'lock-legend' | 'weekly-winner';
+/** Champions per season from League History rows ({ seasonYear, champions: [{ userId }] }). */
+export function championsBySeason(history: Array<{ seasonYear: number; champions?: Array<{ userId?: string }> }>): Map<number, string[]> {
+	return new Map(history.map(h => [h.seasonYear, (h.champions ?? []).map(c => String(c.userId))]));
+}
+
+export type BadgeId = 'upset-hunter' | 'giant-killer' | 'perfect-week' | 'hot-streak' | 'lock-legend' | 'weekly-winner' | 'upset-run' | 'iron-man' | 'back-to-back';
 export type BadgeTone = 'gold' | 'accent' | 'primary' | 'hot' | 'warning' | 'violet';
 
 export interface Badge {
@@ -22,7 +33,7 @@ export interface Badge {
 	name: string;
 	description: string;
 	/** lucide-react icon name */
-	icon: 'Crosshair' | 'Swords' | 'Crown' | 'Flame' | 'Lock' | 'Trophy';
+	icon: 'Crosshair' | 'Swords' | 'Crown' | 'Flame' | 'Lock' | 'Trophy' | 'Zap' | 'Shield' | 'Medal';
 	tier: 'common' | 'rare' | 'epic' | 'legendary';
 	tone: BadgeTone;
 	earned: boolean;
@@ -39,16 +50,29 @@ export const BADGE_DEFS: Record<BadgeId, Omit<Badge, 'earned' | 'progress' | 'ea
 	'weekly-winner': { id: 'weekly-winner', name: 'Weekly Winner', description: 'Topped the league in a week', icon: 'Trophy', tier: 'rare', tone: 'primary', target: 1 },
 	'lock-legend': { id: 'lock-legend', name: 'Lock Legend', description: '3 correct locks of the week', icon: 'Lock', tier: 'epic', tone: 'violet', target: 3 },
 	'giant-killer': { id: 'giant-killer', name: 'Giant Killer', description: 'Hit a +300 or longer underdog', icon: 'Swords', tier: 'epic', tone: 'warning', target: 1 },
-	'perfect-week': { id: 'perfect-week', name: 'Perfect Week', description: 'All 5 picks correct in a week', icon: 'Crown', tier: 'legendary', tone: 'gold', target: 5 }
+	'perfect-week': { id: 'perfect-week', name: 'Perfect Week', description: 'All 5 picks correct in a week', icon: 'Crown', tier: 'legendary', tone: 'gold', target: 5 },
+	'upset-run': { id: 'upset-run', name: 'Upset Run', description: '3 underdogs hit in one week', icon: 'Zap', tier: 'epic', tone: 'hot', target: 3 },
+	'iron-man': { id: 'iron-man', name: 'Iron Man', description: 'Never missed a week (4+ weeks in)', icon: 'Shield', tier: 'rare', tone: 'primary', target: 4 },
+	'back-to-back': { id: 'back-to-back', name: 'Back-to-Back', description: 'League champion two seasons running', icon: 'Medal', tier: 'legendary', tone: 'gold', target: 2 }
 };
 
 /** Display order: most prestigious first (used for the leaderboard's top-3 icons). */
-export const BADGE_ORDER: BadgeId[] = ['perfect-week', 'giant-killer', 'lock-legend', 'hot-streak', 'upset-hunter', 'weekly-winner'];
+export const BADGE_ORDER: BadgeId[] = ['back-to-back', 'perfect-week', 'upset-run', 'giant-killer', 'lock-legend', 'hot-streak', 'iron-man', 'upset-hunter', 'weekly-winner'];
 
 export const UPSET_TARGET = 3;
 export const GIANT_KILLER_ODDS = 300;
 export const STREAK_TARGET = 5;
 export const LOCK_TARGET = 3;
+export const UPSET_RUN_TARGET = 3;
+export const IRON_MAN_WEEKS = 4;
+export const HOT_STREAK = 5;
+export const COLD_STREAK = 4;
+
+export interface Streak {
+	kind: 'hot' | 'cold';
+	/** Picks in a row */
+	length: number;
+}
 
 interface FinalPick extends ScoredPick {
 	week: number;
@@ -76,9 +100,10 @@ function weekReaching(picks: FinalPick[], target: number, pred: (p: FinalPick) =
 
 /**
  * Badges for every member of the league. `kickoffs` (gameId -> epoch ms) orders picks for the
- * streak; without it picks fall back to week, then pick order.
+ * streak; without it picks fall back to week, then pick order. `champions` (season -> userIds,
+ * from League History) enables Back-to-Back.
  */
-export function computeLeagueBadges(season: LeagueSeason, kickoffs: Map<string, number> = new Map()): Map<string, Badge[]> {
+export function computeLeagueBadges(season: LeagueSeason, kickoffs: Map<string, number> = new Map(), champions: Map<number, string[]> = new Map()): Map<string, Badge[]> {
 	const weeks = Array.from(season.weeks.keys()).sort((a, b) => a - b);
 	const finalStatus = (week: number) => {
 		const status = new Map((season.resultsByWeek.get(week) ?? []).map(r => [r.id, r.status]));
@@ -97,12 +122,21 @@ export function computeLeagueBadges(season: LeagueSeason, kickoffs: Map<string, 
 		weekWinners.set(week, new Set(players.filter(w => w.weeklyPoints === top).map(w => w.userId)));
 	}
 
+	// Weeks whose every picked game is final (Iron Man counts these)
+	const finishedWeeks = weeks.filter(week => {
+		const isFinal = finalStatus(week);
+		return Array.from(season.weeks.get(week)!.values()).every(w => w.picks.every(p => isFinal(p.gameId)));
+	});
+
 	const result = new Map<string, Badge[]>();
 	for (const { userId } of season.members) {
 		const finalPicks: FinalPick[] = [];
 		let perfectWeeks = 0;
 		let firstPerfect: number | null = null;
 		let bestFinishedWeek = 0;
+		let bestUpsetWeek = 0;
+		let upsetRuns = 0;
+		let firstUpsetRun: number | null = null;
 
 		for (const week of weeks) {
 			const mw = season.weeks.get(week)!.get(userId);
@@ -111,6 +145,12 @@ export function computeLeagueBadges(season: LeagueSeason, kickoffs: Map<string, 
 			mw.picks.forEach((p, order) => {
 				if (p.isCorrect !== null) finalPicks.push({ ...p, week, order, kickoff: kickoffs.get(p.gameId) ?? Number.NaN });
 			});
+			const dogs = finals.filter(p => p.isCorrect && typeof p.odds === 'number' && p.odds > 0).length;
+			bestUpsetWeek = Math.max(bestUpsetWeek, dogs);
+			if (dogs >= UPSET_RUN_TARGET) {
+				upsetRuns++;
+				firstUpsetRun ??= week;
+			}
 			if (finals.length === mw.picks.length && mw.picks.length > 0) {
 				const correct = finals.filter(p => p.isCorrect).length;
 				bestFinishedWeek = Math.max(bestFinishedWeek, correct);
@@ -146,17 +186,59 @@ export function computeLeagueBadges(season: LeagueSeason, kickoffs: Map<string, 
 		const locks = weekReaching(finalPicks, LOCK_TARGET, p => !!p.isCorrect && p.isLock);
 		const wonWeeks = weeks.filter(w => weekWinners.get(w)?.has(userId));
 
+		// Iron Man: picked in every finished week so far
+		const played = finishedWeeks.filter(w => season.weeks.get(w)!.has(userId));
+		const ironCurrent = played.length === finishedWeeks.length ? played.length : 0;
+		const ironWeek = ironCurrent >= IRON_MAN_WEEKS ? finishedWeeks[IRON_MAN_WEEKS - 1] : null;
+
+		// Back-to-Back: champion in consecutive seasons (any time in the league's history)
+		const titles = Array.from(champions.entries())
+			.filter(([, ids]) => ids.includes(userId))
+			.map(([year]) => year)
+			.sort((a, b) => a - b);
+		const repeats = titles.filter(year => titles.includes(year - 1)).length;
+		const lastTitle = titles.at(-1);
+
 		const badges: Record<BadgeId, Badge> = {
 			'perfect-week': badge('perfect-week', bestFinishedWeek, firstPerfect, perfectWeeks),
 			'giant-killer': badge('giant-killer', giants.count, giants.week, giants.count),
 			'lock-legend': badge('lock-legend', locks.count, locks.week, Math.floor(locks.count / LOCK_TARGET)),
 			'hot-streak': badge('hot-streak', bestRun, streakWeek, streaks),
 			'upset-hunter': badge('upset-hunter', upsets.count, upsets.week, Math.floor(upsets.count / UPSET_TARGET)),
-			'weekly-winner': badge('weekly-winner', wonWeeks.length, wonWeeks[0] ?? null, wonWeeks.length)
+			'weekly-winner': badge('weekly-winner', wonWeeks.length, wonWeeks[0] ?? null, wonWeeks.length),
+			'upset-run': badge('upset-run', bestUpsetWeek, firstUpsetRun, upsetRuns),
+			'iron-man': badge('iron-man', ironCurrent, ironWeek, ironWeek !== null ? 1 : 0),
+			// Progress: a title last season puts you one away
+			'back-to-back': badge('back-to-back', repeats > 0 ? 2 : lastTitle !== undefined && lastTitle === season.season - 1 ? 1 : 0, repeats > 0 ? 0 : null, repeats)
 		};
 		result.set(userId, BADGE_ORDER.map(id => badges[id]));
 	}
 	return result;
+}
+
+/**
+ * Each member's current streak of final picks, ordered by kickoff: `HOT_STREAK`+ correct in a row is
+ * hot, `COLD_STREAK`+ misses is cold. Members on neither are left out.
+ */
+export function computeStreaks(season: LeagueSeason, kickoffs: Map<string, number> = new Map()): Record<string, Streak> {
+	const weeks = Array.from(season.weeks.keys()).sort((a, b) => a - b);
+	const streaks: Record<string, Streak> = {};
+	for (const { userId } of season.members) {
+		const finals: FinalPick[] = [];
+		for (const week of weeks) {
+			season.weeks.get(week)!.get(userId)?.picks.forEach((p, order) => {
+				if (p.isCorrect !== null) finals.push({ ...p, week, order, kickoff: kickoffs.get(p.gameId) ?? Number.NaN });
+			});
+		}
+		finals.sort((a, b) => a.week - b.week || (Number.isNaN(a.kickoff) ? Infinity : a.kickoff) - (Number.isNaN(b.kickoff) ? Infinity : b.kickoff) || a.order - b.order);
+		const last = finals.at(-1);
+		if (!last) continue;
+		let length = 0;
+		for (let i = finals.length - 1; i >= 0 && finals[i].isCorrect === last.isCorrect; i--) length++;
+		if (last.isCorrect && length >= HOT_STREAK) streaks[userId] = { kind: 'hot', length };
+		else if (!last.isCorrect && length >= COLD_STREAK) streaks[userId] = { kind: 'cold', length };
+	}
+	return streaks;
 }
 
 /* ------------------------------ cross-league ------------------------------ */
@@ -192,6 +274,8 @@ export interface LeagueBadgesResponse {
 	leagueId: string;
 	season: number;
 	members: Array<{ userId: string; badges: Badge[] }>;
+	/** Current hot/cold pick streaks (members on neither are omitted) */
+	streaks: Record<string, Streak>;
 }
 
 /** GET /api/user/badges */

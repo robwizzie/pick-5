@@ -2,8 +2,9 @@
 // NFL schedule helpers for the notification jobs (ESPN via NFLService).
 import type { Game } from '@/components/games/GameCard';
 import { NFLService } from '@/services/nflService';
+import { getSeasonWeeks } from '@/lib/season';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
-import { ScoringService } from '@/services/scoringService';
+import { ScoringService, type ScoringInput } from '@/services/scoringService';
 
 /** ESPN `status.type.state` is 'pre' | 'in' | 'post'; older data used 'final'. */
 export function isFinal(game: Pick<Game, 'status'>): boolean {
@@ -26,14 +27,15 @@ export function toGameResults(games: Game[]) {
 export type GameResultRow = ReturnType<typeof toGameResults>[number];
 
 /**
- * The most recent regular-season week whose games are all final, or null. Unlike
- * `getCurrentWeek(true) - 1` this is right for week 18 too (auto-advance stops at 18) and
- * doesn't depend on when ESPN flips its default week.
+ * The most recent week (within the season's start..final weeks) whose games are all final, or null.
+ * Unlike `getCurrentWeek(true) - 1` this is right for the final week too and doesn't depend
+ * on when ESPN flips its default week.
  */
 export async function getLastCompletedWeek(season: number): Promise<{ week: number; games: Game[] } | null> {
-	const espnWeek = Math.min(18, await NFLService.getCurrentWeek(false));
+	const [currentWeek, { startWeek, finalWeek }] = await Promise.all([NFLService.getCurrentWeek(false), getSeasonWeeks(season)]);
+	const espnWeek = Math.min(finalWeek, currentWeek);
 	for (const week of [espnWeek, espnWeek - 1]) {
-		if (week < 1) continue;
+		if (week < startWeek) continue;
 		const games = await NFLService.getWeeklyGames(week, season);
 		if (games.length > 0 && games.every(isFinal)) return { week, games };
 	}
@@ -61,6 +63,6 @@ export function formatKickoffEt(date: Date | string): string {
 }
 
 /** Points for a correct pick, matching ScoringService.calculateWeekScore. */
-export function pointsForCorrectPick(leagueMode: string | undefined, odds: number | undefined | null, isLock = false): number {
-	return ScoringService.pointsForPick({ odds: typeof odds === 'number' ? odds : undefined }, leagueMode || 'standard', calculatePointsFromOdds, isLock);
+export function pointsForCorrectPick(league: ScoringInput | undefined, odds: number | undefined | null, isLock = false): number {
+	return ScoringService.pointsForPick({ odds: typeof odds === 'number' ? odds : undefined }, league || 'standard', calculatePointsFromOdds, isLock);
 }

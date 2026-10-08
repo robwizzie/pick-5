@@ -9,11 +9,12 @@ import { EmptyState, StatTile } from '@/components/ui/page';
 import { GameCardSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { TeamLogo } from '@/components/ui/team-logo';
 import { PickGameCard } from './PickGameCard';
-import { GameCard } from './GameCard';
+import { GameCard, countLeaguePickers } from './GameCard';
 import type { Game } from './GameCard';
 import { NFLService } from '@/services/nflService';
 import { ScoringService } from '@/services/scoringService';
 import { useWeek } from '@/contexts/WeekContext';
+import { useLeagueRules } from '@/contexts/LeagueRulesContext';
 import { useLeague } from '@/contexts/LeagueContext';
 import { hasGameFinished, hasGameStarted } from '@/services/gameUtils';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
@@ -90,9 +91,9 @@ const isUpcomingStatus = (status?: string) => {
 };
 
 /** Attach odds from the centralized snapshot (standard mode). */
-async function withSnapshotOdds(games: Game[], week: number): Promise<Game[]> {
+async function withSnapshotOdds(games: Game[], week: number, season: number): Promise<Game[]> {
 	try {
-		const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}`);
+		const oddsResponse = await fetch(`/api/odds/snapshot?week=${week}&season=${season}`);
 		let snapshotOdds: SnapshotOdds[] = [];
 		if (oddsResponse.ok) {
 			const data = await oddsResponse.json();
@@ -173,7 +174,8 @@ function ResultsSkeleton() {
 }
 
 export function Results() {
-	const { currentWeek } = useWeek();
+	const { currentWeek, season, isPastSeason } = useWeek();
+	const rules = useLeagueRules();
 	const { leagueId } = useLeague();
 	const { data: session, status: sessionStatus } = useSession();
 	const [picks, setPicks] = useState<WeeklyPicks | null>(null);
@@ -241,9 +243,9 @@ export function Results() {
 
 				const allGamesView = selectedUserId === ALL_GAMES;
 				const [weeklyGames, leaguePicksResponse, picksResponse] = await Promise.all([
-					NFLService.getWeeklyGames(currentWeek),
-					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}`, { cache: 'no-store' }),
-					allGamesView ? Promise.resolve(null) : fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}`, { cache: 'no-store' })
+					NFLService.getWeeklyGames(currentWeek, season),
+					fetch(`/api/picks/league?week=${currentWeek}&leagueId=${leagueId}&season=${season}`, { cache: 'no-store' }),
+					allGamesView ? Promise.resolve(null) : fetch(`/api/picks?week=${currentWeek}&leagueId=${leagueId}&userId=${selectedUserId}&season=${season}`, { cache: 'no-store' })
 				]);
 
 				// Enrich live games with clock and period data
@@ -252,7 +254,7 @@ export function Results() {
 				const picksData: WeeklyPicks | null = picksResponse ? await picksResponse.json() : null;
 
 				// Fetch odds for Standard mode leagues (same logic as WeeklyPicks)
-				const gamesWithOdds = leagueMode === 'standard' ? await withSnapshotOdds(enrichedGames, currentWeek) : enrichedGames;
+				const gamesWithOdds = leagueMode === 'standard' ? await withSnapshotOdds(enrichedGames, currentWeek, season) : enrichedGames;
 
 				setGames(gamesWithOdds);
 				setPicks(picksData); // null in the "All Games" view
@@ -260,7 +262,7 @@ export function Results() {
 				setLastUpdated(new Date());
 				setError(null);
 
-				if (!allGamesView) {
+				if (!allGamesView && !isPastSeason) {
 					// The /api/picks endpoint recalculates scores, so notify other components
 					window.dispatchEvent(new Event('refreshLeaderboard'));
 					window.dispatchEvent(new Event('refreshSeasonStats'));
@@ -277,9 +279,11 @@ export function Results() {
 		loadData(false); // Initial load
 
 		// Smart polling interval: 2 minutes during games, 5 minutes outside game windows
+		// A past season's results are final: nothing to poll
+		if (isPastSeason) return;
 		const pollInterval = setInterval(() => loadData(true), NFLService.getPollingInterval());
 		return () => clearInterval(pollInterval);
-	}, [currentWeek, sessionStatus, leagueId, selectedUserId, leagueMode]);
+	}, [currentWeek, season, isPastSeason, sessionStatus, leagueId, selectedUserId, leagueMode]);
 
 	const viewingSelf = selectedUserId === currentUserId;
 
@@ -306,7 +310,7 @@ export function Results() {
 			// Points depend on league mode; the lock scores double
 			let points = 0;
 			if (finished && isCorrect === true) {
-				points = ScoringService.pointsForPick(pick, leagueMode, calculatePointsFromOdds, isLock);
+				points = ScoringService.pointsForPick(pick, { ...rules, mode: leagueMode }, calculatePointsFromOdds, isLock);
 				totalPoints += points;
 				correctPicks += 1;
 			}
@@ -332,7 +336,7 @@ export function Results() {
 			correctPicks,
 			tfsPoints
 		};
-	}, [picks, games, viewingSelf, leagueMode]);
+	}, [picks, games, viewingSelf, leagueMode, rules]);
 
 	if (sessionStatus === 'loading' || loading) {
 		return <ResultsSkeleton />;
@@ -418,7 +422,7 @@ export function Results() {
 					<div className='space-y-3'>
 						{group.games.map((game, index) => (
 							<div key={game.id} className='glass animate-slide-up rounded-2xl' style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
-								<GameCard game={game} showScores disabled noHover leaguePicks={leaguePicks[game.id]} leagueMode={leagueMode} />
+								<GameCard game={game} showScores disabled noHover leaguePicks={leaguePicks[game.id]} leagueSize={countLeaguePickers(leaguePicks)} leagueMode={leagueMode} />
 							</div>
 						))}
 					</div>
@@ -510,6 +514,7 @@ export function Results() {
 										pickPoints={row.points}
 										isLock={row.isLock}
 										leaguePicks={leaguePicks[row.pick.gameId]}
+										leagueSize={countLeaguePickers(leaguePicks)}
 										leagueMode={leagueMode}
 										variant='results'
 									/>

@@ -1,6 +1,6 @@
 // Server-side helpers for scoring and revealing pick documents.
 import { NFLService } from '@/services/nflService';
-import { ScoringService } from '@/services/scoringService';
+import { ScoringService, type ScoringInput } from '@/services/scoringService';
 import { calculatePointsFromOdds } from '@/utils/oddsUtils';
 
 export interface GameResult {
@@ -46,13 +46,13 @@ export async function loadGameResults(weeks: number[], season: number): Promise<
 }
 
 /** Re-score a pick document against live results (stored scores can be stale). */
-export function rescore(doc: PickDocLike, results: GameResult[], leagueMode: string) {
+export function rescore(doc: PickDocLike, results: GameResult[], league: ScoringInput) {
 	const { scoredPicks, weeklyPoints, correctPicks, tfsPoints, completedGames } = ScoringService.calculateWeekScore(
 		doc.picks,
 		results,
 		doc.tfsGame ?? null,
 		doc.tfsScore ?? null,
-		leagueMode,
+		league,
 		calculatePointsFromOdds,
 		doc.lockGameId
 	);
