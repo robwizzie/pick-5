@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { useVisiblePolling } from '@/components/sweat/useSweat';
-import type { NudgeStatus } from '@/lib/nudgeTypes';
+import type { NudgeOpenVia, NudgeStatus } from '@/lib/nudgeTypes';
 
 const POLL_MS = 60_000;
 
@@ -13,9 +13,11 @@ interface NudgeContextValue {
 	nudge: (userId: string, name: string) => Promise<boolean>;
 	sending: string | null;
 	refresh: () => void;
+	/** The viewer opened the league from their nudge: record it for the nudge report */
+	opened: (via: NudgeOpenVia) => void;
 }
 
-const NudgeCtx = createContext<NudgeContextValue>({ status: null, nudge: async () => false, sending: null, refresh: () => {} });
+const NudgeCtx = createContext<NudgeContextValue>({ status: null, nudge: async () => false, sending: null, refresh: () => {}, opened: () => {} });
 
 export const useNudges = () => useContext(NudgeCtx);
 
@@ -26,7 +28,7 @@ const DELIVERY_COPY = {
 } as const;
 
 /** One shared picks-in / nudge state for a league page (leaderboard, H2H, survivor board and banner). */
-export function NudgeProvider({ leagueId, children }: { leagueId: string; children: React.ReactNode }) {
+export function NudgeProvider({ leagueId, openedVia, children }: { leagueId: string; /** Arrived from a nudge's push or email link */ openedVia?: NudgeOpenVia | null; children: React.ReactNode }) {
 	const [status, setStatus] = useState<NudgeStatus | null>(null);
 	const [sending, setSending] = useState<string | null>(null);
 
@@ -68,6 +70,17 @@ export function NudgeProvider({ leagueId, children }: { leagueId: string; childr
 		[leagueId, refresh]
 	);
 
-	const value = useMemo(() => ({ status, nudge, sending, refresh }), [status, nudge, sending, refresh]);
+	const opened = useCallback(
+		(via: NudgeOpenVia) => {
+			fetch(`/api/league/${leagueId}/nudge`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opened: via }) }).catch(() => {});
+		},
+		[leagueId]
+	);
+
+	useEffect(() => {
+		if (openedVia) opened(openedVia);
+	}, [openedVia, opened]);
+
+	const value = useMemo(() => ({ status, nudge, sending, refresh, opened }), [status, nudge, sending, refresh, opened]);
 	return <NudgeCtx.Provider value={value}>{children}</NudgeCtx.Provider>;
 }

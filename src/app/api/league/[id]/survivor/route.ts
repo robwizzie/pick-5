@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { connectDB } from '@/lib/db';
 import { SurvivorPick } from '@/models/SurvivorPick';
+import { markNudgePicked } from '@/lib/nudges';
 import { getCurrentSeasonYear, parseSeasonParam } from '@/lib/season';
 import { isSurvivorMode } from '@/lib/leagueRules';
 import { loadSurvivor } from '@/lib/survivorServer';
@@ -83,6 +84,7 @@ export async function POST(req: Request, context: { params: Promise<{ id: string
 			{ $set: { gameId, team, abbreviation: side.abbreviation, logo: side.logo, isHome: side === game.home } },
 			{ upsert: true, new: true }
 		).lean();
+		if (!existing) await markNudgePicked(id, season, week, viewerId);
 		return NextResponse.json({ success: true, pick });
 	} catch (error) {
 		console.error('Error saving survivor pick:', error);

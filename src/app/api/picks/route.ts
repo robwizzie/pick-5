@@ -10,6 +10,7 @@ import { ScoringService } from '@/services/scoringService';
 import { NFLService } from '@/services/nflService';
 import { SeasonService } from '@/services/seasonService';
 import { hasGameStarted } from '@/services/gameUtils';
+import { markNudgePicked } from '@/lib/nudges';
 import { ensurePickSeasonMigration, getCurrentSeasonYear, parseSeasonParam, seasonPickFilter } from '@/lib/season';
 import type { Game } from '@/components/games/GameCard';
 import { revealStartedOnly } from '@/lib/pickScoring';
@@ -190,8 +191,12 @@ export async function POST(req: Request) {
 			weeklyPoints,
 			correctPicks,
 			tfsPoints,
-			submitted: true
+			submitted: true,
+			// Edits recreate the doc: keep when picks first went in
+			firstSubmittedAt: existingPicks ? (existingPicks.firstSubmittedAt ?? existingPicks.createdAt) : new Date()
 		});
+		// First time in this week: credit the nudge, if they had one
+		if (!existingPicks) await markNudgePicked(leagueId, season, week, session.user.id);
 
 		// Update user's total stats (current season, this league)
 		const totalStats = await Pick.aggregate([
