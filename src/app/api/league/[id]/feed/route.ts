@@ -26,7 +26,7 @@ type LeanMessage = {
 	emoji?: string | null;
 	week?: number | null;
 	createdAt: Date;
-	reactions?: Record<string, string[]>;
+	reactions?: Record<string, unknown>;
 };
 
 /** The viewer's league (members + commissioner), or an error response. */
@@ -40,13 +40,37 @@ async function memberLeague(leagueId: string, viewerId: string) {
 	return { league: { members, creatorId: league.creatorId } };
 }
 
+/** Only real reaction lists: emoji -> userIds. Anything else (e.g. a stray internal key) is ignored. */
+function reactionLists(reactions: unknown): Array<[string, string[]]> {
+	if (!reactions || typeof reactions !== 'object') return [];
+	return Object.entries(reactions as Record<string, unknown>).filter((entry): entry is [string, string[]] => (FEED_REACTIONS as readonly string[]).includes(entry[0]) && Array.isArray(entry[1]));
+}
+
+/** Rewrite `reactions` keeping only real reaction lists (drops junk such as a '$*' key mongoose once wrote). */
+async function repairReactions(ids: unknown[]) {
+	if (ids.length === 0) return;
+	const allowed = [...FEED_REACTIONS];
+	await LeagueMessage.collection.updateMany({ _id: { $in: ids as never[] } }, [
+		{
+			$set: {
+				reactions: {
+					$arrayToObject: { $filter: { input: { $objectToArray: { $ifNull: ['$reactions', {}] } }, cond: { $and: [{ $isArray: '$$this.v' }, { $in: ['$$this.k', allowed] }] } } }
+				}
+			}
+		}
+	]);
+}
+
+const hasJunkReactions = (reactions: unknown) =>
+	!!reactions && typeof reactions === 'object' && Object.keys(reactions).length !== reactionLists(reactions).length;
+
 async function toFeedMessages(docs: LeanMessage[], viewerId: string): Promise<FeedMessage[]> {
 	// A malformed id would make the whole lookup (and so the feed) fail; those authors just show as former members
 	const authorIds = Array.from(new Set(docs.map(d => d.userId).filter((id): id is string => !!id && isValidObjectId(id))));
 	const users = authorIds.length ? await User.find({ _id: { $in: authorIds } }, 'name image').lean<Array<{ _id: unknown; name?: string; image?: string | null }>>() : [];
 	const userById = new Map(users.map(u => [String(u._id), u]));
 	return docs.map(d => {
-		const reactions = d.reactions ?? {};
+		const reactions = reactionLists(d.reactions);
 		const author = d.userId ? userById.get(d.userId) : undefined;
 		return {
 			id: String(d._id),
@@ -58,8 +82,8 @@ async function toFeedMessages(docs: LeanMessage[], viewerId: string): Promise<Fe
 			emoji: d.emoji ?? null,
 			week: d.week ?? null,
 			createdAt: new Date(d.createdAt).toISOString(),
-			reactions: Object.fromEntries(Object.entries(reactions).filter(([, ids]) => ids.length > 0).map(([emoji, ids]) => [emoji, ids.length])),
-			mine: Object.entries(reactions).filter(([, ids]) => ids.includes(viewerId)).map(([emoji]) => emoji)
+			reactions: Object.fromEntries(reactions.filter(([, ids]) => ids.length > 0).map(([emoji, ids]) => [emoji, ids.length])),
+			mine: reactions.filter(([, ids]) => ids.includes(viewerId)).map(([emoji]) => emoji)
 		};
 	});
 }
@@ -93,6 +117,10 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 			.sort({ createdAt: -1 })
 			.limit(FEED_PAGE_SIZE + 1)
 			.lean<LeanMessage[]>();
+
+		// Self-heal messages whose reactions picked up junk keys; reading already ignores them
+		const broken = docs.filter(d => hasJunkReactions(d.reactions)).map(d => d._id);
+		if (broken.length) await repairReactions(broken).catch(error => console.error('[feed] Failed to repair reactions:', error));
 
 		const body: FeedResponse = { messages: await toFeedMessages(docs.slice(0, FEED_PAGE_SIZE), viewerId), hasMore: docs.length > FEED_PAGE_SIZE };
 		return NextResponse.json(body);
@@ -149,14 +177,22 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 			return NextResponse.json({ error: 'Invalid reaction' }, { status: 400 });
 		}
 
-		const message = await LeagueMessage.findOne({ _id: body.messageId, leagueId: id });
+		const message = await LeagueMessage.findOne({ _id: body.messageId, leagueId: id }, 'reactions').lean<LeanMessage>();
 		if (!message) return NextResponse.json({ error: 'Message not found' }, { status: 404 });
-		const reactions = message.reactions as Map<string, string[]>;
-		const current = reactions.get(emoji) ?? [];
-		reactions.set(emoji, current.includes(viewerId) ? current.filter(u => u !== viewerId) : [...current, viewerId]);
-		await message.save();
 
-		const [updated] = await toFeedMessages([message.toObject({ flattenMaps: true }) as LeanMessage], viewerId);
+		// Atomic toggle on the raw collection. Saving the mongoose Map of arrays instead could
+		// write mongoose's internal '$*' path into the document, which broke the whole feed.
+		const reacted = reactionLists(message.reactions).some(([e, ids]) => e === emoji && ids.includes(viewerId));
+		const path = `reactions.${emoji}`;
+		if (hasJunkReactions(message.reactions)) await repairReactions([message._id]);
+		await LeagueMessage.collection.updateOne(
+			{ _id: message._id as never },
+			reacted ? { $pull: { [path]: viewerId } as never, $currentDate: { updatedAt: true } } : { $addToSet: { [path]: viewerId } as never, $currentDate: { updatedAt: true } }
+		);
+
+		const fresh = await LeagueMessage.findById(message._id).lean<LeanMessage>();
+		if (!fresh) return NextResponse.json({ error: 'Message not found' }, { status: 404 });
+		const [updated] = await toFeedMessages([fresh], viewerId);
 		return NextResponse.json(updated);
 	} catch (error) {
 		console.error('Error reacting in league feed:', error);
