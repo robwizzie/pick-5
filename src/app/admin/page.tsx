@@ -15,6 +15,7 @@ import {
 	Crosshair,
 	DatabaseZap,
 	Eye,
+	GitMerge,
 	Info,
 	PauseCircle,
 	PenLine,
@@ -88,6 +89,13 @@ const adminTools: AdminTool[] = [
 		description: 'See whether nudged players made their picks, by channel, against players who weren’t nudged',
 		href: '/admin/nudges',
 		icon: BellRing,
+		category: 'picks'
+	},
+	{
+		title: 'Merge Accounts',
+		description: 'Fold a player’s duplicate account into the one they keep, moving all picks and history',
+		href: '/admin/merge-users',
+		icon: GitMerge,
 		category: 'picks'
 	}
 ];
