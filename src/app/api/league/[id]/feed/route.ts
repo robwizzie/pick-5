@@ -14,6 +14,8 @@ export const dynamic = 'force-dynamic';
 
 /** Minimum gap between one member's chat messages. */
 const CHAT_COOLDOWN_MS = 2_000;
+/** Moments are a bonus: never hold the feed up longer than this waiting on scores. */
+const MOMENTS_BUDGET_MS = 2_500;
 
 type LeanMessage = {
 	_id: unknown;
@@ -39,7 +41,8 @@ async function memberLeague(leagueId: string, viewerId: string) {
 }
 
 async function toFeedMessages(docs: LeanMessage[], viewerId: string): Promise<FeedMessage[]> {
-	const authorIds = Array.from(new Set(docs.map(d => d.userId).filter((id): id is string => !!id)));
+	// A malformed id would make the whole lookup (and so the feed) fail; those authors just show as former members
+	const authorIds = Array.from(new Set(docs.map(d => d.userId).filter((id): id is string => !!id && isValidObjectId(id))));
 	const users = authorIds.length ? await User.find({ _id: { $in: authorIds } }, 'name image').lean<Array<{ _id: unknown; name?: string; image?: string | null }>>() : [];
 	const userById = new Map(users.map(u => [String(u._id), u]));
 	return docs.map(d => {
@@ -80,7 +83,7 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
 		const before = searchParams.get('before');
 		const week = parseInt(searchParams.get('week') || '', 10);
 		if (!before && Number.isInteger(week) && week >= 1 && week <= 18) {
-			await postLeagueMoments(id, getCurrentSeasonYear(), [week - 1, week]);
+			await Promise.race([postLeagueMoments(id, getCurrentSeasonYear(), [week - 1, week]), new Promise(resolve => setTimeout(resolve, MOMENTS_BUDGET_MS))]);
 		}
 
 		const filter: Record<string, unknown> = { leagueId: id };
