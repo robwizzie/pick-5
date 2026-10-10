@@ -203,6 +203,10 @@ export function WeeklyPicks() {
 	const [seasonStatus, setSeasonStatus] = useState<SeasonStatus | null>(null);
 	const [showAllGames, setShowAllGames] = useState(false);
 	const [swapCandidate, setSwapCandidate] = useState<Pick | null>(null);
+	// The TFS step sits below the games; the action bar jumps there (and flashes it) when it's what's missing
+	const tfsSectionRef = useRef<HTMLDivElement>(null);
+	const tfsInputRef = useRef<HTMLInputElement>(null);
+	const [tfsFlash, setTfsFlash] = useState(false);
 	const [lockGameId, setLockGameId] = useState<string | null>(null);
 
 	// Fetch league details to get the mode
@@ -656,6 +660,20 @@ export function WeeklyPicks() {
 		}
 	};
 
+	/** Scroll to the TFS step and focus whatever is missing (the score once a game is chosen). */
+	const goToTfs = (gameChosen = !!tfsGame) => {
+		tfsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		if (gameChosen) tfsInputRef.current?.focus({ preventScroll: true });
+		setTfsFlash(true);
+		setTimeout(() => setTfsFlash(false), 1600);
+	};
+
+	const chooseTfsGame = (gameId: string) => {
+		setTfsGame(gameId);
+		// Straight on to the score, so nobody wonders what's left
+		if (!tfsScore) requestAnimationFrame(() => tfsInputRef.current?.focus({ preventScroll: true }));
+	};
+
 	if (sessionStatus === 'loading' || loading || !picksLoaded) {
 		return <WeeklyPicksSkeleton />;
 	}
@@ -680,6 +698,8 @@ export function WeeklyPicks() {
 	const lockedPick = activeLock ? picks.find(p => p.gameId === activeLock) : undefined;
 	const tfsReady = !!tfsGame && !!tfsScore && !tfsError;
 	const canSubmit = slateFull && !isSaving && (!playsTfs || tfsReady);
+	// All 5 picked but the TFS step isn't done: the action bar points there instead of a dead button
+	const needsTfs = slateFull && playsTfs && !tfsReady;
 	// Saved picks auto-save; show where that stands instead of a redundant Update button
 	const saved = lastSavedRef.current;
 	const isDirty = !!saved && JSON.stringify({ picks, tfsGame, tfsScore, lockGameId: activeLock }) !== JSON.stringify({ picks: saved.picks, tfsGame: saved.tfsGame, tfsScore: saved.tfsScore, lockGameId: saved.lockGameId });
@@ -769,8 +789,8 @@ export function WeeklyPicks() {
 	const actionHint = (() => {
 		if (!slateFull) return hasExistingPicks ? `Pick ${MAX_PICKS - pickCount} more to save your changes` : `Pick ${MAX_PICKS - pickCount} more game${MAX_PICKS - pickCount === 1 ? '' : 's'}`;
 		if (playsTfs) {
-			if (!tfsGame) return 'Choose your TFS game below';
-			if (!tfsScore || tfsError) return 'Enter your total score below';
+			if (!tfsGame) return 'Last step: pick a game for your total final score';
+			if (!tfsScore || tfsError) return 'Last step: enter your total final score';
 			if (!activeLock && slateEditable && locksOn) return LOCK_HINT;
 			return `TFS locked in: ${tfsScore}`;
 		}
@@ -949,10 +969,22 @@ export function WeeklyPicks() {
 
 					{/* Steve mode: TFS prediction + scoring */}
 					{slateFull && playsTfs && (
-						<div className='glass space-y-5 rounded-2xl p-4 sm:p-5'>
+						<div
+							ref={tfsSectionRef}
+							className={cn(
+								'glass scroll-mt-24 space-y-5 rounded-2xl p-4 transition-shadow duration-500 sm:p-5',
+								needsTfs && 'border border-warning/40',
+								tfsFlash && 'shadow-[0_0_0_2px_hsl(var(--warning)/0.8)]'
+							)}
+						>
 							<div>
-								<p className='eyebrow mb-1'>Total final score</p>
-								<p className='text-sm text-muted-foreground'>Pick one of your games and predict the combined final score of both teams.</p>
+								<p className='eyebrow mb-1 flex items-center gap-2'>
+									Total final score
+									{needsTfs && <span className='rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-bold text-warning'>Required to submit</span>}
+								</p>
+								<p className='text-sm text-muted-foreground'>
+									{tfsGame ? 'Now predict the combined final score of both teams.' : 'Step 1: tap one of your games. Step 2: predict the combined final score of both teams.'}
+								</p>
 							</div>
 
 							<div className='grid grid-cols-1 gap-2 sm:grid-cols-2' role='radiogroup' aria-label='TFS game'>
@@ -966,7 +998,7 @@ export function WeeklyPicks() {
 											type='button'
 											role='radio'
 											aria-checked={active}
-											onClick={() => setTfsGame(pick.gameId)}
+											onClick={() => chooseTfsGame(pick.gameId)}
 											className={cn(
 												'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all duration-200 ease-out-expo active:scale-[0.98]',
 												active ? 'border-primary/70 bg-primary/[0.12] shadow-[0_0_0_1px_hsl(var(--primary)/0.4)]' : 'border-white/[0.07] bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
@@ -990,6 +1022,7 @@ export function WeeklyPicks() {
 									Predicted total score
 								</label>
 								<Input
+									ref={tfsInputRef}
 									id='tfs-score'
 									type='number'
 									inputMode='numeric'
@@ -1109,13 +1142,19 @@ export function WeeklyPicks() {
 									<PickProgress count={pickCount} className='mt-1.5' />
 									{/* Only hints that add something beyond the count above */}
 									{(slateFull || (hasExistingPicks && isDirty)) && (
-										<p className={cn('mt-1 flex min-w-0 items-center gap-1 text-[11px]', actionHint === LOCK_HINT ? 'text-warning' : 'text-muted-foreground')}>
+										<p className={cn('mt-1 flex min-w-0 items-center gap-1 text-[11px]', actionHint === LOCK_HINT || needsTfs ? 'text-warning' : 'text-muted-foreground')}>
 											{actionHint === LOCK_HINT && <Lock className='h-3 w-3 shrink-0' aria-hidden />}
+											{needsTfs && <Target className='h-3 w-3 shrink-0' aria-hidden />}
 											<span className='truncate'>{actionHint}</span>
 										</p>
 									)}
 								</div>
-								{hasExistingPicks ? (
+								{needsTfs && !isSaving ? (
+									<Button className='h-11 shrink-0 px-4' onClick={() => goToTfs()}>
+										<Target />
+										Add TFS
+									</Button>
+								) : hasExistingPicks ? (
 									<span
 										role='status'
 										className={cn(

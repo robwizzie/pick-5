@@ -98,6 +98,8 @@ export function LeagueFeed({ leagueId, isCommissioner = false, className }: { le
 	const userId = session?.user?.id;
 	const { liveWeek, isPastSeason } = useWeek();
 	const [messages, setMessages] = useState<FeedMessage[] | null>(null);
+	// Set when the feed couldn't be loaded, so a failure never passes for an empty feed
+	const [loadError, setLoadError] = useState<string | null>(null);
 	const [hasMore, setHasMore] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [text, setText] = useState('');
@@ -111,8 +113,12 @@ export function LeagueFeed({ leagueId, isCommissioner = false, className }: { le
 		try {
 			const week = !isPastSeason && liveWeek ? `?week=${liveWeek}` : '';
 			const res = await fetch(`/api/league/${leagueId}/feed${week}`, { cache: 'no-store' });
-			if (!res.ok) throw new Error(`Failed to load feed (${res.status})`);
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new Error(body.error || `Couldn’t load the chat (${res.status})`);
+			}
 			const data: FeedResponse = await res.json();
+			setLoadError(null);
 			setMessages(prev => merge(prev ?? [], data.messages));
 			if (firstPageRef.current) {
 				firstPageRef.current = false;
@@ -120,12 +126,13 @@ export function LeagueFeed({ leagueId, isCommissioner = false, className }: { le
 			}
 		} catch (error) {
 			console.error(error);
-			setMessages(prev => prev ?? []);
+			setLoadError(error instanceof Error ? error.message : 'Couldn’t load the chat');
 		}
 	}, [leagueId, liveWeek, isPastSeason]);
 
 	useEffect(() => {
 		setMessages(null);
+		setLoadError(null);
 		stickToBottom.current = true;
 		firstPageRef.current = true;
 		load();
@@ -214,7 +221,15 @@ export function LeagueFeed({ leagueId, isCommissioner = false, className }: { le
 				}}
 				className='max-h-[28rem] min-h-[12rem] flex-1 space-y-3 overflow-y-auto px-4 py-3'
 			>
-				{messages === null ? (
+				{messages === null && loadError ? (
+					<div role='alert' className='flex h-40 flex-col items-center justify-center gap-2 text-center'>
+						<p className='text-sm font-semibold'>Couldn’t load the chat</p>
+						<p className='max-w-[16rem] text-xs text-muted-foreground'>{loadError}. Your messages are safe. We’ll keep retrying.</p>
+						<button type='button' onClick={load} className='text-xs font-semibold text-primary hover:underline'>
+							Try again
+						</button>
+					</div>
+				) : messages === null ? (
 					[0, 1, 2].map(i => <Skeleton key={i} className='h-12 rounded-xl' />)
 				) : messages.length === 0 ? (
 					<div className='flex h-40 flex-col items-center justify-center gap-2 text-center'>
